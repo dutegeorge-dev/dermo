@@ -257,6 +257,15 @@ export interface Dictionary {
       /** Подпись вторичной CTA «Как мы работаем». */
       secondary: string;
     };
+    heroForm: {
+      title: string;
+      note: string;
+      cargoLabel: string;
+      cargoError: string;
+      contactLabel: string;
+      contactError: string;
+      success: string;
+    };
     trust: {
       expValue: string;
       expLabel: string;
@@ -268,6 +277,8 @@ export interface Dictionary {
       whiteLabel: string;
       bankValue: string;
       bankLabel: string;
+      suppliersValue: string;
+      suppliersLabel: string;
     };
     about: {
       title: string;
@@ -277,6 +288,8 @@ export interface Dictionary {
       link: string;
     };
     wings: {
+      title: string;
+      subtitle: string;
       logistics: {
         title: string;
         desc: string;
@@ -304,6 +317,7 @@ export interface Dictionary {
       s5: { title: string; text: string };
       s6: { title: string; text: string };
       s7: { title: string; text: string };
+      s8: { title: string; text: string };
     };
     cases: {
       title: string;

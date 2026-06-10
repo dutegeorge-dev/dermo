@@ -15,6 +15,7 @@ const home: HomeData = {
     { icon: "package", valueKey: "home.trust.volumeValue", labelKey: "home.trust.volumeLabel" },
     { icon: "badge-check", valueKey: "home.trust.whiteValue", labelKey: "home.trust.whiteLabel" },
     { icon: "landmark", valueKey: "home.trust.bankValue", labelKey: "home.trust.bankLabel" },
+    { icon: "handshake", valueKey: "home.trust.suppliersValue", labelKey: "home.trust.suppliersLabel" },
   ],
 
   // Два равноправных крыла — сердце главной (торгово-логистическая суть).
@@ -51,10 +52,11 @@ const home: HomeData = {
     { num: "01", icon: "clipboard-list", titleKey: "home.steps.s1.title", textKey: "home.steps.s1.text" },
     { num: "02", icon: "file-text", titleKey: "home.steps.s2.title", textKey: "home.steps.s2.text" },
     { num: "03", icon: "warehouse", titleKey: "home.steps.s3.title", textKey: "home.steps.s3.text" },
-    { num: "04", icon: "badge-check", titleKey: "home.steps.s4.title", textKey: "home.steps.s4.text" },
-    { num: "05", icon: "truck", titleKey: "home.steps.s5.title", textKey: "home.steps.s5.text" },
-    { num: "06", icon: "shield-check", titleKey: "home.steps.s6.title", textKey: "home.steps.s6.text" },
-    { num: "07", icon: "package-check", titleKey: "home.steps.s7.title", textKey: "home.steps.s7.text" },
+    { num: "04", icon: "scan-barcode", titleKey: "home.steps.s4.title", textKey: "home.steps.s4.text" },
+    { num: "05", icon: "badge-check", titleKey: "home.steps.s5.title", textKey: "home.steps.s5.text" },
+    { num: "06", icon: "truck", titleKey: "home.steps.s6.title", textKey: "home.steps.s6.text" },
+    { num: "07", icon: "shield-check", titleKey: "home.steps.s7.title", textKey: "home.steps.s7.text" },
+    { num: "08", icon: "package-check", titleKey: "home.steps.s8.title", textKey: "home.steps.s8.text" },
   ],
 };
 

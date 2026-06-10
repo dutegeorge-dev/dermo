@@ -9,7 +9,12 @@
 
 <section class="bg-surface-alt">
   <div class="container section">
-    <div class="grid gap-6 lg:grid-cols-2">
+    <div class="max-w-2xl">
+      <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "home.wings.title" | t(locale) }}</h2>
+      <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "home.wings.subtitle" | t(locale) }}</p>
+    </div>
+
+    <div class="mt-10 grid gap-6 lg:grid-cols-2">
       {% for wing in wingList %}
         <a
           href="{{ wing.url | localizedUrl(locale) }}"
