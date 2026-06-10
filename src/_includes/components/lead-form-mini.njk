@@ -1,0 +1,45 @@
+{#
+  Мини-форма расчёта (заглушка) — единый компонент для hero главной и hero
+  страницы логистики. Клиентская валидация + событие в аналитику:
+  data-lead-form, обработка в assets/ts/main.ts. Тексты — из словаря
+  (home.heroForm.*, cta.calculate).
+
+  Параметры:
+    locale     — текущая локаль (передаётся явно: внутри макроса контекст
+                 шаблона недоступен, а фильтр t требует локаль);
+    id_prefix  — префикс id полей (уникальность на странице; по умолчанию "hero").
+#}
+{% macro leadFormMini(locale, id_prefix="hero") %}
+<form
+  data-lead-form
+  novalidate
+  class="rounded-2xl bg-surface p-6 text-ink shadow-xl ring-1 ring-black/5 md:p-8"
+>
+  <h2 class="text-xl font-medium text-ink">{{ "home.heroForm.title" | t(locale) }}</h2>
+  <p class="mt-1 text-sm text-muted">{{ "home.heroForm.note" | t(locale) }}</p>
+
+  <div class="mt-5 space-y-4">
+    <div>
+      <label class="field-label" for="{{ id_prefix }}-cargo">{{ "home.heroForm.cargoLabel" | t(locale) }}</label>
+      <input class="field-input min-h-[44px]" id="{{ id_prefix }}-cargo" name="cargo" type="text" data-validate="required" autocomplete="off" />
+      <p class="field-error" data-error-for="cargo">{{ "home.heroForm.cargoError" | t(locale) }}</p>
+    </div>
+    <div>
+      <label class="field-label" for="{{ id_prefix }}-contact">{{ "home.heroForm.contactLabel" | t(locale) }}</label>
+      <input class="field-input min-h-[44px]" id="{{ id_prefix }}-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ · @username" data-validate="contact" autocomplete="off" />
+      <p class="field-error" data-error-for="contact">{{ "home.heroForm.contactError" | t(locale) }}</p>
+    </div>
+
+    <button
+      type="submit"
+      class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+    >
+      {{ "cta.calculate" | t(locale) }}
+    </button>
+
+    <p class="hidden rounded-md bg-green-50 px-4 py-3 text-sm text-green-700" data-form-success role="status">
+      {{ "home.heroForm.success" | t(locale) }}
+    </p>
+  </div>
+</form>
+{% endmacro %}

@@ -6,6 +6,7 @@
   обработка в assets/ts/main.ts). Тексты — из словаря (home.hero.*, home.heroForm.*).
 #}
 {% from "partials/icon.njk" import icon %}
+{% from "components/lead-form-mini.njk" import leadFormMini %}
 
 <section class="bg-brand text-white">
   <div class="container grid items-center gap-10 py-16 md:py-20 lg:grid-cols-2 lg:gap-16 lg:py-24">
@@ -33,38 +34,7 @@
       </div>
     </div>
 
-    {# ── Правая колонка: мини-форма расчёта (заглушка) ──────────────── #}
-    <form
-      data-lead-form
-      novalidate
-      class="rounded-2xl bg-surface p-6 text-ink shadow-xl ring-1 ring-black/5 md:p-8"
-    >
-      <h2 class="text-xl font-medium text-ink">{{ "home.heroForm.title" | t(locale) }}</h2>
-      <p class="mt-1 text-sm text-muted">{{ "home.heroForm.note" | t(locale) }}</p>
-
-      <div class="mt-5 space-y-4">
-        <div>
-          <label class="field-label" for="hero-cargo">{{ "home.heroForm.cargoLabel" | t(locale) }}</label>
-          <input class="field-input min-h-[44px]" id="hero-cargo" name="cargo" type="text" data-validate="required" autocomplete="off" />
-          <p class="field-error" data-error-for="cargo">{{ "home.heroForm.cargoError" | t(locale) }}</p>
-        </div>
-        <div>
-          <label class="field-label" for="hero-contact">{{ "home.heroForm.contactLabel" | t(locale) }}</label>
-          <input class="field-input min-h-[44px]" id="hero-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ · @username" data-validate="contact" autocomplete="off" />
-          <p class="field-error" data-error-for="contact">{{ "home.heroForm.contactError" | t(locale) }}</p>
-        </div>
-
-        <button
-          type="submit"
-          class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-        >
-          {{ "cta.calculate" | t(locale) }}
-        </button>
-
-        <p class="hidden rounded-md bg-green-50 px-4 py-3 text-sm text-green-700" data-form-success role="status">
-          {{ "home.heroForm.success" | t(locale) }}
-        </p>
-      </div>
-    </form>
+    {# ── Правая колонка: мини-форма расчёта (единый компонент) ──────── #}
+    {{ leadFormMini(locale, "hero") }}
   </div>
 </section>

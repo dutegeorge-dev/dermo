@@ -50,6 +50,18 @@ const config: Config = {
         muted: "#64748B", // вторичный текст
         surface: "#FFFFFF", // фон мега-меню, светлые блоки
         "surface-alt": "#F1F5F9", // фон кликабельных «ворот»
+        // Служебные цвета статусов (только для таблиц/состояний «есть/нет»).
+        // Не часть бренд-палитры — используются точечно для ✓/✗ и подобного.
+        success: {
+          DEFAULT: "#16A34A",
+          dark: "#15803D",
+          light: "#DCFCE7",
+        },
+        danger: {
+          DEFAULT: "#DC2626",
+          dark: "#B91C1C",
+          light: "#FEE2E2",
+        },
       },
       fontFamily: {
         // Onest (self-hosted woff2, @font-face в tailwind.css) — дефолтный шрифт сайта.

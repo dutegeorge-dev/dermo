@@ -14,6 +14,7 @@ sitemap: true
 #}
 {% from "partials/icon.njk" import icon %}
 {% from "components/cta-band.njk" import ctaBand %}
+{% from "components/lead-form-mini.njk" import leadFormMini %}
 {% set L = dict.logistika %}
 {% set calcUrl = site.calculateUrl | localizedUrl(locale) %}
 {% set requestUrl = "/kontakty/" | localizedUrl(locale) %}
@@ -25,16 +26,21 @@ sitemap: true
 
   {# ── 1. Hero ─────────────────────────────────────────────────────────── #}
   <section class="bg-brand text-white">
-    <div class="container section">
-      <h1 class="max-w-4xl text-3xl font-light leading-tight tracking-tight sm:text-4xl md:text-5xl">{{ L.hero.h1 }}</h1>
-      <p class="mt-5 max-w-2xl text-lg text-white/90">{{ L.hero.subtitle }}</p>
-      <div class="mt-8 flex flex-wrap gap-3">
-        <a href="{{ calcUrl }}" class="btn-accent px-6 py-3 text-base">
-          {{ L.hero.ctaPrimary }}
-          {{ icon("arrow-right", "ml-1.5 h-5 w-5") }}
-        </a>
-        <a href="#bezopasnost" class="btn-outline border-white px-6 py-3 text-base text-white hover:bg-white hover:text-brand">{{ L.hero.ctaSecondary }}</a>
+    <div class="container grid items-center gap-10 py-16 md:py-20 lg:grid-cols-2 lg:gap-16 lg:py-24">
+      {# Левая колонка: H1, подзаголовок, CTA #}
+      <div>
+        <h1 class="max-w-2xl text-3xl font-light leading-tight tracking-tight sm:text-4xl md:text-5xl">{{ L.hero.h1 }}</h1>
+        <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85 md:text-xl">{{ L.hero.subtitle }}</p>
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <a href="{{ calcUrl }}" class="btn-accent px-6 py-3 text-base">
+            {{ L.hero.ctaPrimary }}
+            {{ icon("arrow-right", "ml-1.5 h-5 w-5") }}
+          </a>
+          <a href="#bezopasnost" class="btn-outline border-white px-6 py-3 text-base text-white hover:bg-white hover:text-brand">{{ L.hero.ctaSecondary }}</a>
+        </div>
       </div>
+      {# Правая колонка: мини-форма расчёта (единый компонент с главной) #}
+      {{ leadFormMini(locale, "logi") }}
     </div>
   </section>
 
@@ -63,41 +69,76 @@ sitemap: true
       <h2 class="max-w-3xl text-2xl font-semibold tracking-tight md:text-3xl">{{ L.cargo.title }}</h2>
       <p class="mt-4 max-w-3xl text-base text-muted">{{ L.cargo.intro }}</p>
 
-      {# Сравнение: на мобайле — карточки, на sm+ — две колонки внутри карточки #}
-      <div class="mt-8 space-y-4">
+      {# Десктоп: полноценная сравнительная таблица с цветовым кодом ✓/✗ #}
+      <div class="mt-8 hidden overflow-hidden rounded-xl border border-slate-200 md:block">
+        <table class="w-full border-collapse text-left">
+          <caption class="sr-only">{{ L.cargo.title }}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="w-1/4 bg-white px-5 py-3 text-sm font-semibold text-muted">{{ L.cargo.head.criterion }}</th>
+              <th scope="col" class="w-[37.5%] border-l border-slate-200 bg-success-light px-5 py-3 text-sm font-semibold text-success-dark">
+                <span class="flex items-center gap-1.5">{{ icon("check", "h-4 w-4") }}{{ L.cargo.head.white }}</span>
+              </th>
+              <th scope="col" class="w-[37.5%] border-l border-slate-200 bg-slate-100 px-5 py-3 text-sm font-semibold text-slate-600">
+                <span class="flex items-center gap-1.5">{{ icon("x", "h-4 w-4") }}{{ L.cargo.head.cargo }}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in L.cargo.rows %}
+              <tr class="border-t border-slate-200 {% if loop.index is even %}bg-surface-alt{% else %}bg-white{% endif %}">
+                <th scope="row" class="px-5 py-4 align-top text-sm font-semibold text-ink">{{ row.criterion }}</th>
+                <td class="border-l border-slate-200 px-5 py-4 align-top">
+                  <div class="flex gap-2">
+                    {{ icon("check", "mt-0.5 h-4 w-4 shrink-0 text-success") }}
+                    <span class="text-sm text-ink">{{ row.white }}</span>
+                  </div>
+                </td>
+                <td class="border-l border-slate-200 px-5 py-4 align-top">
+                  <div class="flex gap-2">
+                    {{ icon("x", "mt-0.5 h-4 w-4 shrink-0 text-danger") }}
+                    <span class="text-sm text-muted">{{ row.cargo }}</span>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {# Мобайл: таблица перестраивается в карточки по критериям #}
+      <div class="mt-8 space-y-4 md:hidden">
         {% for row in L.cargo.rows %}
           <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div class="border-b border-slate-200 bg-surface-alt px-5 py-3 text-sm font-semibold uppercase tracking-wide text-ink">{{ row.criterion }}</div>
-            <div class="grid divide-y divide-slate-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-              <div class="px-5 py-4">
-                <div class="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-cyan-dark">
-                  {{ icon("badge-check", "h-4 w-4") }}{{ L.cargo.head.white }}
-                </div>
-                <p class="text-sm text-muted">{{ row.white }}</p>
+            <div class="border-b border-slate-200 bg-surface-alt px-5 py-3 text-sm font-semibold text-ink">{{ row.criterion }}</div>
+            <div class="space-y-3 px-5 py-4">
+              <div class="flex gap-2">
+                {{ icon("check", "mt-0.5 h-4 w-4 shrink-0 text-success") }}
+                <p class="text-sm text-ink"><span class="font-semibold text-success-dark">{{ L.cargo.head.white }}:</span> {{ row.white }}</p>
               </div>
-              <div class="px-5 py-4">
-                <div class="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-500">
-                  {{ icon("x", "h-4 w-4") }}{{ L.cargo.head.cargo }}
-                </div>
-                <p class="text-sm text-muted">{{ row.cargo }}</p>
+              <div class="flex gap-2">
+                {{ icon("x", "mt-0.5 h-4 w-4 shrink-0 text-danger") }}
+                <p class="text-sm text-muted"><span class="font-semibold text-slate-600">{{ L.cargo.head.cargo }}:</span> {{ row.cargo }}</p>
               </div>
             </div>
           </div>
         {% endfor %}
       </div>
-
-      {# Анти-кейсы — типовые ошибки рынка #}
-      <h3 class="mt-12 text-xl font-semibold tracking-tight text-ink">{{ L.cargo.antiTitle }}</h3>
-      <div class="mt-6 grid gap-4 md:grid-cols-3">
-        {% for c in L.cargo.antiCases %}
-          <div class="rounded-xl border-l-4 border-accent bg-white p-5 shadow-sm">
-            <p class="font-semibold text-ink">{{ c.title }}</p>
-            <p class="mt-2 text-sm text-muted">{{ c.desc }}</p>
-          </div>
-        {% endfor %}
-      </div>
-      <p class="mt-5 max-w-3xl text-sm italic text-muted">{{ L.cargo.antiNote }}</p>
     </div>
+  </section>
+
+  {# Анти-кейсы — отдельный блок на белом фоне (отделён от таблицы карго) #}
+  <section class="container section">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ L.cargo.antiTitle }}</h2>
+    <div class="mt-8 grid gap-4 md:grid-cols-3">
+      {% for c in L.cargo.antiCases %}
+        <div class="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-surface-alt p-5 shadow-sm">
+          <p class="font-semibold text-ink">{{ c.title }}</p>
+          <p class="mt-2 text-sm text-muted">{{ c.desc }}</p>
+        </div>
+      {% endfor %}
+    </div>
+    <p class="mt-5 max-w-3xl text-sm italic text-muted">{{ L.cargo.antiNote }}</p>
   </section>
 
   {# → CTA-1 (после блока карго) #}
