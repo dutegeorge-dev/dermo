@@ -1,0 +1,38 @@
+{#
+  «Кто мы» — короткий рассказ о компании + ссылка на /o-kompanii/.
+  Слева заголовок и абзацы, справа — акцентный блок-плейсхолдер.
+  Тексты — из словаря (home.about.*). Светлый фон.
+#}
+{% from "partials/icon.njk" import icon %}
+
+<section class="bg-surface">
+  <div class="container section">
+    <div class="grid gap-10 lg:grid-cols-[1.4fr_minmax(0,1fr)] lg:items-center lg:gap-16">
+      <div>
+        <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "home.about.title" | t(locale) }}</h2>
+        <div class="mt-6 space-y-4 text-base leading-relaxed text-muted md:text-lg">
+          <p>{{ "home.about.p1" | t(locale) }}</p>
+          <p>{{ "home.about.p2" | t(locale) }}</p>
+          <p>{{ "home.about.p3" | t(locale) }}</p>
+        </div>
+        <a
+          href="{{ '/o-kompanii/' | localizedUrl(locale) }}"
+          class="mt-8 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+        >
+          {{ "home.about.link" | t(locale) }}
+        </a>
+      </div>
+
+      {# Акцентный блок-плейсхолдер (изображение подключается позже). #}
+      <div class="relative hidden aspect-[4/3] overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-brand-dark lg:block" aria-hidden="true">
+        <div class="absolute inset-0 flex items-center justify-center">
+          {{ icon("globe", "h-24 w-24 text-white/15") }}
+        </div>
+        <div class="absolute bottom-5 left-5 right-5 flex items-center gap-2 text-white/70">
+          {{ icon("map-pin", "h-5 w-5 text-cyan") }}
+          <span class="text-sm">Гуанчжоу · Китай</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,33 @@
+{#
+  Финальный CTA — контрастная ультрамариновая полоса перед футером.
+  Янтарная главная кнопка + телефон рядом. Тексты — из словаря (home.ctaFinal.*).
+  Якорь #zayavka — цель для CTA внутри страницы.
+#}
+{% from "partials/icon.njk" import icon %}
+
+<section id="zayavka" class="scroll-mt-24 bg-brand text-white">
+  <div class="container section">
+    <div class="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+      <div class="max-w-2xl">
+        <h2 class="text-3xl font-light leading-tight tracking-tight md:text-4xl">{{ "home.ctaFinal.title" | t(locale) }}</h2>
+        <p class="mt-4 text-lg font-light text-white/85">{{ "home.ctaFinal.subtitle" | t(locale) }}</p>
+      </div>
+      <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center lg:shrink-0">
+        <a
+          href="{{ site.calculateUrl | localizedUrl(locale) }}"
+          class="inline-flex items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+        >
+          {{ "cta.request" | t(locale) }}
+        </a>
+        <a
+          href="tel:{{ site.phoneHref }}"
+          class="inline-flex items-center gap-2 text-base font-medium text-white transition-colors hover:text-cyan"
+          aria-label="{{ 'a11y.phoneRu' | t(locale) }}"
+        >
+          {{ icon("phone", "h-5 w-5 text-cyan") }}
+          <span>{{ site.phone }}</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
