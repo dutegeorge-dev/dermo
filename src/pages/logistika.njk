@@ -19,10 +19,38 @@ sitemap: true
 {% set calcUrl = site.calculateUrl | localizedUrl(locale) %}
 {% set requestUrl = "/kontakty/" | localizedUrl(locale) %}
 {% set tradeUrl = "/torgovlya/" | localizedUrl(locale) %}
+{# Пункты оглавления (sticky-ToC + свёрнутое «Содержание» на мобайле). #}
+{% set tocItems = [
+  { id: "sposoby", label: L.toc.methods },
+  { id: "kargo", label: L.toc.cargo },
+  { id: "bezopasnost", label: L.toc.safety },
+  { id: "garantii", label: L.toc.payment },
+  { id: "stoimost", label: L.toc.cost },
+  { id: "dlya-kogo", label: L.toc.audience },
+  { id: "torgovlya", label: L.toc.trade },
+  { id: "faq", label: L.toc.faq }
+] %}
 
 {% include "partials/header.njk" %}
 
 <main class="flex-1">
+
+  {# Sticky-оглавление в левом «гутере» — только на очень широких экранах,
+     чтобы не перекрывать контент (на остальных — свёрнутый блок ниже). #}
+  <nav
+    data-toc
+    aria-label="{{ L.toc.title }}"
+    class="fixed top-1/2 z-30 hidden w-44 -translate-y-1/2 left-[calc((100vw_-_75rem)/2_-_12rem)] min-[1600px]:block"
+  >
+    <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">{{ L.toc.title }}</p>
+    <ul class="space-y-0.5 border-l border-slate-200">
+      {% for it in tocItems %}
+        <li>
+          <a href="#{{ it.id }}" class="-ml-px block border-l-2 border-transparent py-1 pl-3 text-sm text-muted transition-colors hover:text-cyan">{{ it.label }}</a>
+        </li>
+      {% endfor %}
+    </ul>
+  </nav>
 
   {# ── 1. Hero ─────────────────────────────────────────────────────────── #}
   <section class="bg-brand text-white">
@@ -44,17 +72,36 @@ sitemap: true
     </div>
   </section>
 
+  {# Свёрнутое «Содержание» — для мобайла и обычных десктопов (где sticky-ToC скрыт). #}
+  <div class="container pt-8 min-[1600px]:hidden">
+    <details data-toc class="rounded-xl border border-slate-200 bg-surface-alt">
+      <summary class="flex cursor-pointer items-center justify-between gap-2 px-5 py-3 text-sm font-semibold text-ink">
+        {{ L.toc.title }}
+        {{ icon("chevron-down", "h-5 w-5 text-cyan") }}
+      </summary>
+      <ul class="grid gap-x-6 gap-y-1 border-t border-slate-200 px-5 py-3 sm:grid-cols-2">
+        {% for it in tocItems %}
+          <li><a href="#{{ it.id }}" class="block py-1 text-sm text-muted transition-colors hover:text-cyan">{{ it.label }}</a></li>
+        {% endfor %}
+      </ul>
+    </details>
+  </div>
+
   {# ── 2. Способы доставки ──────────────────────────────────────────────── #}
-  <section id="sposoby" class="container section">
+  <section id="sposoby" class="container section scroll-mt-24">
     <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.methods.title }}</h2>
     <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {% for m in L.methods.items %}
-        <div class="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-cyan">
+        <a href="{{ m.url | localizedUrl(locale) }}" class="group flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-cyan">
           {{ icon(m.icon, "h-8 w-8 text-cyan") }}
           <h3 class="mt-4 text-base font-semibold text-ink">{{ m.title }}</h3>
           <p class="mt-2 text-2xl font-semibold text-cyan">{{ m.time }}</p>
           <p class="mt-2 text-sm text-muted">{{ m.desc }}</p>
-        </div>
+          <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-cyan-dark">
+            {{ "home.cases.more" | t(locale) }}
+            {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover:translate-x-1") }}
+          </span>
+        </a>
       {% endfor %}
     </div>
     <p class="mt-5 flex items-center gap-2 text-sm font-medium text-muted">
@@ -64,7 +111,7 @@ sitemap: true
   </section>
 
   {# ── 3. Карго vs белая доставка ───────────────────────────────────────── #}
-  <section id="kargo" class="bg-surface-alt">
+  <section id="kargo" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <h2 class="max-w-3xl text-2xl font-semibold tracking-tight md:text-3xl">{{ L.cargo.title }}</h2>
       <p class="mt-4 max-w-3xl text-base text-muted">{{ L.cargo.intro }}</p>
@@ -128,7 +175,7 @@ sitemap: true
   </section>
 
   {# Анти-кейсы — отдельный блок на белом фоне (отделён от таблицы карго) #}
-  <section class="container section">
+  <section id="anti-kejsy" class="container section scroll-mt-24">
     <h2 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ L.cargo.antiTitle }}</h2>
     <div class="mt-8 grid gap-4 md:grid-cols-3">
       {% for c in L.cargo.antiCases %}
@@ -145,7 +192,7 @@ sitemap: true
   {{ ctaBand(L.ctaInline1.button, calcUrl, text=L.ctaInline1.text, tone="inline") }}
 
   {# ── 4. Как мы обеспечиваем безопасность ──────────────────────────────── #}
-  <section id="bezopasnost" class="container section">
+  <section id="bezopasnost" class="container section scroll-mt-24">
     <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.safety.title }}</h2>
     <p class="mt-3 max-w-3xl text-base text-muted">{{ L.safety.subtitle }}</p>
     <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -155,14 +202,15 @@ sitemap: true
             {{ icon(s.icon, "h-6 w-6 text-cyan") }}
           </span>
           <h3 class="mt-4 text-base font-semibold text-ink">{{ s.title }}</h3>
-          <p class="mt-2 text-sm text-muted">{{ s.desc }}</p>
+          {# desc может содержать перелинковку (<a>) — рендерим как safe. #}
+          <p class="mt-2 text-sm text-muted">{{ s.desc | safe }}</p>
         </div>
       {% endfor %}
     </div>
   </section>
 
   {# ── 5. Гарантии и оплата ─────────────────────────────────────────────── #}
-  <section class="bg-surface-alt">
+  <section id="garantii" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.payment.title }}</h2>
       <p class="mt-4 max-w-3xl text-base text-muted">{{ L.payment.intro }}</p>
@@ -183,7 +231,7 @@ sitemap: true
   </section>
 
   {# ── 6. Прозрачная стоимость ──────────────────────────────────────────── #}
-  <section class="container section">
+  <section id="stoimost" class="container section scroll-mt-24">
     <h2 class="max-w-3xl text-2xl font-semibold tracking-tight md:text-3xl">{{ L.cost.title }}</h2>
     <p class="mt-4 max-w-3xl text-base text-muted">{{ L.cost.intro }}</p>
     <div class="mt-8 grid gap-8 lg:grid-cols-2">
@@ -211,7 +259,7 @@ sitemap: true
   {{ ctaBand(L.ctaInline2.button, calcUrl, text=L.ctaInline2.text, tone="inline") }}
 
   {# ── 7. Почему не агент-одиночка ──────────────────────────────────────── #}
-  <section class="container section">
+  <section id="ne-agent" class="container section scroll-mt-24">
     <div class="container-narrow !px-0">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.notAgent.title }}</h2>
       <p class="mt-5 text-base text-muted">{{ L.notAgent.p1 }}</p>
@@ -242,7 +290,7 @@ sitemap: true
   </section>
 
   {# ── 9. Для кого мы ───────────────────────────────────────────────────── #}
-  <section class="container section">
+  <section id="dlya-kogo" class="container section scroll-mt-24">
     <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.audience.title }}</h2>
     <p class="mt-4 max-w-3xl text-base text-muted">{{ L.audience.intro }}</p>
     <div class="mt-8 grid gap-5 sm:grid-cols-3">
@@ -252,14 +300,15 @@ sitemap: true
             {{ icon(a.icon, "h-6 w-6 text-cyan") }}
           </span>
           <h3 class="mt-4 text-base font-semibold text-ink">{{ a.title }}</h3>
-          <p class="mt-2 text-sm text-muted">{{ a.desc }}</p>
+          {# desc категорий содержит перелинковку на /tovary/* — рендерим как safe. #}
+          <p class="mt-2 text-sm text-muted">{{ a.desc | safe }}</p>
         </div>
       {% endfor %}
     </div>
   </section>
 
   {# ── 10. Большой тизер «Торговля» ─────────────────────────────────────── #}
-  <section class="bg-surface-alt">
+  <section id="torgovlya" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <div class="max-w-3xl">
         <span class="inline-flex items-center gap-1.5 rounded-full bg-cyan/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-dark">
@@ -296,7 +345,7 @@ sitemap: true
   </section>
 
   {# ── 11. Примеры расчётов ─────────────────────────────────────────────── #}
-  <section class="container section">
+  <section id="primery" class="container section scroll-mt-24">
     <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.examples.title }}</h2>
     <div class="mt-8 grid gap-4 sm:grid-cols-2">
       {% for e in L.examples.items %}
@@ -312,7 +361,7 @@ sitemap: true
   </section>
 
   {# ── 12. FAQ (аккордеон + микроразметка FAQPage) ──────────────────────── #}
-  <section class="bg-surface-alt">
+  <section id="faq" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <div class="container-narrow !px-0">
         <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.faq.title }}</h2>
@@ -330,7 +379,8 @@ sitemap: true
                 {{ icon("chevron-down", "accordion-caret h-5 w-5 shrink-0 text-cyan transition-transform duration-200") }}
               </button>
               <div id="faq-panel-{{ loop.index }}" data-accordion-panel class="hidden pb-4" hidden>
-                <p class="max-w-2xl text-sm text-muted">{{ item.a }}</p>
+                {# ответ может содержать перелинковку (<a>) — рендерим как safe. #}
+                <p class="max-w-2xl text-sm text-muted">{{ item.a | safe }}</p>
               </div>
             </div>
           {% endfor %}
@@ -340,7 +390,7 @@ sitemap: true
   </section>
 
   {# ── 13. Контакты и скорость ответа ───────────────────────────────────── #}
-  <section class="container section">
+  <section id="kontakty-blok" class="container section scroll-mt-24">
     <div class="container-narrow !px-0">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.contacts.title }}</h2>
       <p class="mt-4 text-base text-muted">{{ L.contacts.text }}</p>
@@ -394,7 +444,7 @@ sitemap: true
       "name": {{ item.q | dump | safe }},
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": {{ item.a | dump | safe }}
+        "text": {{ item.a | striptags | dump | safe }}
       }
     }{% if not loop.last %},{% endif %}
     {%- endfor %}
