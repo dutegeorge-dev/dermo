@@ -34,10 +34,16 @@ export interface SiteConfig {
   defaultDescription: string;
   /** Путь к OG-картинке по умолчанию (относительный). */
   defaultOgImage: string;
-  /** Телефон в человекочитаемом виде. */
+  /** Телефон РФ в человекочитаемом виде. */
   phone: string;
-  /** Телефон для href (tel:). */
+  /** Телефон РФ для href (tel:). */
   phoneHref: string;
+  /** Телефон в Китае в человекочитаемом виде. */
+  phoneCn: string;
+  /** Телефон в Китае для href (tel:). */
+  phoneCnHref: string;
+  /** URL формы/секции расчёта (на старте — якорь-заглушка). */
+  calculateUrl: string;
   /** Ссылка на Telegram. */
   telegram: string;
   /** E-mail для связи. */
@@ -52,13 +58,61 @@ export interface SiteConfig {
   verification: VerificationConfig;
 }
 
-export interface NavItem {
-  /** Подпись пункта меню. */
-  title: string;
-  /** URL пункта (с завершающим слешем). */
+/**
+ * Пункт основной навигации (ярус 2 хедера).
+ * Тексты не хардкодятся: подпись берётся по ключу словаря (`titleKey`).
+ */
+export interface MainNavItem {
+  /** Ключ перевода подписи (например, "nav.services"). */
+  titleKey: string;
+  /** URL пункта. У пункта-меги (Услуги) ссылки нет — раскрывается панель. */
+  url?: string;
+  /** true — пункт с мега-меню «Услуги». */
+  mega?: boolean;
+}
+
+/** Ссылка с иконкой Lucide (способы доставки, торговые услуги). */
+export interface MegaLink {
+  /** Ключ перевода названия. */
+  titleKey: string;
+  /** URL ссылки. */
   url: string;
-  /** Вложенные пункты выпадающего меню. */
-  children?: NavItem[];
+  /** Имя иконки Lucide (см. partials/icon.njk). */
+  icon?: string;
+}
+
+/** Подгруппа левого крыла с кликабельным подзаголовком-хабом. */
+export interface MegaGroup {
+  /** Ключ перевода подзаголовка группы. */
+  titleKey: string;
+  /** URL хаба-раздела (кликабельный подзаголовок). */
+  url: string;
+  /** Ссылки внутри группы. */
+  items: MegaLink[];
+}
+
+/** Кликабельные «ворота» крыла — вход на экспертную страницу. */
+export interface MegaGate {
+  /** Ключ перевода заголовка ворот. */
+  titleKey: string;
+  /** Ключ перевода подписи под заголовком. */
+  subtitleKey: string;
+  /** URL целевой страницы крыла. */
+  url: string;
+}
+
+/** Мега-меню «Услуги»: два крыла — логистика (шире) и торговля. */
+export interface MegaMenu {
+  /** Левое крыло — Логистика (подгруппы). */
+  logistics: {
+    gate: MegaGate;
+    groups: MegaGroup[];
+  };
+  /** Правое крыло — Торговля (список услуг). */
+  trade: {
+    gate: MegaGate;
+    services: MegaLink[];
+  };
 }
 
 export interface Breadcrumb {
@@ -66,4 +120,76 @@ export interface Breadcrumb {
   url: string;
   /** Признак текущей (последней) крошки — без ссылки. */
   last?: boolean;
+}
+
+/**
+ * Общий интерфейс словаря переводов.
+ * Все три локали (ru/en/zh) реализуют один и тот же интерфейс — пропуск
+ * любого ключа в любой локали ловится типчекером (`tsc --noEmit`).
+ */
+export interface Dictionary {
+  nav: {
+    services: string;
+    cases: string;
+    blog: string;
+    about: string;
+    contacts: string;
+  };
+  cta: {
+    request: string;
+    calculate: string;
+    telegram: string;
+  };
+  mega: {
+    logistics: { title: string; subtitle: string };
+    trade: { title: string; subtitle: string };
+    byMethod: string;
+    byGoods: string;
+    byCity: string;
+  };
+  method: {
+    avto: string;
+    zhd: string;
+    more: string;
+    avia: string;
+  };
+  goods: {
+    flooring: string;
+    building: string;
+    ceramics: string;
+    electronics: string;
+    parts: string;
+    textile: string;
+    equipment: string;
+  };
+  city: {
+    moscow: string;
+    spb: string;
+    ekb: string;
+    nsk: string;
+    kazan: string;
+  };
+  trade: {
+    search: string;
+    purchase: string;
+    inspection: string;
+    quality: string;
+    samples: string;
+  };
+  lang: {
+    ru: string;
+    en: string;
+    zh: string;
+    switch: string;
+  };
+  a11y: {
+    openMenu: string;
+    closeMenu: string;
+    toggleServices: string;
+    mainNav: string;
+    utilityNav: string;
+    phoneRu: string;
+    phoneCn: string;
+    telegram: string;
+  };
 }

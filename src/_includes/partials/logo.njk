@@ -1,0 +1,10 @@
+{#
+  Логотип-плейсхолдер ТЛК БАРС. Один файл — заменить здесь, отразится везде.
+  variant: "light" — для тёмного фона (хедер), "dark" — для светлого (мобильная панель, подвал).
+#}
+{% macro logo(variant="light") %}
+<span class="inline-flex items-center gap-2.5">
+  <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-lg font-semibold text-brand">Б</span>
+  <span class="text-lg font-medium tracking-tight {{ 'text-white' if variant == 'light' else 'text-ink' }}">ТЛК БАРС</span>
+</span>
+{% endmacro %}

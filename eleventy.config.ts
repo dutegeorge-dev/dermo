@@ -1,5 +1,55 @@
 import { pathToFileURL } from "node:url";
-import type { Breadcrumb } from "./src/_data/types.js";
+import type { Breadcrumb, Dictionary } from "./src/_data/types.js";
+import ruDict from "./src/_data/i18n/ru.js";
+import enDict from "./src/_data/i18n/en.js";
+import zhDict from "./src/_data/i18n/zh.js";
+
+/** Поддерживаемые локали. ru — дефолт (в корне), en/zh — с URL-префиксом. */
+const LOCALES = ["ru", "en", "zh"] as const;
+type Locale = (typeof LOCALES)[number];
+
+const DICTS: Record<Locale, Dictionary> = {
+  ru: ruDict,
+  en: enDict,
+  zh: zhDict,
+};
+
+/** Достаёт значение по dot-path ("nav.services") из словаря. */
+function resolveKey(dict: Dictionary, key: string): string | undefined {
+  const value = key.split(".").reduce<unknown>((acc, part) => {
+    if (acc && typeof acc === "object" && part in (acc as Record<string, unknown>)) {
+      return (acc as Record<string, unknown>)[part];
+    }
+    return undefined;
+  }, dict);
+  return typeof value === "string" ? value : undefined;
+}
+
+/** Перевод ключа в локали с фолбэком на ru, затем на сам ключ. */
+function translate(key: string, locale: string): string {
+  const loc = (LOCALES as readonly string[]).includes(locale)
+    ? (locale as Locale)
+    : "ru";
+  return resolveKey(DICTS[loc], key) ?? resolveKey(DICTS.ru, key) ?? key;
+}
+
+/** Локаль из URL: /en/... → en, /zh/... → zh, иначе ru. */
+function localeFromUrl(url: string): Locale {
+  const match = /^\/(en|zh)(\/|$)/.exec(url || "/");
+  return match ? (match[1] as Locale) : "ru";
+}
+
+/** Канонический (ru) путь без языкового префикса. */
+function stripLocale(path: string): string {
+  return (path || "/").replace(/^\/(en|zh)(\/|$)/, "/");
+}
+
+/** Тот же путь в указанной локали (ru — без префикса, en/zh — с префиксом). */
+function localizedUrl(path: string, locale: string): string {
+  const base = stripLocale(path);
+  if (locale === "ru") return base;
+  return `/${locale}${base}`.replace(/\/{2,}/g, "/");
+}
 
 /**
  * Карта слаг → человекочитаемая подпись.
@@ -62,7 +112,7 @@ type EleventyConfig = {
   addPassthroughCopy: (path: unknown) => void;
   addWatchTarget: (path: string) => void;
   setTemplateFormats: (formats: string[] | string) => void;
-  addFilter: (name: string, fn: (...args: never[]) => unknown) => void;
+  addFilter: (name: string, fn: (...args: any[]) => unknown) => void;
   addGlobalData: (name: string, value: unknown) => void;
 };
 
@@ -79,8 +129,9 @@ export default function (eleventyConfig: EleventyConfig) {
     },
   });
 
-  // Статика: картинки и Decap CMS-админка.
+  // Статика: картинки, self-hosted шрифты (Onest woff2) и Decap CMS-админка.
   eleventyConfig.addPassthroughCopy({ "src/assets/img": "assets/img" });
+  eleventyConfig.addPassthroughCopy({ "src/assets/fonts": "assets/fonts" });
   eleventyConfig.addPassthroughCopy({ admin: "admin" });
 
   // CSS и JS собираются вне 11ty (postcss/esbuild) прямо в _site —
@@ -101,6 +152,19 @@ export default function (eleventyConfig: EleventyConfig) {
     if (/^https?:\/\//.test(path)) return path;
     return `${base.replace(/\/$/, "")}${path}`;
   });
+
+  // i18n: перевод ключа в локали — {{ "nav.services" | t(locale) }}.
+  eleventyConfig.addFilter("t", (key: string, locale: string) =>
+    translate(key, locale),
+  );
+
+  // i18n: тот же путь в другой локали (для переключателя языка и hreflang).
+  eleventyConfig.addFilter("localizedUrl", (path: string, locale: string) =>
+    localizedUrl(path, locale),
+  );
+
+  // Список локалей — для генерации hreflang в <head>.
+  eleventyConfig.addGlobalData("locales", LOCALES);
 
   // Дата в ISO (для sitemap lastmod и <time datetime>).
   eleventyConfig.addFilter("isoDate", (value: Date | string) => {
@@ -130,6 +194,10 @@ export default function (eleventyConfig: EleventyConfig) {
       (data.page?.fileSlug ? LABELS[data.page.fileSlug] : undefined) ||
       data.site?.defaultTitle ||
       "",
+    // Текущая локаль страницы, выведенная из URL (ru по умолчанию).
+    // Доступна во всех шаблонах как `locale` (хедер, base-layout, hreflang).
+    locale: (data: { page?: { url?: string } }) =>
+      localeFromUrl(data.page?.url || "/"),
   });
 
   return {
