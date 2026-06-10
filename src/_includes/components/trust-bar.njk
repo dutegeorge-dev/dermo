@@ -13,8 +13,9 @@
           <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan/15">
             {{ icon(fact.icon, "h-7 w-7 text-cyan") }}
           </span>
-          {# Фикс высоты под 2 строки — подписи во всех колонках стартуют на одном уровне. #}
-          <span class="mt-4 flex min-h-[2.75rem] items-start text-xl font-semibold leading-tight tracking-tight text-ink md:min-h-[3.5rem] md:text-2xl">{{ fact.valueKey | t(locale) }}</span>
+          {# Фикс высоты под 2 строки — подписи во всех колонках стартуют на одном уровне.
+             Высота с запасом под 2 строки leading-tight: text-xl ≈ 3.2rem, text-2xl ≈ 3.75rem. #}
+          <span class="mt-4 flex min-h-[3.25rem] items-start text-xl font-semibold leading-tight tracking-tight text-ink md:min-h-[4rem] md:text-2xl">{{ fact.valueKey | t(locale) }}</span>
           <span class="mt-1 text-sm text-muted">{{ fact.labelKey | t(locale) }}</span>
         </li>
       {% endfor %}
