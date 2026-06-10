@@ -12,12 +12,22 @@ function initStickyHeader(): void {
   const header = document.querySelector<HTMLElement>("[data-header]");
   if (!header) return;
 
-  const THRESHOLD = 8;
+  // Гистерезис: сворачиваем ниже COLLAPSE_AT, разворачиваем только у самого
+  // верха (EXPAND_AT). Мёртвая зона между порогами шире высоты utility-полосы —
+  // иначе изменение высоты хедера (scroll anchoring) возвращает scrollY за порог
+  // и состояние «дрожит». Внутри зоны состояние не меняется.
+  const COLLAPSE_AT = 64;
+  const EXPAND_AT = 8;
   let ticking = false;
 
   const update = (): void => {
-    const scrolled = window.scrollY > THRESHOLD;
-    header.dataset.scrolled = scrolled ? "true" : "false";
+    const y = window.scrollY;
+    const collapsed = header.dataset.scrolled === "true";
+    if (!collapsed && y > COLLAPSE_AT) {
+      header.dataset.scrolled = "true";
+    } else if (collapsed && y < EXPAND_AT) {
+      header.dataset.scrolled = "false";
+    }
     ticking = false;
   };
 
@@ -31,7 +41,8 @@ function initStickyHeader(): void {
     },
     { passive: true },
   );
-  update();
+
+  header.dataset.scrolled = window.scrollY > COLLAPSE_AT ? "true" : "false";
 }
 
 /** Мега-меню «Услуги»: тап/клик-переключение, Esc и клик-вне (hover — на CSS). */
