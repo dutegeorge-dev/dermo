@@ -193,6 +193,16 @@
     transform: translateY(8px);
     transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
   }
+  /* Невидимый «мостик» над панелью: перекрывает зазор между кнопкой и панелью,
+     чтобы курсор не терял :hover по пути с «Услуги» в мега-меню. */
+  .mega-panel::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 16px;
+  }
   /* Раскрытие: hover мышью (CSS) или JS-флаг data-open (клавиатура/тач/Esc). */
   .has-mega:hover > .mega-panel,
   .has-mega[data-open="true"] > .mega-panel {

@@ -62,7 +62,7 @@
                 <button
                   type="button"
                   data-mega-toggle
-                  class="inline-flex items-center gap-1 rounded-md px-3 py-2 text-[15px] font-medium text-white transition-colors hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+                  class="inline-flex h-16 items-center gap-1 rounded-md px-3 text-[15px] font-medium text-white transition-colors hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
                   aria-haspopup="true"
                   aria-expanded="false"
                 >
@@ -88,14 +88,14 @@
 
       {# Десктоп CTA (янтарная) #}
       <div class="hidden lg:flex">
-        <a href="{{ '/kontakty/' | localizedUrl(locale) }}" class="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
+        <a href="{{ '/kontakty/' | localizedUrl(locale) }}" class="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
           {{ "cta.request" | t(locale) }}
         </a>
       </div>
 
       {# Мобайл: уменьшенная CTA + бургер #}
       <div class="flex items-center gap-2 lg:hidden">
-        <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-3 text-sm font-medium text-ink hover:bg-accent-hover" aria-label="{{ 'cta.telegram' | t(locale) }}">
+        <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-3 text-sm font-medium text-white hover:bg-accent-hover" aria-label="{{ 'cta.telegram' | t(locale) }}">
           {{ icon("send", "h-5 w-5") }}
         </a>
         <button
