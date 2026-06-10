@@ -13,10 +13,9 @@
           <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan/15">
             {{ icon(fact.icon, "h-7 w-7 text-cyan") }}
           </span>
-          {# Фикс высоты под 2 строки + выравнивание по низу: однострочные тезисы
-             прижимаются к подписи (пустота уходит вверх), подписи во всех колонках
-             на одном уровне. Запас под 2 строки leading-tight: text-xl ≈ 3.2rem, text-2xl ≈ 3.75rem. #}
-          <span class="mt-4 flex min-h-[3.25rem] items-end text-xl font-semibold leading-tight tracking-tight text-ink md:min-h-[4rem] md:text-2xl">{{ fact.valueKey | t(locale) }}</span>
+          {# Значение — одно слово (однострочное), поэтому подписи во всех колонках
+             выравниваются естественно, без резерва высоты. #}
+          <span class="mt-4 text-xl font-semibold leading-tight tracking-tight text-ink md:text-2xl">{{ fact.valueKey | t(locale) }}</span>
           <span class="mt-1 text-sm text-muted">{{ fact.labelKey | t(locale) }}</span>
         </li>
       {% endfor %}
