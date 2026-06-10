@@ -1,38 +1,22 @@
 ---
 layout: layouts/base.njk
 permalink: /
-title: ООО ТЛК БАРС — транспортно-логистическая компания
-description: Транспортно-логистическая компания ООО ТЛК БАРС — доставка грузов автотранспортом, ЖД, морем и авиа по России. Логистика и торговля.
+title: ООО ТЛК БАРС — торгово-логистическая компания
+description: "Торгово-логистическая компания ООО ТЛК БАРС: доставляем и закупаем товары из Китая под ключ. Белая доставка с полным пакетом документов, команда в Гуанчжоу, прямая работа с заводами."
 sitemap: true
 ---
-{% from "components/card.njk" import card %}
 {% include "partials/header.njk" %}
 
 <main class="flex-1">
-  {# Hero (контент-заглушка) #}
-  <section class="bg-brand text-white">
-    <div class="container section">
-      <h1 class="max-w-3xl text-4xl font-bold tracking-tight md:text-5xl">{{ title }}</h1>
-      <p class="mt-4 max-w-2xl text-lg text-white/90">Каркас сайта. Контент будет добавлен позже.</p>
-      <div class="mt-8 flex flex-wrap gap-3">
-        <a href="/logistika/" class="btn-accent">Логистика</a>
-        <a href="/kontakty/" class="btn-outline border-white text-white hover:bg-white hover:text-brand">Связаться</a>
-      </div>
-    </div>
-  </section>
-
-  {# Направления (ссылки на разделы) #}
-  <section class="container section">
-    <h2 class="text-2xl font-bold">Направления</h2>
-    <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {{ card("Доставка по способу", "/dostavka/", "Авто, ЖД, море, авиа") }}
-      {{ card("Доставка по товару", "/tovary/", "Категории грузов") }}
-      {{ card("Доставка по городу", "/goroda/", "Города присутствия") }}
-      {{ card("Логистика", "/logistika/", "") }}
-      {{ card("Торговля", "/torgovlya/", "") }}
-      {{ card("О компании", "/o-kompanii/", "") }}
-    </div>
-  </section>
+  {# Порядок секций — по ТЗ главной (раздел 1). Каждая секция — отдельный компонент. #}
+  {% include "components/hero.njk" %}
+  {% include "components/trust-bar.njk" %}
+  {% include "components/about-short.njk" %}
+  {% include "components/wings.njk" %}
+  {% include "components/steps.njk" %}
+  {% include "components/cases.njk" %}
+  {% include "components/blog.njk" %}
+  {% include "components/cta-final.njk" %}
 </main>
 
 {% include "partials/footer.njk" %}

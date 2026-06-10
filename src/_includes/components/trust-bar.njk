@@ -1,0 +1,22 @@
+{#
+  Полоса доверия — реальные проверяемые факты с бирюзовыми иконками Lucide.
+  Данные — _data/home.ts (home.trust); тексты — из словаря. Светлый фон.
+  Адаптив: 2 в ряд на мобайле → 3 на планшете → 5 в ряд на десктопе.
+#}
+{% from "partials/icon.njk" import icon %}
+
+<section class="bg-surface-alt">
+  <div class="container section">
+    <ul class="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
+      {% for fact in home.trust %}
+        <li class="flex flex-col items-start">
+          <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan/10">
+            {{ icon(fact.icon, "h-6 w-6 text-cyan") }}
+          </span>
+          <span class="mt-4 text-2xl font-light tracking-tight text-ink md:text-3xl">{{ fact.valueKey | t(locale) }}</span>
+          <span class="mt-1 text-sm text-muted">{{ fact.labelKey | t(locale) }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>

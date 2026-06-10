@@ -1,0 +1,58 @@
+{#
+  Блог: последние статьи. Рендерятся из коллекции Decap CMS `collections.blog`,
+  если в ней есть записи; иначе — из плейсхолдеров _data/homeBlog.ts (видимы на старте).
+  Карточка кликабельна целиком; место под изображение — lazy-load. Фон surface-alt.
+#}
+{% from "partials/icon.njk" import icon %}
+
+{% if collections.blog and collections.blog.length %}
+  {% set items = collections.blog | reverse %}
+  {% set fromCms = true %}
+{% else %}
+  {% set items = homeBlog %}
+  {% set fromCms = false %}
+{% endif %}
+
+<section class="bg-surface-alt">
+  <div class="container section">
+    <div class="flex items-end justify-between gap-4">
+      <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "home.blog.title" | t(locale) }}</h2>
+      <a href="{{ '/blog/' | localizedUrl(locale) }}" class="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-cyan-dark transition-colors hover:text-cyan">
+        {{ "home.blog.all" | t(locale) }}
+        {{ icon("arrow-right", "h-4 w-4") }}
+      </a>
+    </div>
+
+    <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {% for item in items %}
+        {% if loop.index0 < 3 %}
+        {% set title = item.data.title if fromCms else item.title %}
+        {% set description = item.data.description if fromCms else item.description %}
+        {% set date = item.data.date if fromCms else item.date %}
+        {% set image = item.data.image if fromCms else item.image %}
+        <a
+          href="{{ item.url }}"
+          class="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-surface shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+        >
+          {% if image %}
+            <img src="{{ image }}" alt="{{ title }}" loading="lazy" decoding="async" class="aspect-[16/10] w-full object-cover" width="640" height="400" />
+          {% else %}
+            <span class="flex aspect-[16/10] w-full items-center justify-center bg-surface-alt" aria-hidden="true">
+              {{ icon("file-text", "h-10 w-10 text-slate-300") }}
+            </span>
+          {% endif %}
+          <div class="flex flex-1 flex-col p-6">
+            {% if date %}<time datetime="{{ date | isoDate }}" class="text-xs font-medium uppercase tracking-wide text-muted">{{ date | readableDate }}</time>{% endif %}
+            <h3 class="mt-2 text-lg font-medium text-ink">{{ title }}</h3>
+            <p class="mt-2 flex-1 text-sm leading-relaxed text-muted">{{ description }}</p>
+            <span class="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-cyan-dark transition-colors group-hover:text-cyan">
+              {{ "home.blog.read" | t(locale) }}
+              {{ icon("arrow-right", "h-4 w-4") }}
+            </span>
+          </div>
+        </a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</section>
