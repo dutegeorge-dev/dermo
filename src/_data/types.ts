@@ -115,6 +115,74 @@ export interface MegaMenu {
   };
 }
 
+/**
+ * Факт «полосы доверия» на главной. Текст — по ключам словаря (i18n),
+ * иконка — Lucide (см. partials/icon.njk). Данные в _data/home.ts.
+ */
+export interface TrustFact {
+  /** Имя иконки Lucide. */
+  icon: string;
+  /** Ключ перевода крупного числа/короткой фразы. */
+  valueKey: string;
+  /** Ключ перевода подписи (серый текст). */
+  labelKey: string;
+}
+
+/** Шаг процесса «Как мы работаем» (01–07). */
+export interface ProcessStep {
+  /** Порядковый номер с ведущим нулём ("01"…"07"). */
+  num: string;
+  /** Имя иконки Lucide. */
+  icon: string;
+  /** Ключ перевода заголовка шага. */
+  titleKey: string;
+  /** Ключ перевода текста шага (может содержать разметку — рендерится как safe). */
+  textKey: string;
+}
+
+/** Крупный парный блок-крыло на главной (Логистика / Торговля). */
+export interface HomeWing {
+  /** Имя иконки Lucide. */
+  icon: string;
+  /** Ключ перевода заголовка. */
+  titleKey: string;
+  /** Ключ перевода описания. */
+  descKey: string;
+  /** Ключ перевода CTA-ссылки. */
+  ctaKey: string;
+  /** URL целевой экспертной страницы крыла. */
+  url: string;
+  /** Ключи перевода тизер-списка (короткие подписи). */
+  teaserKeys: string[];
+}
+
+/** Данные секций главной (полоса доверия, шаги, крылья). */
+export interface HomeData {
+  trust: TrustFact[];
+  steps: ProcessStep[];
+  wings: {
+    logistics: HomeWing;
+    trade: HomeWing;
+  };
+}
+
+/**
+ * Карточка-плейсхолдер для секций «Кейсы» и «Блог» на главной.
+ * Имитирует будущую запись Decap CMS-коллекции (поэтому тексты — не i18n,
+ * а локальные «фейковые записи»). При появлении реальной коллекции карточки
+ * рендерятся из неё, а плейсхолдеры остаются фолбэком для дебага.
+ */
+export interface PlaceholderCard {
+  /** Заголовок карточки. */
+  title: string;
+  /** Короткое описание/анонс. */
+  description: string;
+  /** Ссылка «Подробнее»/«Читать». */
+  url: string;
+  /** Дата-заглушка (для блога), ISO или человекочитаемая. */
+  date?: string;
+}
+
 export interface Breadcrumb {
   name: string;
   url: string;
@@ -310,6 +378,90 @@ export interface Dictionary {
     en: string;
     zh: string;
     switch: string;
+  };
+  home: {
+    hero: {
+      title: string;
+      subtitle: string;
+      /** Подпись вторичной CTA «Как мы работаем». */
+      secondary: string;
+    };
+    heroForm: {
+      title: string;
+      note: string;
+      cargoLabel: string;
+      cargoError: string;
+      contactLabel: string;
+      contactError: string;
+      success: string;
+    };
+    trust: {
+      expValue: string;
+      expLabel: string;
+      teamValue: string;
+      teamLabel: string;
+      volumeValue: string;
+      volumeLabel: string;
+      whiteValue: string;
+      whiteLabel: string;
+      bankValue: string;
+      bankLabel: string;
+      suppliersValue: string;
+      suppliersLabel: string;
+    };
+    about: {
+      title: string;
+      p1: string;
+      p2: string;
+      p3: string;
+      link: string;
+    };
+    wings: {
+      title: string;
+      subtitle: string;
+      logistics: {
+        title: string;
+        desc: string;
+        cta: string;
+        t1: string;
+        t2: string;
+        t3: string;
+      };
+      trade: {
+        title: string;
+        desc: string;
+        cta: string;
+        t1: string;
+        t2: string;
+        t3: string;
+        t4: string;
+      };
+    };
+    steps: {
+      title: string;
+      s1: { title: string; text: string };
+      s2: { title: string; text: string };
+      s3: { title: string; text: string };
+      s4: { title: string; text: string };
+      s5: { title: string; text: string };
+      s6: { title: string; text: string };
+      s7: { title: string; text: string };
+      s8: { title: string; text: string };
+    };
+    cases: {
+      title: string;
+      all: string;
+      more: string;
+    };
+    blog: {
+      title: string;
+      all: string;
+      read: string;
+    };
+    ctaFinal: {
+      title: string;
+      subtitle: string;
+    };
   };
   a11y: {
     openMenu: string;

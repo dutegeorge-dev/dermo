@@ -1,0 +1,42 @@
+{#
+  Два равноправных крыла — Логистика | Торговля (сердце главной, торгово-логистическая суть).
+  Симметричные парные блоки 50/50; кликабельны целиком (весь блок — ссылка),
+  CTA внутри — стилизованный span (без вложенных <a>). Данные — _data/home.ts.
+  Десктоп — в ряд, мобайл — стопкой. Hover — бирюзовая подсветка/тень.
+#}
+{% from "partials/icon.njk" import icon %}
+{% set wingList = [home.wings.logistics, home.wings.trade] %}
+
+<section class="bg-surface-alt">
+  <div class="container section">
+    <div class="max-w-2xl">
+      <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "home.wings.title" | t(locale) }}</h2>
+      <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "home.wings.subtitle" | t(locale) }}</p>
+    </div>
+
+    <div class="mt-10 grid gap-6 lg:grid-cols-2">
+      {% for wing in wingList %}
+        <a
+          href="{{ wing.url | localizedUrl(locale) }}"
+          class="group flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-8 shadow-sm ring-1 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl hover:ring-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan md:p-10"
+        >
+          <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan/10">
+            {{ icon(wing.icon, "h-7 w-7 text-cyan") }}
+          </span>
+          <h2 class="mt-6 text-2xl font-light tracking-tight text-ink md:text-3xl">{{ wing.titleKey | t(locale) }}</h2>
+          <p class="mt-4 text-base leading-relaxed text-muted">{{ wing.descKey | t(locale) }}</p>
+
+          <ul class="mt-6 flex flex-wrap gap-2">
+            {% for key in wing.teaserKeys %}
+              <li class="rounded-full bg-surface-alt px-3 py-1 text-sm text-ink">{{ key | t(locale) }}</li>
+            {% endfor %}
+          </ul>
+
+          <span class="mt-8 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors group-hover:text-cyan">
+            {{ wing.ctaKey | t(locale) }}
+          </span>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>

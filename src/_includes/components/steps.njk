@@ -1,0 +1,26 @@
+{#
+  «Как мы работаем» — 7 шагов процесса (01–07). Якорь #kak-rabotaem (вторичная CTA hero).
+  Крупный тонкий номер (бирюза), иконка Lucide, заголовок и текст шага.
+  Текст шага 1 содержит ссылку на форму — рендерится как safe. Данные — _data/home.ts.
+  Адаптив: 1 → 2 → 4 в ряд (7 карточек ложатся 4 + 3).
+#}
+{% from "partials/icon.njk" import icon %}
+
+<section id="kak-rabotaem" class="scroll-mt-24 bg-surface">
+  <div class="container section">
+    <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "home.steps.title" | t(locale) }}</h2>
+
+    <ol class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {% for step in home.steps %}
+        <li class="flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 transition hover:border-cyan hover:shadow-md">
+          <div class="flex items-center justify-between">
+            <span class="text-4xl font-light tracking-tight text-cyan/70 md:text-5xl">{{ step.num }}</span>
+            {{ icon(step.icon, "h-6 w-6 text-cyan") }}
+          </div>
+          <h3 class="mt-5 text-lg font-medium text-ink">{{ step.titleKey | t(locale) }}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted">{{ step.textKey | t(locale) | safe }}</p>
+        </li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>
