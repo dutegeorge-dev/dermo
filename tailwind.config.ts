@@ -28,28 +28,32 @@ const config: Config = {
     },
     extend: {
       colors: {
-        // Плейсхолдеры бренд-цветов — заменить на фирменные позже.
+        // Дизайн-токены бренда ТЛК БАРС. Меняются здесь — отражаются на всём сайте.
+        // brand — ультрамарин: основной фон хедера и акценты.
         brand: {
-          DEFAULT: "#0f4c81",
-          light: "#3a6ea5",
-          dark: "#0a3a63",
+          DEFAULT: "#1E3FD0",
+          dark: "#15269C", // utility-полоса, hover-состояния
+          light: "#3a6ea5", // оставлено для обратной совместимости
         },
+        // accent — янтарь: ТОЛЬКО главные CTA («Оставить заявку», «Рассчитать»).
         accent: {
-          DEFAULT: "#f59e0b",
-          dark: "#b45309",
+          DEFAULT: "#F5A623",
+          hover: "#D98E0B",
+          dark: "#D98E0B", // алиас hover для существующих утилит .btn-accent
         },
+        // cyan — бирюза: мелкие акценты (иконки, подчёркивания, активные состояния).
+        cyan: {
+          DEFAULT: "#22B8CF",
+          dark: "#1098AD",
+        },
+        ink: "#0F172A", // основной текст на светлом
+        muted: "#64748B", // вторичный текст
+        surface: "#FFFFFF", // фон мега-меню, светлые блоки
+        "surface-alt": "#F1F5F9", // фон кликабельных «ворот»
       },
       fontFamily: {
-        // Системный стек по умолчанию (без render-blocking веб-шрифтов).
-        sans: [
-          "system-ui",
-          "-apple-system",
-          "Segoe UI",
-          "Roboto",
-          "Helvetica Neue",
-          "Arial",
-          "sans-serif",
-        ],
+        // Onest (self-hosted woff2, @font-face в tailwind.css) — дефолтный шрифт сайта.
+        sans: ["Onest", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
       },
     },
   },

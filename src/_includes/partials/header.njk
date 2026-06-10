@@ -1,76 +1,248 @@
-<header class="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur">
-  <div class="container flex items-center justify-between gap-4 py-3">
-    <a href="/" class="flex shrink-0 items-center gap-2" aria-label="{{ site.legalName }}">
-      <img src="/assets/img/logo.svg" alt="{{ site.name }}" width="120" height="32" />
-    </a>
+{#
+  Двухъярусный sticky-хедер ТЛК БАРС.
+  Ярус 1 (utility) — переключатель языка, «Рассчитать», два телефона, Telegram.
+  Ярус 2 (navbar) — логотип, меню (5 пунктов), янтарная CTA. «Услуги» → мега-меню.
+  Тексты — из словаря (t), без хардкода. Поведение — header.ts (прогрессивное улучшение).
+#}
+{% from "partials/icon.njk" import icon %}
+{% from "partials/logo.njk" import logo %}
 
-    {# Десктоп-навигация #}
-    <nav class="hidden lg:block" aria-label="Основная навигация">
-      <ul class="flex items-center gap-1">
-        {% for item in navigation %}
-          <li class="group relative">
-            <a
-              href="{{ item.url }}"
-              class="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-brand{% if page.url == item.url %} text-brand{% endif %}"
-            >
-              {{ item.title }}
-              {% if item.children %}<span aria-hidden="true">▾</span>{% endif %}
-            </a>
-            {% if item.children %}
-              <ul class="invisible absolute left-0 top-full z-50 min-w-56 rounded-md border border-gray-100 bg-white py-2 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-                {% for child in item.children %}
-                  <li>
-                    <a href="{{ child.url }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-brand">{{ child.title }}</a>
-                  </li>
-                {% endfor %}
-              </ul>
+<header data-header class="sticky top-0 z-40">
+  {# ── Ярус 1: utility-полоса (скрывается при скролле) ───────────────── #}
+  <div class="utility-bar bg-brand-dark text-white">
+    <div class="container flex h-9 items-center justify-between gap-4 text-xs">
+      {# Переключатель языка #}
+      <nav class="flex items-center gap-1" aria-label="{{ 'a11y.utilityNav' | t(locale) }}">
+        {% for loc in locales %}
+          {% if loc == locale %}
+            <span class="px-1 font-medium text-cyan" aria-current="true">{{ ("lang." + loc) | t(locale) }}</span>
+          {% else %}
+            <a href="{{ page.url | localizedUrl(loc) }}" class="px-1 text-white/70 transition-colors hover:text-cyan" hreflang="{{ loc }}">{{ ("lang." + loc) | t(locale) }}</a>
+          {% endif %}
+          {% if not loop.last %}<span class="text-white/30" aria-hidden="true">·</span>{% endif %}
+        {% endfor %}
+      </nav>
+
+      {# Сервисы: Рассчитать · телефоны · Telegram #}
+      <div class="flex items-center gap-3 text-white/80">
+        <a href="{{ site.calculateUrl | localizedUrl(locale) }}" class="hidden items-center gap-1.5 transition-colors hover:text-cyan sm:inline-flex">
+          {{ icon("calculator", "h-4 w-4") }}
+          <span>{{ "cta.calculate" | t(locale) }}</span>
+        </a>
+        <span class="hidden h-3 w-px bg-white/20 sm:block" aria-hidden="true"></span>
+        <a href="tel:{{ site.phoneHref }}" class="inline-flex items-center gap-1.5 transition-colors hover:text-cyan" aria-label="{{ 'a11y.phoneRu' | t(locale) }}">
+          {{ icon("phone", "h-3.5 w-3.5 text-cyan") }}
+          <span>{{ site.phone }}</span>
+        </a>
+        <span class="text-white/30" aria-hidden="true">·</span>
+        <a href="tel:{{ site.phoneCnHref }}" class="hidden items-center gap-1.5 transition-colors hover:text-cyan md:inline-flex" aria-label="{{ 'a11y.phoneCn' | t(locale) }}">
+          <span>{{ site.phoneCn }}</span>
+        </a>
+        <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.telegram' | t(locale) }}">
+          {{ icon("send", "h-4 w-4") }}
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# ── Ярус 2: основная навигация (sticky-якорь) ─────────────────────── #}
+  <div class="navbar bg-brand text-white">
+    <div class="container relative flex h-16 items-center justify-between gap-6">
+      {# Логотип #}
+      <a href="{{ '/' | localizedUrl(locale) }}" class="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-brand" aria-label="{{ site.legalName }}">
+        {{ logo("light") }}
+      </a>
+
+      {# Десктоп-навигация #}
+      <nav class="hidden lg:block" aria-label="{{ 'a11y.mainNav' | t(locale) }}">
+        <ul class="flex items-center gap-1">
+          {% for item in navigation %}
+            {% if item.mega %}
+              <li class="has-mega" data-mega>
+                <button
+                  type="button"
+                  data-mega-toggle
+                  class="inline-flex h-16 items-center gap-1 rounded-md px-3 text-[15px] font-medium text-white transition-colors hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                >
+                  {{ "nav.services" | t(locale) }}
+                  {{ icon("chevron-down", "mega-caret h-4 w-4 transition-transform duration-200") }}
+                </button>
+                {% include "partials/mega-services.njk" %}
+              </li>
+            {% else %}
+              <li>
+                <a
+                  href="{{ item.url | localizedUrl(locale) }}"
+                  class="relative inline-flex items-center rounded-md px-3 py-2 text-[15px] font-medium text-white transition-colors hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan after:absolute after:inset-x-3 after:-bottom-0.5 after:h-0.5 after:origin-left after:scale-x-0 after:bg-cyan after:transition-transform hover:after:scale-x-100{% if (item.url | localizedUrl(locale)) == page.url %} text-cyan after:scale-x-100{% endif %}"
+                  {% if (item.url | localizedUrl(locale)) == page.url %}aria-current="page"{% endif %}
+                >
+                  {{ item.titleKey | t(locale) }}
+                </a>
+              </li>
             {% endif %}
-          </li>
+          {% endfor %}
+        </ul>
+      </nav>
+
+      {# Десктоп CTA (янтарная) #}
+      <div class="hidden lg:flex">
+        <a href="{{ '/kontakty/' | localizedUrl(locale) }}" class="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
+          {{ "cta.request" | t(locale) }}
+        </a>
+      </div>
+
+      {# Мобайл: уменьшенная CTA + бургер #}
+      <div class="flex items-center gap-2 lg:hidden">
+        <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-3 text-sm font-medium text-white hover:bg-accent-hover" aria-label="{{ 'cta.telegram' | t(locale) }}">
+          {{ icon("send", "h-5 w-5") }}
+        </a>
+        <button
+          type="button"
+          data-menu-toggle
+          class="inline-flex h-11 w-11 items-center justify-center rounded-lg text-white transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+          aria-expanded="false"
+          aria-controls="mobile-panel"
+          aria-label="{{ 'a11y.openMenu' | t(locale) }}"
+        >
+          {{ icon("menu", "h-6 w-6") }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {# ── Мобильная off-canvas панель ───────────────────────────────────── #}
+  <div data-mobile-overlay class="invisible fixed inset-0 z-40 bg-ink/50 opacity-0 transition-opacity duration-300 lg:hidden" hidden></div>
+
+  <aside
+    id="mobile-panel"
+    data-mobile-panel
+    class="fixed inset-y-0 right-0 z-50 flex w-[88%] max-w-sm translate-x-full flex-col overflow-y-auto bg-surface text-ink shadow-2xl transition-transform duration-300 lg:hidden"
+    aria-label="{{ 'a11y.mainNav' | t(locale) }}"
+    aria-hidden="true"
+  >
+    {# Шапка панели #}
+    <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+      {{ logo("dark") }}
+      <button
+        type="button"
+        data-menu-close
+        class="inline-flex h-11 w-11 items-center justify-center rounded-lg text-ink hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+        aria-label="{{ 'a11y.closeMenu' | t(locale) }}"
+      >
+        {{ icon("x", "h-6 w-6") }}
+      </button>
+    </div>
+
+    {# Меню #}
+    <nav class="flex-1 px-4 py-2" aria-label="{{ 'a11y.mainNav' | t(locale) }}">
+      <ul class="divide-y divide-slate-100">
+        {# Услуги — аккордеон с двумя крыльями #}
+        <li>
+          <button
+            type="button"
+            data-accordion-toggle
+            class="flex min-h-[44px] w-full items-center justify-between py-3 text-left text-base font-medium text-ink"
+            aria-expanded="false"
+          >
+            {{ "nav.services" | t(locale) }}
+            {{ icon("chevron-down", "accordion-caret h-5 w-5 text-cyan transition-transform duration-200") }}
+          </button>
+          <div data-accordion-panel class="hidden pb-3" hidden>
+            {# Крыло: Логистика #}
+            <a href="{{ megaMenu.logistics.gate.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center justify-between gap-3 rounded-lg bg-surface-alt px-3 py-2">
+              <span>
+                <span class="block text-sm font-semibold uppercase tracking-wide text-ink">{{ megaMenu.logistics.gate.titleKey | t(locale) }}</span>
+                <span class="mt-0.5 block text-xs text-muted">{{ megaMenu.logistics.gate.subtitleKey | t(locale) }}</span>
+              </span>
+              {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan") }}
+            </a>
+            <div class="mt-1 pl-2">
+              {% for group in megaMenu.logistics.groups %}
+                <div>
+                  <button type="button" data-accordion-toggle class="flex min-h-[44px] w-full items-center justify-between py-2 text-left text-sm font-medium text-ink" aria-expanded="false">
+                    {{ group.titleKey | t(locale) }}
+                    {{ icon("chevron-down", "accordion-caret h-4 w-4 text-cyan transition-transform duration-200") }}
+                  </button>
+                  <div data-accordion-panel class="hidden pb-2 pl-2" hidden>
+                    <a href="{{ group.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center text-sm text-cyan">{{ group.titleKey | t(locale) }} →</a>
+                    <ul>
+                      {% for item in group.items %}
+                        <li>
+                          <a href="{{ item.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center gap-2 text-sm text-muted">
+                            {% if item.icon %}{{ icon(item.icon, "h-4 w-4 shrink-0 text-cyan") }}{% endif %}
+                            <span>{{ item.titleKey | t(locale) }}</span>
+                          </a>
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            {# Крыло: Торговля #}
+            <a href="{{ megaMenu.trade.gate.url | localizedUrl(locale) }}" class="mt-2 flex min-h-[44px] items-center justify-between gap-3 rounded-lg bg-surface-alt px-3 py-2">
+              <span>
+                <span class="block text-sm font-semibold uppercase tracking-wide text-ink">{{ megaMenu.trade.gate.titleKey | t(locale) }}</span>
+                <span class="mt-0.5 block text-xs text-muted">{{ megaMenu.trade.gate.subtitleKey | t(locale) }}</span>
+              </span>
+              {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan") }}
+            </a>
+            <ul class="mt-1 pl-2">
+              {% for service in megaMenu.trade.services %}
+                <li>
+                  <a href="{{ service.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center gap-2 text-sm text-ink">
+                    {{ icon(service.icon, "h-4 w-4 shrink-0 text-cyan") }}
+                    <span>{{ service.titleKey | t(locale) }}</span>
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </li>
+
+        {# Остальные пункты #}
+        {% for item in navigation %}
+          {% if not item.mega %}
+            <li>
+              <a href="{{ item.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center py-3 text-base font-medium text-ink hover:text-cyan{% if (item.url | localizedUrl(locale)) == page.url %} text-cyan{% endif %}"{% if (item.url | localizedUrl(locale)) == page.url %} aria-current="page"{% endif %}>
+                {{ item.titleKey | t(locale) }}
+              </a>
+            </li>
+          {% endif %}
         {% endfor %}
       </ul>
     </nav>
 
-    <div class="hidden items-center gap-3 lg:flex">
-      <a href="tel:{{ site.phoneHref }}" class="text-sm font-semibold text-brand">{{ site.phone }}</a>
-      <a href="{{ site.telegram }}" class="btn-accent" rel="nofollow noopener" target="_blank">Telegram</a>
-    </div>
-
-    {# Кнопка мобильного меню #}
-    <button
-      type="button"
-      class="inline-flex items-center rounded-md p-2 text-gray-700 lg:hidden"
-      data-menu-toggle
-      aria-expanded="false"
-      aria-controls="mobile-menu"
-      aria-label="Открыть меню"
-    >
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <line x1="3" y1="6" x2="21" y2="6" />
-        <line x1="3" y1="12" x2="21" y2="12" />
-        <line x1="3" y1="18" x2="21" y2="18" />
-      </svg>
-    </button>
-  </div>
-
-  {# Мобильное меню #}
-  <nav id="mobile-menu" class="hidden border-t border-gray-100 lg:hidden" data-mobile-menu aria-label="Мобильная навигация">
-    <ul class="container flex flex-col gap-1 py-3">
-      {% for item in navigation %}
-        <li>
-          <a href="{{ item.url }}" class="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">{{ item.title }}</a>
-          {% if item.children %}
-            <ul class="ml-3 border-l border-gray-100 pl-3">
-              {% for child in item.children %}
-                <li><a href="{{ child.url }}" class="block rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50">{{ child.title }}</a></li>
-              {% endfor %}
-            </ul>
+    {# Utility-блок панели: телефоны, Telegram, Рассчитать, язык #}
+    <div class="border-t border-slate-200 px-4 py-4">
+      <div class="space-y-2">
+        <a href="tel:{{ site.phoneHref }}" class="flex min-h-[44px] items-center gap-2 text-sm font-medium text-ink">
+          {{ icon("phone", "h-4 w-4 text-cyan") }}{{ site.phone }}
+        </a>
+        <a href="tel:{{ site.phoneCnHref }}" class="flex min-h-[44px] items-center gap-2 text-sm font-medium text-ink">
+          {{ icon("phone", "h-4 w-4 text-cyan") }}{{ site.phoneCn }}
+        </a>
+        <div class="flex flex-wrap items-center gap-2 pt-1">
+          <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white">
+            {{ icon("send", "h-4 w-4") }} {{ "cta.telegram" | t(locale) }}
+          </a>
+          <a href="{{ site.calculateUrl | localizedUrl(locale) }}" class="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-cyan px-4 text-sm font-medium text-cyan">
+            {{ icon("calculator", "h-4 w-4") }} {{ "cta.calculate" | t(locale) }}
+          </a>
+        </div>
+      </div>
+      <div class="mt-4 flex items-center gap-1 text-sm">
+        {% for loc in locales %}
+          {% if loc == locale %}
+            <span class="px-2 py-1 font-medium text-cyan" aria-current="true">{{ ("lang." + loc) | t(locale) }}</span>
+          {% else %}
+            <a href="{{ page.url | localizedUrl(loc) }}" class="px-2 py-1 text-muted hover:text-cyan" hreflang="{{ loc }}">{{ ("lang." + loc) | t(locale) }}</a>
           {% endif %}
-        </li>
-      {% endfor %}
-      <li class="mt-2 flex items-center gap-3 px-3">
-        <a href="tel:{{ site.phoneHref }}" class="text-sm font-semibold text-brand">{{ site.phone }}</a>
-        <a href="{{ site.telegram }}" class="btn-accent" rel="nofollow noopener" target="_blank">Telegram</a>
-      </li>
-    </ul>
-  </nav>
+          {% if not loop.last %}<span class="text-slate-300" aria-hidden="true">·</span>{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </aside>
 </header>

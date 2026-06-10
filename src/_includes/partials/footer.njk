@@ -14,8 +14,12 @@
     <nav aria-label="Навигация в подвале">
       <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-900">Разделы</h2>
       <ul class="mt-4 space-y-2">
+        <li><a href="{{ megaMenu.logistics.gate.url | localizedUrl(locale) }}" class="text-sm text-gray-600 hover:text-brand">{{ megaMenu.logistics.gate.titleKey | t(locale) }}</a></li>
+        <li><a href="{{ megaMenu.trade.gate.url | localizedUrl(locale) }}" class="text-sm text-gray-600 hover:text-brand">{{ megaMenu.trade.gate.titleKey | t(locale) }}</a></li>
         {% for item in navigation %}
-          <li><a href="{{ item.url }}" class="text-sm text-gray-600 hover:text-brand">{{ item.title }}</a></li>
+          {% if not item.mega %}
+            <li><a href="{{ item.url | localizedUrl(locale) }}" class="text-sm text-gray-600 hover:text-brand">{{ item.titleKey | t(locale) }}</a></li>
+          {% endif %}
         {% endfor %}
       </ul>
     </nav>
@@ -24,6 +28,7 @@
       <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-900">Контакты</h2>
       <ul class="mt-4 space-y-2 text-sm text-gray-600">
         <li><a href="tel:{{ site.phoneHref }}" class="font-semibold text-brand">{{ site.phone }}</a></li>
+        <li><a href="tel:{{ site.phoneCnHref }}" class="font-semibold text-brand">{{ site.phoneCn }}</a></li>
         <li><a href="mailto:{{ site.email }}" class="hover:text-brand">{{ site.email }}</a></li>
         <li><a href="{{ site.telegram }}" class="hover:text-brand" rel="nofollow noopener" target="_blank">Telegram</a></li>
       </ul>

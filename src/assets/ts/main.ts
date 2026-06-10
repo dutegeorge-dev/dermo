@@ -1,10 +1,13 @@
 /**
  * Клиентский скрипт каркаса:
- *  - переключение мобильного меню;
+ *  - поведение хедера (мега-меню, мобильная панель, sticky) — модуль ./header;
  *  - заглушка отправки форм заявок (клиентская валидация + событие в аналитику).
  *
  * Реального сабмита на бэкенд здесь НЕТ — это визуальная заглушка.
  */
+
+// Хедер: sticky, мега-меню, off-canvas, аккордеоны (см. ./header.ts).
+import "./header";
 
 // Типизация глобальных функций аналитики (могут отсутствовать в dev).
 declare global {
@@ -23,18 +26,6 @@ function trackEvent(eventName: string): void {
   if (window.gtag) {
     window.gtag("event", eventName);
   }
-}
-
-/** Инициализация переключателя мобильного меню. */
-function initMobileMenu(): void {
-  const toggle = document.querySelector<HTMLButtonElement>("[data-menu-toggle]");
-  const menu = document.querySelector<HTMLElement>("[data-mobile-menu]");
-  if (!toggle || !menu) return;
-
-  toggle.addEventListener("click", () => {
-    const isOpen = menu.classList.toggle("hidden");
-    toggle.setAttribute("aria-expanded", String(!isOpen));
-  });
 }
 
 /** Простейшая валидация телефона/Telegram. */
@@ -101,7 +92,6 @@ function initForms(): void {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  initMobileMenu();
   initForms();
 });
 

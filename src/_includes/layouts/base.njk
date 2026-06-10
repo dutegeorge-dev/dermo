@@ -4,7 +4,7 @@
 {%- set canonicalUrl = site.url + page.url -%}
 {%- set ogImageUrl = (ogImage or site.defaultOgImage) | absoluteUrl(site.url) -%}
 <!doctype html>
-<html lang="{{ site.lang }}"{% if site.analytics.yandexMetrika %} data-ym-id="{{ site.analytics.yandexMetrika }}"{% endif %}>
+<html lang="{{ locale or site.lang }}"{% if site.analytics.yandexMetrika %} data-ym-id="{{ site.analytics.yandexMetrika }}"{% endif %}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -13,6 +13,16 @@
     <meta name="description" content="{{ pageDescription }}" />
     <meta name="robots" content="{{ pageRobots }}" />
     <link rel="canonical" href="{{ canonicalUrl }}" />
+
+    {# hreflang: языковые версии страницы (ru — x-default) #}
+    {% for loc in locales %}
+    <link rel="alternate" hreflang="{{ loc }}" href="{{ (page.url | localizedUrl(loc)) | absoluteUrl(site.url) }}" />
+    {% endfor %}
+    <link rel="alternate" hreflang="x-default" href="{{ (page.url | localizedUrl('ru')) | absoluteUrl(site.url) }}" />
+
+    {# Предзагрузка основных подсетов Onest (вес 400) — быстрее первый рендер текста #}
+    <link rel="preload" href="/assets/fonts/onest-cyrillic-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/onest-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 
     {# Open Graph #}
     <meta property="og:type" content="{{ ogType or 'website' }}" />
