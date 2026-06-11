@@ -39,7 +39,6 @@ const torgovlya: TorgovlyaData = {
     { icon: "shield-check", titleKey: "torgovlya.fullCycle.s4.title", textKey: "torgovlya.fullCycle.s4.text", url: "/uslugi/kontrol-proizvodstva/" },
     { icon: "package-check", titleKey: "torgovlya.separate.s2.title", textKey: "torgovlya.separate.s2.text", url: "/uslugi/inspekciya/" },
     { icon: "package", titleKey: "torgovlya.fullCycle.s5.title", textKey: "torgovlya.fullCycle.s5.text", url: "/uslugi/upakovka-markirovka/" },
-    { icon: "file-text", titleKey: "torgovlya.fullCycle.s6.title", textKey: "torgovlya.fullCycle.s6.text", url: "/uslugi/sertifikaciya/" },
     { icon: "landmark", titleKey: "torgovlya.separate.s1.title", textKey: "torgovlya.separate.s1.text", url: "/uslugi/vykup-tovara/" },
     { icon: "calculator", titleKey: "torgovlya.separate.s3.title", textKey: "torgovlya.separate.s3.text", url: "/uslugi/vozvrat-nds/" },
     { icon: "badge-check", titleKey: "torgovlya.separate.s5.title", textKey: "torgovlya.separate.s5.text", url: "/uslugi/proverka-zavoda/" },

@@ -15,15 +15,17 @@ sitemap: true
 #}
 
 {# Переиспользуемая CTA-полоса внутри страницы — светлая (правка 3): не сливается
-   с синими акцентными блоками. Карточка surface-alt с янтарной кнопкой. #}
+   с синими акцентными блоками. Карточка surface-alt с янтарной кнопкой.
+   Десктоп: текст слева (flex-1), компактная кнопка справа. Мобайл: стопкой,
+   кнопка во всю ширину, увеличенные вертикальные отступы. #}
 {% macro ctaBand(textKey, btnKey) %}
 <section class="bg-surface">
-  <div class="container py-6 md:py-8">
-    <div class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-surface-alt px-6 py-7 sm:flex-row sm:items-center sm:justify-between md:px-10 md:py-8">
-      <p class="text-lg font-light leading-snug text-ink md:text-xl">{{ textKey | t(locale) }}</p>
+  <div class="container py-8 md:py-12">
+    <div class="flex flex-col items-start gap-6 rounded-2xl border border-slate-200 bg-surface-alt p-8 sm:flex-row sm:items-center sm:gap-8 md:p-10">
+      <p class="flex-1 text-lg font-light leading-snug text-ink md:text-xl">{{ textKey | t(locale) }}</p>
       <a
         href="{{ site.calculateUrl | localizedUrl(locale) }}"
-        class="inline-flex min-h-[44px] w-full shrink-0 items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:w-auto"
+        class="inline-flex min-h-[48px] w-full shrink-0 items-center justify-center rounded-lg bg-accent px-8 py-3.5 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:w-auto"
       >
         {{ btnKey | t(locale) }}
       </a>
@@ -102,7 +104,7 @@ sitemap: true
   {# ── 2. Реальность Alibaba — боль с акцентом «до 40%» ──────────────── #}
   <section class="bg-surface">
     <div class="container section">
-      <div class="grid items-stretch gap-8 lg:grid-cols-2 lg:gap-12">
+      <div class="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
         <div>
           <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.alibaba.title" | t(locale) }}</h2>
           <div class="mt-6 space-y-4 text-base leading-relaxed text-muted md:text-lg">
@@ -111,10 +113,10 @@ sitemap: true
             <p>{{ "torgovlya.alibaba.p3" | t(locale) }}</p>
           </div>
         </div>
-        {# Крупный акцентный блок справа, на всю высоту текстовой колонки. #}
-        <div class="flex h-full flex-col justify-center rounded-2xl bg-brand p-10 text-center text-white shadow-lg md:p-12">
-          <span class="block text-7xl font-light leading-none tracking-tight text-cyan md:text-8xl">{{ "torgovlya.alibaba.accentValue" | t(locale) }}</span>
-          <span class="mx-auto mt-5 block max-w-xs text-lg font-light leading-relaxed text-white/90">{{ "torgovlya.alibaba.accentLabel" | t(locale) }}</span>
+        {# Компактный акцентный блок: крупная цифра + подпись, по центру колонки. #}
+        <div class="rounded-2xl bg-brand px-8 py-16 text-center text-white shadow-lg md:px-12">
+          <span class="block text-6xl font-light leading-none tracking-tight text-cyan md:text-7xl">{{ "torgovlya.alibaba.accentValue" | t(locale) }}</span>
+          <span class="mx-auto mt-4 block max-w-xs text-lg font-light leading-relaxed text-white/90">{{ "torgovlya.alibaba.accentLabel" | t(locale) }}</span>
         </div>
       </div>
     </div>
@@ -293,11 +295,6 @@ sitemap: true
             </div>
           </div>
 
-          {# Плейсхолдер под фото товара/склада (правка 7) — заменяется позже. #}
-          <div class="mt-6 flex aspect-[16/6] w-full items-center justify-center rounded-xl border border-slate-200 bg-surface" aria-hidden="true">
-            {{ icon("package", "h-10 w-10 text-slate-300") }}
-          </div>
-
           <div class="mt-6 grid gap-5 md:grid-cols-3">
             {% for pt in torgovlya.flooringPoints %}
               <div class="rounded-xl bg-surface p-5 shadow-sm">
@@ -322,11 +319,6 @@ sitemap: true
               <h3 class="text-2xl font-light tracking-tight text-ink">{{ "torgovlya.spec.parts.title" | t(locale) }}</h3>
               <p class="mt-2 text-base leading-relaxed text-muted">{{ "torgovlya.spec.parts.lead" | t(locale) }}</p>
             </div>
-          </div>
-
-          {# Плейсхолдер под фото товара/склада (правка 7) — заменяется позже. #}
-          <div class="mt-6 flex aspect-[16/6] w-full items-center justify-center rounded-xl border border-slate-200 bg-surface" aria-hidden="true">
-            {{ icon("truck", "h-10 w-10 text-slate-300") }}
           </div>
 
           <p class="mt-6 text-sm font-medium uppercase tracking-wide text-muted">{{ "torgovlya.spec.parts.brandsLabel" | t(locale) }}</p>
