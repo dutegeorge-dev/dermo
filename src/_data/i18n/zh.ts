@@ -1,4 +1,25 @@
 import type { Dictionary } from "../types.js";
+import ru from "./ru.js";
+
+/**
+ * Рекурсивно префиксует все строковые листья объекта (для крупных секций-заглушек,
+ * чтобы не дублировать структуру вручную). Тип сохраняется — typecheck сверяет
+ * результат с интерфейсом Dictionary.
+ */
+function stubBranch<T>(value: T, prefix: string): T {
+  if (typeof value === "string") return (prefix + value) as unknown as T;
+  if (Array.isArray(value)) {
+    return value.map((item) => stubBranch(item, prefix)) as unknown as T;
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value)) {
+      out[key] = stubBranch(val, prefix);
+    }
+    return out as T;
+  }
+  return value;
+}
 
 /**
  * Китайский словарь — ЗАГЛУШКИ. Структура полная (тот же интерфейс Dictionary),
@@ -174,6 +195,8 @@ const zh: Dictionary = {
       subtitle: "[ZH] Опишите задачу — подготовим расчёт и предложение.",
     },
   },
+  // Крупная экспертная секция — заглушка выводится из ru с префиксом [ZH].
+  torgovlya: stubBranch(ru.torgovlya, "[ZH] "),
   a11y: {
     openMenu: "[ZH] Открыть меню",
     closeMenu: "[ZH] Закрыть меню",
