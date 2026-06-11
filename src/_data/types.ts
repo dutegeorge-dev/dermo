@@ -167,6 +167,76 @@ export interface HomeData {
 }
 
 /**
+ * Карточка-услуга с иконкой Lucide и текстом по ключам словаря (i18n).
+ * Используется в секциях страницы «Торговля» (услуги полного цикла,
+ * отдельные услуги, пункты «что нужно для прямой работы»).
+ */
+export interface IconCard {
+  /** Имя иконки Lucide (см. partials/icon.njk). */
+  icon: string;
+  /** Ключ перевода заголовка карточки. */
+  titleKey: string;
+  /** Ключ перевода текста карточки. */
+  textKey: string;
+}
+
+/** Заголовок + текст по ключам словаря (пункты-преимущества направлений). */
+export interface TitleTextKeys {
+  titleKey: string;
+  textKey: string;
+}
+
+/** Услуга-карточка со ссылкой на отдельную страницу услуги (/uslugi/<slug>/). */
+export interface ServiceLink {
+  /** Имя иконки Lucide (см. partials/icon.njk). */
+  icon: string;
+  /** Ключ перевода заголовка услуги. */
+  titleKey: string;
+  /** Ключ перевода текста услуги. */
+  textKey: string;
+  /** URL страницы услуги. */
+  url: string;
+}
+
+/** Пара «вопрос — ответ» FAQ по ключам словаря (для аккордеона и FAQPage). */
+export interface FaqEntry {
+  questionKey: string;
+  answerKey: string;
+}
+
+/**
+ * Структурные данные страницы «Торговля» (/torgovlya/): иконки, номера шагов
+ * и ключи словаря. Тексты не хардкодятся — здесь только ссылки на i18n-словарь.
+ * Меняется состав/порядок — отражается на странице без правок шаблона.
+ */
+export interface TorgovlyaData {
+  /** «Что нужно для прямой работы с заводом» — 4 пункта. */
+  directPoints: IconCard[];
+  /** Провинции выезда — ключи словаря. */
+  provinces: string[];
+  /** «Что даёт выезд на завод» — ключи словаря (3 пункта). */
+  guangzhouBenefits: string[];
+  /** Единый блок услуг (полный цикл + отдельные) — карточки-ссылки на /uslugi/. */
+  services: ServiceLink[];
+  /** Этапы работы (процесс закупки) — 7 шагов с номерами. */
+  process: ProcessStep[];
+  /** Преимущества направления «Напольные покрытия» — 3 пункта. */
+  flooringPoints: TitleTextKeys[];
+  /** Марки китайских грузовиков — ключи словаря (6). */
+  partsBrands: string[];
+  /** «Что поставляем» по запчастям — ключи словаря (4). */
+  partsSupply: string[];
+  /** Преимущества направления «Запчасти» — ключи словаря (3). */
+  partsAdvantages: string[];
+  /** Типы станков — ключи словаря (4). */
+  machineTypes: string[];
+  /** «Как работаем» по станкам — ключи словаря (3). */
+  machineHow: string[];
+  /** Частые вопросы — 8 пар вопрос/ответ. */
+  faq: FaqEntry[];
+}
+
+/**
  * Карточка-плейсхолдер для секций «Кейсы» и «Блог» на главной.
  * Имитирует будущую запись Decap CMS-коллекции (поэтому тексты — не i18n,
  * а локальные «фейковые записи»). При появлении реальной коллекции карточки
@@ -332,6 +402,180 @@ export interface Dictionary {
     ctaFinal: {
       title: string;
       subtitle: string;
+    };
+  };
+  torgovlya: {
+    hero: {
+      title: string;
+      subtitle: string;
+      secondary: string;
+    };
+    heroForm: {
+      title: string;
+      note: string;
+      cargoLabel: string;
+      cargoError: string;
+      contactLabel: string;
+      contactError: string;
+      success: string;
+    };
+    alibaba: {
+      title: string;
+      p1: string;
+      p2: string;
+      p3: string;
+      accentValue: string;
+      accentLabel: string;
+    };
+    direct: {
+      title: string;
+      subtitle: string;
+      p1: { title: string; text: string };
+      p2: { title: string; text: string };
+      p3: { title: string; text: string };
+      p4: { title: string; text: string };
+      closing: string;
+    };
+    cta1: string;
+    guangzhou: {
+      title: string;
+      p1: string;
+      p2: string;
+      provincesLabel: string;
+      prov1: string;
+      prov2: string;
+      prov3: string;
+      prov4: string;
+      benefitsTitle: string;
+      b1: string;
+      b2: string;
+      b3: string;
+    };
+    fullCycle: {
+      title: string;
+      s1: { title: string; text: string };
+      s2: { title: string; text: string };
+      s3: { title: string; text: string };
+      s4: { title: string; text: string };
+      s5: { title: string; text: string };
+      s6: { title: string; text: string };
+      s7: { title: string; text: string };
+    };
+    services: {
+      title: string;
+      intro: string;
+      more: string;
+      allLink: string;
+    };
+    process: {
+      title: string;
+      s1: { title: string; text: string };
+      s2: { title: string; text: string };
+      s3: { title: string; text: string };
+      s4: { title: string; text: string };
+      s5: { title: string; text: string };
+      s6: { title: string; text: string };
+      s7: { title: string; text: string };
+    };
+    cta2: string;
+    quality: {
+      title: string;
+      p1: string;
+      p2: string;
+      p3: string;
+    };
+    separate: {
+      title: string;
+      intro: string;
+      s1: { title: string; text: string };
+      s2: { title: string; text: string };
+      s3: { title: string; text: string };
+      s4: { title: string; text: string };
+      s5: { title: string; text: string };
+      s6: { title: string; text: string };
+    };
+    cta3: string;
+    spec: {
+      title: string;
+      subtitle: string;
+      flooring: {
+        title: string;
+        lead: string;
+        pt1: { title: string; text: string };
+        pt2: { title: string; text: string };
+        pt3: { title: string; text: string };
+        link: string;
+      };
+      parts: {
+        title: string;
+        lead: string;
+        brandsLabel: string;
+        brand1: string;
+        brand2: string;
+        brand3: string;
+        brand4: string;
+        brand5: string;
+        brand6: string;
+        supplyTitle: string;
+        supply1: string;
+        supply2: string;
+        supply3: string;
+        supply4: string;
+        advantagesTitle: string;
+        adv1: string;
+        adv2: string;
+        adv3: string;
+        link: string;
+      };
+      machines: {
+        title: string;
+        lead: string;
+        typesTitle: string;
+        type1: string;
+        type2: string;
+        type3: string;
+        type4: string;
+        howTitle: string;
+        how1: string;
+        how2: string;
+        how3: string;
+        note: string;
+      };
+    };
+    partnership: {
+      title: string;
+      p1: string;
+      p2: string;
+      p3: string;
+    };
+    logistics: {
+      title: string;
+      text: string;
+      cta: string;
+    };
+    contacts: {
+      title: string;
+      text: string;
+      phoneRuLabel: string;
+      phoneCnLabel: string;
+      telegramLabel: string;
+      emailLabel: string;
+    };
+    faq: {
+      title: string;
+      q1: { q: string; a: string };
+      q2: { q: string; a: string };
+      q3: { q: string; a: string };
+      q4: { q: string; a: string };
+      q5: { q: string; a: string };
+      q6: { q: string; a: string };
+      q7: { q: string; a: string };
+      q8: { q: string; a: string };
+    };
+    ctaFinal: {
+      title: string;
+      subtitle: string;
+      button: string;
     };
   };
   a11y: {

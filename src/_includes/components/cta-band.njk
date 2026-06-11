@@ -1,0 +1,46 @@
+{#
+  Единый CTA-компонент (дизайн со страницы /logistika/). Используется для
+  внутренних полос (после смысловых блоков) и для финальной полосы внизу.
+
+  Параметры:
+    buttonLabel — подпись кнопки;
+    buttonUrl   — ссылка кнопки;
+    text        — поясняющий текст (опц.);
+    title       — заголовок (опц., в основном для tone="final");
+    tone        — "inline" (компактная полоса surface-alt внутри страницы)
+                  или "final" (контрастная ультрамариновая полоса внизу);
+    icon_name   — иконка слева у inline-полосы (по умолчанию калькулятор).
+#}
+{% from "partials/icon.njk" import icon %}
+
+{% macro ctaBand(buttonLabel, buttonUrl, text="", title="", tone="inline", icon_name="calculator") %}
+{% if tone == "final" %}
+<section class="bg-brand text-white">
+  <div class="container section text-center">
+    {% if title %}<h2 class="mx-auto max-w-2xl text-2xl font-semibold tracking-tight md:text-3xl">{{ title }}</h2>{% endif %}
+    {% if text %}<p class="mx-auto mt-3 max-w-2xl text-base text-white/85 md:text-lg">{{ text }}</p>{% endif %}
+    <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+      <a href="{{ buttonUrl }}" class="btn-accent px-6 py-3 text-base">
+        {{ buttonLabel }}
+        {{ icon("arrow-right", "ml-1.5 h-5 w-5") }}
+      </a>
+    </div>
+  </div>
+</section>
+{% else %}
+<section class="py-6 md:py-8">
+  <div class="container">
+    <div class="flex flex-col items-start gap-4 rounded-xl border border-cyan/40 bg-surface-alt px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <p class="flex items-start gap-3 text-base font-medium text-ink">
+        {{ icon(icon_name, "mt-0.5 h-5 w-5 shrink-0 text-cyan") }}
+        <span>{{ text }}</span>
+      </p>
+      <a href="{{ buttonUrl }}" class="btn-accent shrink-0">
+        {{ buttonLabel }}
+        {{ icon("arrow-right", "ml-1.5 h-4 w-4") }}
+      </a>
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endmacro %}
