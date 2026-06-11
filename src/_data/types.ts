@@ -553,6 +553,14 @@ export interface Dictionary {
       text: string;
       cta: string;
     };
+    contacts: {
+      title: string;
+      text: string;
+      phoneRuLabel: string;
+      phoneCnLabel: string;
+      telegramLabel: string;
+      emailLabel: string;
+    };
     faq: {
       title: string;
       q1: { q: string; a: string };
