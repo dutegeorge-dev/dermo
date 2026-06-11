@@ -14,15 +14,16 @@ sitemap: true
   Форма расчёта и CTA-полоса — переиспользуемая разметка с главной/логистики.
 #}
 
-{# Переиспользуемая CTA-полоса внутри страницы (CTA-1/2/3). #}
+{# Переиспользуемая CTA-полоса внутри страницы — светлая (правка 3): не сливается
+   с синими акцентными блоками. Карточка surface-alt с янтарной кнопкой. #}
 {% macro ctaBand(textKey, btnKey) %}
 <section class="bg-surface">
   <div class="container py-6 md:py-8">
-    <div class="flex flex-col gap-4 rounded-2xl bg-brand px-6 py-7 text-white sm:flex-row sm:items-center sm:justify-between md:px-10 md:py-8">
-      <p class="text-lg font-light leading-snug md:text-xl">{{ textKey | t(locale) }}</p>
+    <div class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-surface-alt px-6 py-7 sm:flex-row sm:items-center sm:justify-between md:px-10 md:py-8">
+      <p class="text-lg font-light leading-snug text-ink md:text-xl">{{ textKey | t(locale) }}</p>
       <a
         href="{{ site.calculateUrl | localizedUrl(locale) }}"
-        class="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+        class="inline-flex min-h-[44px] w-full shrink-0 items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:w-auto"
       >
         {{ btnKey | t(locale) }}
       </a>
@@ -101,8 +102,8 @@ sitemap: true
   {# ── 2. Реальность Alibaba — боль с акцентом «до 40%» ──────────────── #}
   <section class="bg-surface">
     <div class="container section">
-      <div class="grid gap-10 lg:grid-cols-3 lg:gap-12">
-        <div class="lg:col-span-2">
+      <div class="grid items-stretch gap-8 lg:grid-cols-2 lg:gap-12">
+        <div>
           <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.alibaba.title" | t(locale) }}</h2>
           <div class="mt-6 space-y-4 text-base leading-relaxed text-muted md:text-lg">
             <p>{{ "torgovlya.alibaba.p1" | t(locale) }}</p>
@@ -110,11 +111,10 @@ sitemap: true
             <p>{{ "torgovlya.alibaba.p3" | t(locale) }}</p>
           </div>
         </div>
-        <div class="flex lg:items-center">
-          <div class="w-full rounded-2xl border border-slate-200 bg-surface-alt p-8 text-center shadow-sm">
-            <span class="block text-5xl font-light tracking-tight text-cyan-dark md:text-6xl">{{ "torgovlya.alibaba.accentValue" | t(locale) }}</span>
-            <span class="mt-3 block text-base font-medium text-ink">{{ "torgovlya.alibaba.accentLabel" | t(locale) }}</span>
-          </div>
+        {# Крупный акцентный блок справа, на всю высоту текстовой колонки. #}
+        <div class="flex h-full flex-col justify-center rounded-2xl bg-brand p-10 text-center text-white shadow-lg md:p-12">
+          <span class="block text-7xl font-light leading-none tracking-tight text-cyan md:text-8xl">{{ "torgovlya.alibaba.accentValue" | t(locale) }}</span>
+          <span class="mx-auto mt-5 block max-w-xs text-lg font-light leading-relaxed text-white/90">{{ "torgovlya.alibaba.accentLabel" | t(locale) }}</span>
         </div>
       </div>
     </div>
@@ -149,9 +149,9 @@ sitemap: true
   {{ ctaBand("torgovlya.cta1", "cta.calculate") }}
 
   {# ── 4. Офис в Гуанчжоу + выезды в провинции ──────────────────────── #}
-  <section class="bg-surface">
+  <section class="bg-surface-alt">
     <div class="container section">
-      <div class="grid gap-10 lg:grid-cols-2 lg:gap-16">
+      <div class="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
         <div>
           <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.guangzhou.title" | t(locale) }}</h2>
           <div class="mt-6 space-y-4 text-base leading-relaxed text-muted md:text-lg">
@@ -170,45 +170,65 @@ sitemap: true
           </ul>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-surface-alt p-8 md:p-10">
-          <h3 class="text-xl font-medium text-ink">{{ "torgovlya.guangzhou.benefitsTitle" | t(locale) }}</h3>
-          <ul class="mt-5 space-y-4">
-            {% for benefit in torgovlya.guangzhouBenefits %}
-              <li class="flex items-start gap-3">
-                {{ icon("badge-check", "mt-0.5 h-5 w-5 shrink-0 text-cyan") }}
-                <span class="text-base leading-relaxed text-muted">{{ benefit | t(locale) }}</span>
-              </li>
-            {% endfor %}
-          </ul>
+        {# Плейсхолдер под фото офиса/команды в Китае (правка 7) — заменяется позже. #}
+        <div class="flex aspect-[4/3] w-full items-center justify-center rounded-2xl border border-slate-200 bg-surface shadow-sm" aria-hidden="true">
+          {{ icon("map-pin", "h-12 w-12 text-slate-300") }}
         </div>
       </div>
-    </div>
-  </section>
 
-  {# ── 5. Услуги полного цикла (7 пунктов) ──────────────────────────── #}
-  <section class="bg-surface-alt">
-    <div class="container section">
-      <h2 class="max-w-3xl text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.fullCycle.title" | t(locale) }}</h2>
-
-      <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {% for service in torgovlya.fullCycle %}
-          <div class="flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm transition hover:border-cyan hover:shadow-md">
-            <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan/15">
-              {{ icon(service.icon, "h-7 w-7 text-cyan") }}
-            </span>
-            <h3 class="mt-5 text-lg font-medium text-ink">{{ service.titleKey | t(locale) }}</h3>
-            <p class="mt-2 text-sm leading-relaxed text-muted">{{ service.textKey | t(locale) }}</p>
+      {# «Что даёт выезд на завод» — отдельные светлые карточки под основным рядом. #}
+      <div class="mt-10 grid gap-5 sm:grid-cols-3">
+        {% for benefit in torgovlya.guangzhouBenefits %}
+          <div class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm">
+            {{ icon("badge-check", "mt-0.5 h-6 w-6 shrink-0 text-cyan") }}
+            <span class="text-base leading-relaxed text-muted">{{ benefit | t(locale) }}</span>
           </div>
         {% endfor %}
       </div>
     </div>
   </section>
 
-  {# ── 6. Этапы работы (процесс закупки, 01–07) ─────────────────────── #}
-  <section id="kak-rabotaem" class="scroll-mt-24 bg-surface">
+  {# ── 5. Услуги (единый блок, правка 6) — карточки-ссылки на /uslugi/ ── #}
+  <section class="bg-surface">
+    <div class="container section">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div class="max-w-3xl">
+          <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.services.title" | t(locale) }}</h2>
+          <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "torgovlya.services.intro" | t(locale) }}</p>
+        </div>
+        <a href="{{ '/uslugi/' | localizedUrl(locale) }}" class="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-cyan-dark transition-colors hover:text-cyan">
+          {{ "torgovlya.services.allLink" | t(locale) }}
+          {{ icon("arrow-right", "h-4 w-4") }}
+        </a>
+      </div>
+
+      <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {% for service in torgovlya.services %}
+          <a
+            href="{{ service.url | localizedUrl(locale) }}"
+            class="group flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+          >
+            <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan/15">
+              {{ icon(service.icon, "h-7 w-7 text-cyan") }}
+            </span>
+            <h3 class="mt-5 text-lg font-medium text-ink">{{ service.titleKey | t(locale) }}</h3>
+            <p class="mt-2 flex-1 text-sm leading-relaxed text-muted">{{ service.textKey | t(locale) }}</p>
+            <span class="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-cyan-dark transition-colors group-hover:text-cyan">
+              {{ "torgovlya.services.more" | t(locale) }}
+              {{ icon("arrow-right", "h-4 w-4") }}
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ── 6. Этапы работы (процесс закупки, 01–07) + CTA-карточка (правка 5) #}
+  <section id="kak-rabotaem" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.process.title" | t(locale) }}</h2>
 
+      {# 7 этапов + 8-я ячейка-CTA → ровная сетка 4×2. #}
       <ol class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {% for step in torgovlya.process %}
           <li class="flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 transition hover:border-cyan hover:shadow-md">
@@ -220,11 +240,20 @@ sitemap: true
             <p class="mt-2 text-sm leading-relaxed text-muted">{{ step.textKey | t(locale) }}</p>
           </li>
         {% endfor %}
+
+        {# 8-я карточка — призыв к действию (янтарный акцент), а не этап. #}
+        <li class="flex h-full flex-col justify-between rounded-2xl border-2 border-accent bg-accent/5 p-6">
+          <p class="text-lg font-medium leading-snug text-ink">{{ "torgovlya.cta2" | t(locale) }}</p>
+          <a
+            href="{{ site.calculateUrl | localizedUrl(locale) }}"
+            class="mt-5 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          >
+            {{ "cta.calculate" | t(locale) }}
+          </a>
+        </li>
       </ol>
     </div>
   </section>
-
-  {{ ctaBand("torgovlya.cta2", "cta.calculate") }}
 
   {# ── 7. Ответственность за качество (тёмный акцент, образец-эталон) ── #}
   <section class="bg-brand text-white">
@@ -243,31 +272,7 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 8. Отдельные услуги (6 услуг, десктоп 3×2) ────────────────────── #}
-  <section class="bg-surface-alt">
-    <div class="container section">
-      <div class="max-w-2xl">
-        <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.separate.title" | t(locale) }}</h2>
-        <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "torgovlya.separate.intro" | t(locale) }}</p>
-      </div>
-
-      <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {% for service in torgovlya.separate %}
-          <div class="flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm transition hover:border-cyan hover:shadow-md">
-            <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan/15">
-              {{ icon(service.icon, "h-7 w-7 text-cyan") }}
-            </span>
-            <h3 class="mt-5 text-lg font-medium text-ink">{{ service.titleKey | t(locale) }}</h3>
-            <p class="mt-2 text-sm leading-relaxed text-muted">{{ service.textKey | t(locale) }}</p>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-  </section>
-
-  {{ ctaBand("torgovlya.cta3", "cta.request") }}
-
-  {# ── 9. Специализация: 3 направления ──────────────────────────────── #}
+  {# ── 8. Специализация: 3 направления ──────────────────────────────── #}
   <section class="bg-surface">
     <div class="container section">
       <div class="max-w-2xl">
@@ -286,6 +291,11 @@ sitemap: true
               <h3 class="text-2xl font-light tracking-tight text-ink">{{ "torgovlya.spec.flooring.title" | t(locale) }}</h3>
               <p class="mt-2 text-base leading-relaxed text-muted">{{ "torgovlya.spec.flooring.lead" | t(locale) }}</p>
             </div>
+          </div>
+
+          {# Плейсхолдер под фото товара/склада (правка 7) — заменяется позже. #}
+          <div class="mt-6 flex aspect-[16/6] w-full items-center justify-center rounded-xl border border-slate-200 bg-surface" aria-hidden="true">
+            {{ icon("package", "h-10 w-10 text-slate-300") }}
           </div>
 
           <div class="mt-6 grid gap-5 md:grid-cols-3">
@@ -312,6 +322,11 @@ sitemap: true
               <h3 class="text-2xl font-light tracking-tight text-ink">{{ "torgovlya.spec.parts.title" | t(locale) }}</h3>
               <p class="mt-2 text-base leading-relaxed text-muted">{{ "torgovlya.spec.parts.lead" | t(locale) }}</p>
             </div>
+          </div>
+
+          {# Плейсхолдер под фото товара/склада (правка 7) — заменяется позже. #}
+          <div class="mt-6 flex aspect-[16/6] w-full items-center justify-center rounded-xl border border-slate-200 bg-surface" aria-hidden="true">
+            {{ icon("truck", "h-10 w-10 text-slate-300") }}
           </div>
 
           <p class="mt-6 text-sm font-medium uppercase tracking-wide text-muted">{{ "torgovlya.spec.parts.brandsLabel" | t(locale) }}</p>
@@ -463,16 +478,17 @@ sitemap: true
           <h2 class="text-3xl font-light leading-tight tracking-tight md:text-4xl">{{ "torgovlya.ctaFinal.title" | t(locale) }}</h2>
           <p class="mt-4 text-lg font-light text-white/85">{{ "torgovlya.ctaFinal.subtitle" | t(locale) }}</p>
         </div>
-        <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center lg:shrink-0">
+        {# Мобайл (правка 8): стопкой на всю ширину — кнопка крупная, телефон под ней. #}
+        <div class="flex w-full flex-col items-stretch gap-4 sm:w-auto sm:flex-row sm:items-center lg:shrink-0">
           <a
             href="{{ site.calculateUrl | localizedUrl(locale) }}"
-            class="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+            class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand sm:w-auto"
           >
             {{ "torgovlya.ctaFinal.button" | t(locale) }}
           </a>
           <a
             href="tel:{{ site.phoneHref }}"
-            class="inline-flex items-center gap-2 text-base font-medium text-white transition-colors hover:text-cyan"
+            class="inline-flex min-h-[44px] items-center justify-center gap-2 text-base font-medium text-white transition-colors hover:text-cyan sm:justify-start"
             aria-label="{{ 'a11y.phoneRu' | t(locale) }}"
           >
             {{ icon("phone", "h-5 w-5 text-cyan") }}

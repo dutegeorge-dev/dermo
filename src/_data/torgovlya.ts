@@ -28,15 +28,21 @@ const torgovlya: TorgovlyaData = {
     "torgovlya.guangzhou.b3",
   ],
 
-  // Раздел 6 ТЗ: услуги полного цикла (7 пунктов).
-  fullCycle: [
-    { icon: "search", titleKey: "torgovlya.fullCycle.s1.title", textKey: "torgovlya.fullCycle.s1.text" },
-    { icon: "factory", titleKey: "torgovlya.fullCycle.s2.title", textKey: "torgovlya.fullCycle.s2.text" },
-    { icon: "globe", titleKey: "torgovlya.fullCycle.s3.title", textKey: "torgovlya.fullCycle.s3.text" },
-    { icon: "shield-check", titleKey: "torgovlya.fullCycle.s4.title", textKey: "torgovlya.fullCycle.s4.text" },
-    { icon: "package", titleKey: "torgovlya.fullCycle.s5.title", textKey: "torgovlya.fullCycle.s5.text" },
-    { icon: "file-text", titleKey: "torgovlya.fullCycle.s6.title", textKey: "torgovlya.fullCycle.s6.text" },
-    { icon: "package-check", titleKey: "torgovlya.fullCycle.s7.title", textKey: "torgovlya.fullCycle.s7.text" },
+  // Объединённый блок услуг (правка 6): полный цикл + отдельные услуги одним
+  // списком, каждая карточка — ссылка на свою страницу /uslugi/<slug>/.
+  // «Сертификация» как этап полного цикла убрана (правка 4) и остаётся здесь
+  // как самостоятельная услуга. Тексты переиспользуются из веток fullCycle/separate.
+  services: [
+    { icon: "search", titleKey: "torgovlya.fullCycle.s1.title", textKey: "torgovlya.fullCycle.s1.text", url: "/uslugi/poisk-postavshchika/" },
+    { icon: "factory", titleKey: "torgovlya.fullCycle.s2.title", textKey: "torgovlya.fullCycle.s2.text", url: "/uslugi/audit-proizvodstva/" },
+    { icon: "globe", titleKey: "torgovlya.fullCycle.s3.title", textKey: "torgovlya.fullCycle.s3.text", url: "/uslugi/peregovory/" },
+    { icon: "shield-check", titleKey: "torgovlya.fullCycle.s4.title", textKey: "torgovlya.fullCycle.s4.text", url: "/uslugi/kontrol-proizvodstva/" },
+    { icon: "package-check", titleKey: "torgovlya.separate.s2.title", textKey: "torgovlya.separate.s2.text", url: "/uslugi/inspekciya/" },
+    { icon: "package", titleKey: "torgovlya.fullCycle.s5.title", textKey: "torgovlya.fullCycle.s5.text", url: "/uslugi/upakovka-markirovka/" },
+    { icon: "file-text", titleKey: "torgovlya.fullCycle.s6.title", textKey: "torgovlya.fullCycle.s6.text", url: "/uslugi/sertifikaciya/" },
+    { icon: "landmark", titleKey: "torgovlya.separate.s1.title", textKey: "torgovlya.separate.s1.text", url: "/uslugi/vykup-tovara/" },
+    { icon: "calculator", titleKey: "torgovlya.separate.s3.title", textKey: "torgovlya.separate.s3.text", url: "/uslugi/vozvrat-nds/" },
+    { icon: "badge-check", titleKey: "torgovlya.separate.s5.title", textKey: "torgovlya.separate.s5.text", url: "/uslugi/proverka-zavoda/" },
   ],
 
   // Раздел 7 ТЗ: этапы работы (процесс закупки, 7 шагов 01–07).
@@ -48,16 +54,6 @@ const torgovlya: TorgovlyaData = {
     { num: "05", icon: "factory", titleKey: "torgovlya.process.s5.title", textKey: "torgovlya.process.s5.text" },
     { num: "06", icon: "badge-check", titleKey: "torgovlya.process.s6.title", textKey: "torgovlya.process.s6.text" },
     { num: "07", icon: "truck", titleKey: "torgovlya.process.s7.title", textKey: "torgovlya.process.s7.text" },
-  ],
-
-  // Раздел 9 ТЗ: отдельные услуги (6 карточек).
-  separate: [
-    { icon: "landmark", titleKey: "torgovlya.separate.s1.title", textKey: "torgovlya.separate.s1.text" },
-    { icon: "package-check", titleKey: "torgovlya.separate.s2.title", textKey: "torgovlya.separate.s2.text" },
-    { icon: "calculator", titleKey: "torgovlya.separate.s3.title", textKey: "torgovlya.separate.s3.text" },
-    { icon: "search", titleKey: "torgovlya.separate.s4.title", textKey: "torgovlya.separate.s4.text" },
-    { icon: "shield-check", titleKey: "torgovlya.separate.s5.title", textKey: "torgovlya.separate.s5.text" },
-    { icon: "file-text", titleKey: "torgovlya.separate.s6.title", textKey: "torgovlya.separate.s6.text" },
   ],
 
   // Раздел 10 ТЗ: специализация — направления.

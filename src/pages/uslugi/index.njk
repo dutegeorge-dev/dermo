@@ -1,0 +1,24 @@
+---
+permalink: /uslugi/
+title: Услуги закупки в Китае
+description: "Услуги ООО ТЛК БАРС по закупке товара в Китае: поиск производителя, аудит и контроль производства, переговоры, инспекция качества, упаковка и маркировка, сертификация, выкуп товара, возврат экспортного НДС, проверка завода. Полный цикл или отдельные задачи."
+---
+{% from "components/card.njk" import card %}
+
+<p class="mt-2 max-w-2xl text-base leading-relaxed text-gray-600">
+  Полный цикл закупки под ключ — или любая услуга отдельно, если вы уже нашли поставщика
+  или ведёте часть работы сами. Выберите услугу, чтобы узнать подробнее.
+</p>
+
+<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {{ card("Поиск производителя и поставщика", "/uslugi/poisk-postavshchika/", "") }}
+  {{ card("Аудит производства", "/uslugi/audit-proizvodstva/", "") }}
+  {{ card("Переговоры на китайском", "/uslugi/peregovory/", "") }}
+  {{ card("Контроль производства", "/uslugi/kontrol-proizvodstva/", "") }}
+  {{ card("Инспекция качества", "/uslugi/inspekciya/", "") }}
+  {{ card("Упаковка и маркировка (Private Label)", "/uslugi/upakovka-markirovka/", "") }}
+  {{ card("Сертификация", "/uslugi/sertifikaciya/", "") }}
+  {{ card("Выкуп товара", "/uslugi/vykup-tovara/", "") }}
+  {{ card("Возврат экспортного НДС", "/uslugi/vozvrat-nds/", "") }}
+  {{ card("Проверка завода", "/uslugi/proverka-zavoda/", "") }}
+</div>

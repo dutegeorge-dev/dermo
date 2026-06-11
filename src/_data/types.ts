@@ -186,6 +186,18 @@ export interface TitleTextKeys {
   textKey: string;
 }
 
+/** Услуга-карточка со ссылкой на отдельную страницу услуги (/uslugi/<slug>/). */
+export interface ServiceLink {
+  /** Имя иконки Lucide (см. partials/icon.njk). */
+  icon: string;
+  /** Ключ перевода заголовка услуги. */
+  titleKey: string;
+  /** Ключ перевода текста услуги. */
+  textKey: string;
+  /** URL страницы услуги. */
+  url: string;
+}
+
 /** Пара «вопрос — ответ» FAQ по ключам словаря (для аккордеона и FAQPage). */
 export interface FaqEntry {
   questionKey: string;
@@ -204,12 +216,10 @@ export interface TorgovlyaData {
   provinces: string[];
   /** «Что даёт выезд на завод» — ключи словаря (3 пункта). */
   guangzhouBenefits: string[];
-  /** Услуги полного цикла — 7 карточек. */
-  fullCycle: IconCard[];
+  /** Единый блок услуг (полный цикл + отдельные) — карточки-ссылки на /uslugi/. */
+  services: ServiceLink[];
   /** Этапы работы (процесс закупки) — 7 шагов с номерами. */
   process: ProcessStep[];
-  /** Отдельные услуги — 6 карточек. */
-  separate: IconCard[];
   /** Преимущества направления «Напольные покрытия» — 3 пункта. */
   flooringPoints: TitleTextKeys[];
   /** Марки китайских грузовиков — ключи словаря (6). */
@@ -450,6 +460,12 @@ export interface Dictionary {
       s5: { title: string; text: string };
       s6: { title: string; text: string };
       s7: { title: string; text: string };
+    };
+    services: {
+      title: string;
+      intro: string;
+      more: string;
+      allLink: string;
     };
     process: {
       title: string;
