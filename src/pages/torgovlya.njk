@@ -209,12 +209,11 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 6. Этапы работы (процесс закупки, 01–07) + CTA-карточка (правка 5) #}
+  {# ── 6. Этапы работы (процесс закупки, 01–07) ─────────────────────── #}
   <section id="kak-rabotaem" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.process.title" | t(locale) }}</h2>
 
-      {# 7 этапов + 8-я ячейка-CTA → ровная сетка 4×2. #}
       <ol class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {% for step in torgovlya.process %}
           <li class="flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 transition hover:border-cyan hover:shadow-md">
@@ -226,20 +225,12 @@ sitemap: true
             <p class="mt-2 text-sm leading-relaxed text-muted">{{ step.textKey | t(locale) }}</p>
           </li>
         {% endfor %}
-
-        {# 8-я карточка — призыв к действию (янтарный акцент), а не этап. #}
-        <li class="flex h-full flex-col justify-between rounded-2xl border-2 border-accent bg-accent/5 p-6">
-          <p class="text-lg font-medium leading-snug text-ink">{{ "torgovlya.cta2" | t(locale) }}</p>
-          <a
-            href="{{ site.calculateUrl | localizedUrl(locale) }}"
-            class="mt-5 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-          >
-            {{ "cta.calculate" | t(locale) }}
-          </a>
-        </li>
       </ol>
     </div>
   </section>
+
+  {# → CTA-2 (после блока этапов) — единый дизайн /logistika/ #}
+  {{ ctaBand(("cta.calculate" | t(locale)), calcUrl, text=("torgovlya.cta2" | t(locale)), tone="inline") }}
 
   {# ── 7. Ответственность за качество (тёмный акцент, образец-эталон) ── #}
   <section class="bg-brand text-white">
