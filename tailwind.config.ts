@@ -68,9 +68,7 @@ const config: Config = {
       },
       fontFamily: {
         // Onest (self-hosted woff2, @font-face в tailwind.css) — дефолтный шрифт сайта.
-        // font-display: block держит текст скрытым до загрузки Onest, поэтому
-        // системный fallback не показывается и подгонка метрик не нужна.
-        sans: ["Onest", "system-ui", "sans-serif"],
+        sans: ["Onest", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
       },
     },
   },
