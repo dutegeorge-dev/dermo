@@ -207,6 +207,9 @@ const zh: Dictionary = {
     phoneCn: "[ZH] Телефон в Китае",
     telegram: "[ZH] Написать в Telegram",
   },
+  // Заглушка: большой контент страницы «Логистика» пока берётся из ru —
+  // ZH-страница физически не генерируется. Заменим на реальный перевод позже.
+  logistika: ru.logistika,
 };
 
 export default zh;

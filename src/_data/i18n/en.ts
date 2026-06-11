@@ -207,6 +207,9 @@ const en: Dictionary = {
     phoneCn: "[EN] Телефон в Китае",
     telegram: "[EN] Написать в Telegram",
   },
+  // Заглушка: большой контент страницы «Логистика» пока берётся из ru —
+  // EN-страница физически не генерируется. Заменим на реальный перевод позже.
+  logistika: ru.logistika,
 };
 
 export default en;

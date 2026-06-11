@@ -1,1 +1,412 @@
-{# Раздел логистики — пустой шаблон-заглушка. Контент добавляется позже. #}
+---
+layout: layouts/base.njk
+permalink: /logistika/
+titleKey: logistika.meta.title
+descriptionKey: logistika.meta.description
+sitemap: true
+---
+{#
+  Экспертная страница «Логистика» (/logistika/).
+  Тексты — из i18n-словаря: dict.logistika (см. _data/i18n/ru.ts).
+  Структура секций — по ТЗ: hero → способы → карго → безопасность → оплата →
+  стоимость → не агент → цитата → для кого → тизер торговли → примеры → FAQ →
+  контакты → финальный CTA. CTA-полосы — единый компонент components/cta-band.njk.
+#}
+{% from "partials/icon.njk" import icon %}
+{% from "components/cta-band.njk" import ctaBand %}
+{% from "components/lead-form-mini.njk" import leadFormMini %}
+{% set L = dict.logistika %}
+{% set calcUrl = site.calculateUrl | localizedUrl(locale) %}
+{% set requestUrl = "/kontakty/" | localizedUrl(locale) %}
+{% set tradeUrl = "/torgovlya/" | localizedUrl(locale) %}
+
+{% include "partials/header.njk" %}
+
+<main class="flex-1">
+
+  {# ── 1. Hero ─────────────────────────────────────────────────────────── #}
+  <section class="bg-brand text-white">
+    <div class="container grid items-center gap-10 py-16 md:py-20 lg:grid-cols-2 lg:gap-16 lg:py-24">
+      {# Левая колонка: H1, подзаголовок, CTA #}
+      <div>
+        <h1 class="max-w-2xl text-3xl font-light leading-tight tracking-tight sm:text-4xl md:text-5xl">{{ L.hero.h1 }}</h1>
+        <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85 md:text-xl">{{ L.hero.subtitle }}</p>
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <a href="{{ calcUrl }}" class="btn-accent px-6 py-3 text-base">
+            {{ L.hero.ctaPrimary }}
+            {{ icon("arrow-right", "ml-1.5 h-5 w-5") }}
+          </a>
+          <a href="#bezopasnost" class="btn-outline border-white px-6 py-3 text-base text-white hover:bg-white hover:text-brand">{{ L.hero.ctaSecondary }}</a>
+        </div>
+      </div>
+      {# Правая колонка: мини-форма расчёта (единый компонент с главной) #}
+      {{ leadFormMini(locale, "logi") }}
+    </div>
+  </section>
+
+  {# ── 2. Способы доставки ──────────────────────────────────────────────── #}
+  <section id="sposoby" class="container section scroll-mt-24">
+    <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.methods.title }}</h2>
+    <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {% for m in L.methods.items %}
+        <a href="{{ m.url | localizedUrl(locale) }}" class="group flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-cyan">
+          {{ icon(m.icon, "h-8 w-8 text-cyan") }}
+          <h3 class="mt-4 text-base font-semibold text-ink">{{ m.title }}</h3>
+          <p class="mt-2 text-2xl font-semibold text-cyan">{{ m.time }}</p>
+          <p class="mt-2 text-sm text-muted">{{ m.desc }}</p>
+          <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-cyan-dark">
+            {{ "home.cases.more" | t(locale) }}
+            {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover:translate-x-1") }}
+          </span>
+        </a>
+      {% endfor %}
+    </div>
+    <p class="mt-5 flex items-center gap-2 text-sm font-medium text-muted">
+      {{ icon("package", "h-4 w-4 text-cyan") }}
+      {{ L.methods.note }}
+    </p>
+  </section>
+
+  {# ── 3. Карго vs белая доставка ───────────────────────────────────────── #}
+  <section id="kargo" class="scroll-mt-24 bg-surface-alt">
+    <div class="container section">
+      <h2 class="max-w-3xl text-2xl font-semibold tracking-tight md:text-3xl">{{ L.cargo.title }}</h2>
+      <p class="mt-4 max-w-3xl text-base text-muted">{{ L.cargo.intro }}</p>
+
+      {# Десктоп: полноценная сравнительная таблица с цветовым кодом ✓/✗ #}
+      <div class="mt-8 hidden overflow-hidden rounded-xl border border-slate-200 md:block">
+        <table class="w-full border-collapse text-left">
+          <caption class="sr-only">{{ L.cargo.title }}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="w-1/4 bg-white px-5 py-3 text-sm font-semibold text-muted">{{ L.cargo.head.criterion }}</th>
+              <th scope="col" class="w-[37.5%] border-l border-slate-200 bg-success-light px-5 py-3 text-sm font-semibold text-success-dark">
+                <span class="flex items-center gap-1.5">{{ icon("check", "h-4 w-4") }}{{ L.cargo.head.white }}</span>
+              </th>
+              <th scope="col" class="w-[37.5%] border-l border-slate-200 bg-slate-100 px-5 py-3 text-sm font-semibold text-slate-600">
+                <span class="flex items-center gap-1.5">{{ icon("x", "h-4 w-4") }}{{ L.cargo.head.cargo }}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in L.cargo.rows %}
+              <tr class="border-t border-slate-200 {% if loop.index is even %}bg-surface-alt{% else %}bg-white{% endif %}">
+                <th scope="row" class="px-5 py-4 align-top text-sm font-semibold text-ink">{{ row.criterion }}</th>
+                <td class="border-l border-slate-200 px-5 py-4 align-top">
+                  <div class="flex gap-2">
+                    {{ icon("check", "mt-0.5 h-4 w-4 shrink-0 text-success") }}
+                    <span class="text-sm text-ink">{{ row.white }}</span>
+                  </div>
+                </td>
+                <td class="border-l border-slate-200 px-5 py-4 align-top">
+                  <div class="flex gap-2">
+                    {{ icon("x", "mt-0.5 h-4 w-4 shrink-0 text-danger") }}
+                    <span class="text-sm text-muted">{{ row.cargo }}</span>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {# Мобайл: таблица перестраивается в карточки по критериям #}
+      <div class="mt-8 space-y-4 md:hidden">
+        {% for row in L.cargo.rows %}
+          <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div class="border-b border-slate-200 bg-surface-alt px-5 py-3 text-sm font-semibold text-ink">{{ row.criterion }}</div>
+            <div class="space-y-3 px-5 py-4">
+              <div class="flex gap-2">
+                {{ icon("check", "mt-0.5 h-4 w-4 shrink-0 text-success") }}
+                <p class="text-sm text-ink"><span class="font-semibold text-success-dark">{{ L.cargo.head.white }}:</span> {{ row.white }}</p>
+              </div>
+              <div class="flex gap-2">
+                {{ icon("x", "mt-0.5 h-4 w-4 shrink-0 text-danger") }}
+                <p class="text-sm text-muted"><span class="font-semibold text-slate-600">{{ L.cargo.head.cargo }}:</span> {{ row.cargo }}</p>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# Анти-кейсы — отдельный блок на белом фоне (отделён от таблицы карго) #}
+  <section id="anti-kejsy" class="container section scroll-mt-24">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ L.cargo.antiTitle }}</h2>
+    <div class="mt-8 grid gap-4 md:grid-cols-3">
+      {% for c in L.cargo.antiCases %}
+        <div class="rounded-xl border border-slate-200 border-l-4 border-l-accent bg-surface-alt p-5 shadow-sm">
+          <p class="font-semibold text-ink">{{ c.title }}</p>
+          <p class="mt-2 text-sm text-muted">{{ c.desc }}</p>
+        </div>
+      {% endfor %}
+    </div>
+    <p class="mt-5 max-w-3xl text-sm italic text-muted">{{ L.cargo.antiNote }}</p>
+  </section>
+
+  {# → CTA-1 (после блока карго) #}
+  {{ ctaBand(L.ctaInline1.button, calcUrl, text=L.ctaInline1.text, tone="inline") }}
+
+  {# ── 4. Как мы обеспечиваем безопасность ──────────────────────────────── #}
+  <section id="bezopasnost" class="container section scroll-mt-24">
+    <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.safety.title }}</h2>
+    <p class="mt-3 max-w-3xl text-base text-muted">{{ L.safety.subtitle }}</p>
+    <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {% for s in L.safety.items %}
+        <div class="flex flex-col rounded-xl border border-slate-200 bg-white p-6">
+          <span class="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-cyan/10">
+            {{ icon(s.icon, "h-6 w-6 text-cyan") }}
+          </span>
+          <h3 class="mt-4 text-base font-semibold text-ink">{{ s.title }}</h3>
+          {# desc может содержать перелинковку (<a>) — рендерим как safe. #}
+          <p class="mt-2 text-sm text-muted">{{ s.desc | safe }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ── 5. Гарантии и оплата ─────────────────────────────────────────────── #}
+  <section id="garantii" class="scroll-mt-24 bg-surface-alt">
+    <div class="container section">
+      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.payment.title }}</h2>
+      <p class="mt-4 max-w-3xl text-base text-muted">{{ L.payment.intro }}</p>
+      <div class="mt-8 grid gap-5 sm:grid-cols-2">
+        {% for p in L.payment.items %}
+          <div class="flex gap-4 rounded-xl border border-slate-200 bg-white p-6">
+            <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-cyan/10">
+              {{ icon(p.icon, "h-6 w-6 text-cyan") }}
+            </span>
+            <div>
+              <h3 class="text-base font-semibold text-ink">{{ p.title }}</h3>
+              <p class="mt-1.5 text-sm text-muted">{{ p.desc }}</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ── 6. Прозрачная стоимость ──────────────────────────────────────────── #}
+  <section id="stoimost" class="container section scroll-mt-24">
+    <h2 class="max-w-3xl text-2xl font-semibold tracking-tight md:text-3xl">{{ L.cost.title }}</h2>
+    <p class="mt-4 max-w-3xl text-base text-muted">{{ L.cost.intro }}</p>
+    <div class="mt-8 grid gap-8 lg:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 class="text-lg font-semibold text-ink">{{ L.cost.structureTitle }}</h3>
+        <ul class="mt-4 space-y-3">
+          {% for c in L.cost.structure %}
+            <li class="flex items-start gap-3">
+              {{ icon(c.icon, "mt-0.5 h-5 w-5 shrink-0 text-cyan") }}
+              <span class="text-sm text-ink">{{ c.text }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-surface-alt p-6">
+        <h3 class="flex items-center gap-2 text-lg font-semibold text-ink">
+          {{ icon("clipboard-list", "h-5 w-5 text-cyan") }}{{ L.cost.needTitle }}
+        </h3>
+        <p class="mt-4 text-sm text-muted">{{ L.cost.need }}</p>
+      </div>
+    </div>
+  </section>
+
+  {# → CTA-2 (после блока стоимости) #}
+  {{ ctaBand(L.ctaInline2.button, calcUrl, text=L.ctaInline2.text, tone="inline") }}
+
+  {# ── 7. Почему не агент-одиночка ──────────────────────────────────────── #}
+  <section id="ne-agent" class="container section scroll-mt-24">
+    <div class="container-narrow !px-0">
+      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.notAgent.title }}</h2>
+      <p class="mt-5 text-base text-muted">{{ L.notAgent.p1 }}</p>
+      <p class="mt-4 text-base text-muted">{{ L.notAgent.p2 }}</p>
+    </div>
+  </section>
+
+  {# ── 8. Цитата руководителя ───────────────────────────────────────────── #}
+  <section class="bg-brand text-white">
+    <div class="container section">
+      <div class="grid items-center gap-8 md:grid-cols-3">
+        <div class="md:col-span-1">
+          {# Фото-плейсхолдер руководителя (заменяется при наполнении). #}
+          <div class="mx-auto flex aspect-square w-48 max-w-full items-center justify-center rounded-2xl border border-white/20 bg-white/10 md:w-full" role="img" aria-label="{{ L.quote.photoAlt }}">
+            {{ icon("user", "h-20 w-20 text-white/40") }}
+          </div>
+        </div>
+        <figure class="md:col-span-2">
+          <blockquote class="text-lg font-light leading-relaxed text-white/95 md:text-xl">
+            «{{ L.quote.text }}»
+          </blockquote>
+          <figcaption class="mt-5 text-sm text-white/80">
+            <span class="font-semibold text-white">{{ L.quote.author }}</span>, {{ L.quote.role }}
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  {# ── 9. Для кого мы ───────────────────────────────────────────────────── #}
+  <section id="dlya-kogo" class="container section scroll-mt-24">
+    <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.audience.title }}</h2>
+    <p class="mt-4 max-w-3xl text-base text-muted">{{ L.audience.intro }}</p>
+    <div class="mt-8 grid gap-5 sm:grid-cols-3">
+      {% for a in L.audience.items %}
+        <div class="flex flex-col rounded-xl border border-slate-200 bg-white p-6">
+          <span class="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-cyan/10">
+            {{ icon(a.icon, "h-6 w-6 text-cyan") }}
+          </span>
+          <h3 class="mt-4 text-base font-semibold text-ink">{{ a.title }}</h3>
+          {# desc категорий содержит перелинковку на /tovary/* — рендерим как safe. #}
+          <p class="mt-2 text-sm text-muted">{{ a.desc | safe }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ── 10. Большой тизер «Торговля» ─────────────────────────────────────── #}
+  <section id="torgovlya" class="scroll-mt-24 bg-surface-alt">
+    <div class="container section">
+      <div class="max-w-3xl">
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-cyan/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-dark">
+          {{ icon("search", "h-3.5 w-3.5") }}{{ "mega.trade.title" | t(locale) }}
+        </span>
+        <h2 class="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">{{ L.trade.title }}</h2>
+        <p class="mt-5 text-base text-muted">{{ L.trade.intro1 }}</p>
+        <p class="mt-4 text-base text-muted">{{ L.trade.intro2 }}</p>
+      </div>
+
+      <h3 class="mt-10 text-lg font-semibold text-ink">{{ L.trade.servicesTitle }}</h3>
+      <div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {% for t in L.trade.services %}
+          <div class="flex gap-4 rounded-xl border border-slate-200 bg-white p-5">
+            <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan/10">
+              {{ icon(t.icon, "h-5 w-5 text-cyan") }}
+            </span>
+            <div>
+              <h4 class="text-sm font-semibold text-ink">{{ t.title }}</h4>
+              <p class="mt-1.5 text-sm text-muted">{{ t.desc }}</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {# → CTA-3 (переход на /torgovlya/) — главный переход блока #}
+      <div class="mt-8">
+        <a href="{{ tradeUrl }}" class="btn-accent px-6 py-3 text-base">
+          {{ L.trade.cta }}
+          {{ icon("arrow-right", "ml-1.5 h-5 w-5") }}
+        </a>
+      </div>
+    </div>
+  </section>
+
+  {# ── 11. Примеры расчётов ─────────────────────────────────────────────── #}
+  <section id="primery" class="container section scroll-mt-24">
+    <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.examples.title }}</h2>
+    <div class="mt-8 grid gap-4 sm:grid-cols-2">
+      {% for e in L.examples.items %}
+        <a href="{{ e.url | localizedUrl(locale) }}" class="group flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-cyan">
+          <span class="flex items-start gap-3 text-base font-medium text-ink">
+            {{ icon("calculator", "mt-0.5 h-5 w-5 shrink-0 text-cyan") }}
+            <span>{{ e.text }}</span>
+          </span>
+          {{ icon("arrow-right", "mt-0.5 h-5 w-5 shrink-0 text-cyan transition-transform group-hover:translate-x-1") }}
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ── 12. FAQ (аккордеон + микроразметка FAQPage) ──────────────────────── #}
+  <section id="faq" class="scroll-mt-24 bg-surface-alt">
+    <div class="container section">
+      <div class="container-narrow !px-0">
+        <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.faq.title }}</h2>
+        <div class="mt-8 rounded-xl border border-slate-200 bg-white px-5 sm:px-6">
+          {% for item in L.faq.items %}
+            <div class="border-b border-slate-200 last:border-b-0">
+              <button
+                type="button"
+                data-accordion-toggle
+                class="flex w-full items-center justify-between gap-4 py-4 text-left text-base font-medium text-ink"
+                aria-expanded="false"
+                aria-controls="faq-panel-{{ loop.index }}"
+              >
+                <span>{{ item.q }}</span>
+                {{ icon("chevron-down", "accordion-caret h-5 w-5 shrink-0 text-cyan transition-transform duration-200") }}
+              </button>
+              <div id="faq-panel-{{ loop.index }}" data-accordion-panel class="hidden pb-4" hidden>
+                {# ответ может содержать перелинковку (<a>) — рендерим как safe. #}
+                <p class="max-w-2xl text-sm text-muted">{{ item.a | safe }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ── 13. Контакты и скорость ответа ───────────────────────────────────── #}
+  <section id="kontakty-blok" class="container section scroll-mt-24">
+    <div class="container-narrow !px-0">
+      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.contacts.title }}</h2>
+      <p class="mt-4 text-base text-muted">{{ L.contacts.text }}</p>
+      <div class="mt-6 grid gap-3 sm:grid-cols-2">
+        <a href="tel:{{ site.phoneHref }}" class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-cyan">
+          {{ icon("phone", "h-5 w-5 shrink-0 text-cyan") }}
+          <span>
+            <span class="block text-xs text-muted">{{ L.contacts.phoneRuLabel }}</span>
+            <span class="block font-semibold text-ink">{{ site.phone }}</span>
+          </span>
+        </a>
+        <a href="tel:{{ site.phoneCnHref }}" class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-cyan">
+          {{ icon("phone", "h-5 w-5 shrink-0 text-cyan") }}
+          <span>
+            <span class="block text-xs text-muted">{{ L.contacts.phoneCnLabel }}</span>
+            <span class="block font-semibold text-ink">{{ site.phoneCn }}</span>
+          </span>
+        </a>
+        <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-cyan">
+          {{ icon("send", "h-5 w-5 shrink-0 text-cyan") }}
+          <span>
+            <span class="block text-xs text-muted">{{ L.contacts.telegramLabel }}</span>
+            <span class="block font-semibold text-ink">{{ site.telegram | replace("https://t.me/", "@") }}</span>
+          </span>
+        </a>
+        <a href="mailto:{{ site.email }}" class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-cyan">
+          {{ icon("mail", "h-5 w-5 shrink-0 text-cyan") }}
+          <span>
+            <span class="block text-xs text-muted">{{ L.contacts.emailLabel }}</span>
+            <span class="block font-semibold text-ink">{{ site.email }}</span>
+          </span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  {# ── 14. Финальный CTA ────────────────────────────────────────────────── #}
+  {{ ctaBand(L.finalCta.button, requestUrl, text=L.finalCta.subtitle, title=L.finalCta.title, tone="final") }}
+
+</main>
+
+{# Микроразметка FAQPage (Schema.org) — для расширенных сниппетов в поиске. #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for item in L.faq.items %}
+    {
+      "@type": "Question",
+      "name": {{ item.q | dump | safe }},
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": {{ item.a | striptags | dump | safe }}
+      }
+    }{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ]
+}
+</script>
+
+{% include "partials/footer.njk" %}

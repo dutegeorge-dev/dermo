@@ -197,17 +197,41 @@ export default function (eleventyConfig: EleventyConfig) {
   eleventyConfig.addGlobalData("eleventyComputed", {
     title: (data: {
       title?: string;
-      page?: { fileSlug?: string };
+      titleKey?: string;
+      page?: { fileSlug?: string; url?: string };
       site?: { defaultTitle?: string };
     }) =>
       data.title ||
+      (data.titleKey
+        ? translate(data.titleKey, localeFromUrl(data.page?.url || "/"))
+        : undefined) ||
       (data.page?.fileSlug ? LABELS[data.page.fileSlug] : undefined) ||
       data.site?.defaultTitle ||
+      "",
+    // Описание для <head>: из front matter (description) или из словаря
+    // (descriptionKey), иначе — дефолт сайта.
+    description: (data: {
+      description?: string;
+      descriptionKey?: string;
+      page?: { url?: string };
+      site?: { defaultDescription?: string };
+    }) =>
+      data.description ||
+      (data.descriptionKey
+        ? translate(data.descriptionKey, localeFromUrl(data.page?.url || "/"))
+        : undefined) ||
+      data.site?.defaultDescription ||
       "",
     // Текущая локаль страницы, выведенная из URL (ru по умолчанию).
     // Доступна во всех шаблонах как `locale` (хедер, base-layout, hreflang).
     locale: (data: { page?: { url?: string } }) =>
       localeFromUrl(data.page?.url || "/"),
+    // Словарь текущей локали целиком — для секций со структурированным
+    // контентом (массивы карточек/строк/FAQ), которые нельзя достать через
+    // строковый фильтр `t`. Доступен в шаблонах как `dict` (например
+    // `dict.logistika.faq.items`). Тексты по-прежнему живут в i18n-словаре.
+    dict: (data: { page?: { url?: string } }) =>
+      DICTS[localeFromUrl(data.page?.url || "/")],
   });
 
   return {

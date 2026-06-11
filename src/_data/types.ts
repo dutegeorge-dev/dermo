@@ -260,6 +260,137 @@ export interface Breadcrumb {
   last?: boolean;
 }
 
+/** Карточка «иконка + заголовок + описание» (безопасность, оплата, услуги). */
+export interface LogiCard {
+  /** Имя иконки Lucide (см. partials/icon.njk). */
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+/** Пункт «заголовок + описание» без иконки (анти-кейсы). */
+export interface LogiPoint {
+  title: string;
+  desc: string;
+}
+
+/** Способ доставки: иконка, название, срок и назначение. */
+export interface LogiMethod {
+  icon: string;
+  title: string;
+  /** Срок доставки (акцент). */
+  time: string;
+  desc: string;
+  /** URL раздела способа доставки (перелинковка). */
+  url: string;
+}
+
+/** Строка таблицы сравнения «белая доставка / карго». */
+export interface LogiTableRow {
+  criterion: string;
+  white: string;
+  cargo: string;
+}
+
+/** Строка структуры стоимости: иконка + текст. */
+export interface LogiCostItem {
+  icon: string;
+  text: string;
+}
+
+/** Карточка-ссылка примера расчёта. */
+export interface LogiLink {
+  text: string;
+  url: string;
+}
+
+/** Вопрос-ответ FAQ. */
+export interface LogiQA {
+  q: string;
+  a: string;
+}
+
+/**
+ * Контент страницы «Логистика» (/logistika/).
+ * Тексты — финальные в ru, заглушки в en/zh. Доступ из шаблонов через
+ * глобальные данные `dict.logistika` (вычисляются по локали страницы).
+ */
+export interface Logistika {
+  meta: { title: string; description: string };
+  hero: {
+    h1: string;
+    subtitle: string;
+    ctaPrimary: string;
+    ctaSecondary: string;
+  };
+  methods: {
+    title: string;
+    items: LogiMethod[];
+    note: string;
+  };
+  cargo: {
+    title: string;
+    intro: string;
+    head: { criterion: string; white: string; cargo: string };
+    rows: LogiTableRow[];
+    antiTitle: string;
+    antiCases: LogiPoint[];
+    antiNote: string;
+  };
+  ctaInline1: { text: string; button: string };
+  safety: {
+    title: string;
+    subtitle: string;
+    items: LogiCard[];
+  };
+  payment: {
+    title: string;
+    intro: string;
+    items: LogiCard[];
+  };
+  cost: {
+    title: string;
+    intro: string;
+    structureTitle: string;
+    structure: LogiCostItem[];
+    needTitle: string;
+    need: string;
+  };
+  ctaInline2: { text: string; button: string };
+  notAgent: { title: string; p1: string; p2: string };
+  quote: { text: string; author: string; role: string; photoAlt: string };
+  audience: {
+    title: string;
+    intro: string;
+    items: LogiCard[];
+  };
+  trade: {
+    title: string;
+    intro1: string;
+    intro2: string;
+    servicesTitle: string;
+    services: LogiCard[];
+    cta: string;
+  };
+  examples: {
+    title: string;
+    items: LogiLink[];
+  };
+  faq: {
+    title: string;
+    items: LogiQA[];
+  };
+  contacts: {
+    title: string;
+    text: string;
+    phoneRuLabel: string;
+    phoneCnLabel: string;
+    telegramLabel: string;
+    emailLabel: string;
+  };
+  finalCta: { title: string; subtitle: string; button: string };
+}
+
 /**
  * Общий интерфейс словаря переводов.
  * Все три локали (ru/en/zh) реализуют один и тот же интерфейс — пропуск
@@ -588,4 +719,6 @@ export interface Dictionary {
     phoneCn: string;
     telegram: string;
   };
+  /** Контент страницы «Логистика» (/logistika/). */
+  logistika: Logistika;
 }

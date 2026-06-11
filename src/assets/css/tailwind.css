@@ -159,6 +159,10 @@
   .container-narrow {
     @apply container max-w-3xl;
   }
+  /* Бирюзовая текстовая ссылка для перелинковки внутри абзацев. */
+  .link-inline {
+    @apply font-medium text-cyan-dark underline decoration-cyan/40 underline-offset-2 transition-colors hover:decoration-cyan;
+  }
   .section {
     @apply py-12 md:py-16;
   }
