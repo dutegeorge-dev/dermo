@@ -247,18 +247,6 @@ export interface LogiQA {
  */
 export interface Logistika {
   meta: { title: string; description: string };
-  /** Короткие подписи пунктов оглавления (sticky-ToC) + заголовок «Содержание». */
-  toc: {
-    title: string;
-    methods: string;
-    cargo: string;
-    safety: string;
-    payment: string;
-    cost: string;
-    audience: string;
-    trade: string;
-    faq: string;
-  };
   hero: {
     h1: string;
     subtitle: string;

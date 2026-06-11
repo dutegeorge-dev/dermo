@@ -20,9 +20,13 @@
     {% endfor %}
     <link rel="alternate" hreflang="x-default" href="{{ (page.url | localizedUrl('ru')) | absoluteUrl(site.url) }}" />
 
-    {# Предзагрузка основных подсетов Onest (вес 400) — быстрее первый рендер текста #}
+    {# Предзагрузка весов первого экрана (400 — текст, 600 — заголовки),
+       кириллица + латиница. crossorigin обязателен для шрифтов даже на своём
+       домене. В паре с font-display: optional убирает скачок шрифта (FOUT). #}
     <link rel="preload" href="/assets/fonts/onest-cyrillic-400-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/onest-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/onest-cyrillic-600-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/onest-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin />
 
     {# Open Graph #}
     <meta property="og:type" content="{{ ogType or 'website' }}" />

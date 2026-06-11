@@ -19,38 +19,10 @@ sitemap: true
 {% set calcUrl = site.calculateUrl | localizedUrl(locale) %}
 {% set requestUrl = "/kontakty/" | localizedUrl(locale) %}
 {% set tradeUrl = "/torgovlya/" | localizedUrl(locale) %}
-{# Пункты оглавления (sticky-ToC + свёрнутое «Содержание» на мобайле). #}
-{% set tocItems = [
-  { id: "sposoby", label: L.toc.methods },
-  { id: "kargo", label: L.toc.cargo },
-  { id: "bezopasnost", label: L.toc.safety },
-  { id: "garantii", label: L.toc.payment },
-  { id: "stoimost", label: L.toc.cost },
-  { id: "dlya-kogo", label: L.toc.audience },
-  { id: "torgovlya", label: L.toc.trade },
-  { id: "faq", label: L.toc.faq }
-] %}
 
 {% include "partials/header.njk" %}
 
 <main class="flex-1">
-
-  {# Sticky-оглавление в левом «гутере» — только на очень широких экранах,
-     чтобы не перекрывать контент (на остальных — свёрнутый блок ниже). #}
-  <nav
-    data-toc
-    aria-label="{{ L.toc.title }}"
-    class="fixed top-1/2 z-30 hidden w-44 -translate-y-1/2 left-[calc((100vw_-_75rem)/2_-_12rem)] min-[1600px]:block"
-  >
-    <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">{{ L.toc.title }}</p>
-    <ul class="space-y-0.5 border-l border-slate-200">
-      {% for it in tocItems %}
-        <li>
-          <a href="#{{ it.id }}" class="-ml-px block border-l-2 border-transparent py-1 pl-3 text-sm text-muted transition-colors hover:text-cyan">{{ it.label }}</a>
-        </li>
-      {% endfor %}
-    </ul>
-  </nav>
 
   {# ── 1. Hero ─────────────────────────────────────────────────────────── #}
   <section class="bg-brand text-white">
@@ -71,21 +43,6 @@ sitemap: true
       {{ leadFormMini(locale, "logi") }}
     </div>
   </section>
-
-  {# Свёрнутое «Содержание» — для мобайла и обычных десктопов (где sticky-ToC скрыт). #}
-  <div class="container pt-8 min-[1600px]:hidden">
-    <details data-toc class="rounded-xl border border-slate-200 bg-surface-alt">
-      <summary class="flex cursor-pointer items-center justify-between gap-2 px-5 py-3 text-sm font-semibold text-ink">
-        {{ L.toc.title }}
-        {{ icon("chevron-down", "h-5 w-5 text-cyan") }}
-      </summary>
-      <ul class="grid gap-x-6 gap-y-1 border-t border-slate-200 px-5 py-3 sm:grid-cols-2">
-        {% for it in tocItems %}
-          <li><a href="#{{ it.id }}" class="block py-1 text-sm text-muted transition-colors hover:text-cyan">{{ it.label }}</a></li>
-        {% endfor %}
-      </ul>
-    </details>
-  </div>
 
   {# ── 2. Способы доставки ──────────────────────────────────────────────── #}
   <section id="sposoby" class="container section scroll-mt-24">

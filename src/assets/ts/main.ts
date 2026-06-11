@@ -9,9 +9,6 @@
 // Хедер: sticky, мега-меню, off-canvas, аккордеоны (см. ./header.ts).
 import "./header";
 
-// Оглавление страницы: scroll-spy + плавная прокрутка (см. ./toc.ts).
-import "./toc";
-
 // Типизация глобальных функций аналитики (могут отсутствовать в dev).
 declare global {
   interface Window {
