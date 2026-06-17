@@ -21,40 +21,12 @@ const uslugi: UslugiData = {
   gorodaUrl: `${DELIVERY}/goroda/`,
   torgovlyaUrl: `${BASE}/torgovlya/`,
 
-  // По способу — карточки с иконкой, сроком и описанием (как на /logistika/).
+  // По способу — простые карточки (иконка + название).
   methods: [
-    {
-      slug: "avto",
-      icon: "truck",
-      nameKey: "method.avto",
-      timeKey: "uslugi.methods.avto.time",
-      descKey: "uslugi.methods.avto.desc",
-      url: `${DELIVERY}/avto/`,
-    },
-    {
-      slug: "zhd",
-      icon: "train-front",
-      nameKey: "method.zhd",
-      timeKey: "uslugi.methods.zhd.time",
-      descKey: "uslugi.methods.zhd.desc",
-      url: `${DELIVERY}/zhd/`,
-    },
-    {
-      slug: "more",
-      icon: "ship",
-      nameKey: "method.more",
-      timeKey: "uslugi.methods.more.time",
-      descKey: "uslugi.methods.more.desc",
-      url: `${DELIVERY}/more/`,
-    },
-    {
-      slug: "avia",
-      icon: "plane",
-      nameKey: "method.avia",
-      timeKey: "uslugi.methods.avia.time",
-      descKey: "uslugi.methods.avia.desc",
-      url: `${DELIVERY}/avia/`,
-    },
+    { slug: "avto", icon: "truck", nameKey: "method.avto", url: `${DELIVERY}/avto/` },
+    { slug: "zhd", icon: "train-front", nameKey: "method.zhd", url: `${DELIVERY}/zhd/` },
+    { slug: "more", icon: "ship", nameKey: "method.more", url: `${DELIVERY}/more/` },
+    { slug: "avia", icon: "plane", nameKey: "method.avia", url: `${DELIVERY}/avia/` },
   ],
 
   // По товару — категории грузов (названия из ветки `goods`).
@@ -77,18 +49,18 @@ const uslugi: UslugiData = {
     { slug: "kazan", nameKey: "city.kazan", icon: "map-pin", url: `${DELIVERY}/goroda/kazan/` },
   ],
 
-  // Торговые услуги (10) — карточки витрины /uslugi/torgovlya/.
+  // Торговые услуги (10) — простые карточки витрины /uslugi/torgovlya/.
   torgovlyaServices: [
-    { slug: "poisk-postavshchika", icon: "search", titleKey: "uslugi.torgovlya.services.search.title", descKey: "uslugi.torgovlya.services.search.desc", url: `${BASE}/torgovlya/poisk-postavshchika/` },
-    { slug: "audit-proizvodstva", icon: "factory", titleKey: "uslugi.torgovlya.services.audit.title", descKey: "uslugi.torgovlya.services.audit.desc", url: `${BASE}/torgovlya/audit-proizvodstva/` },
-    { slug: "peregovory", icon: "messages-square", titleKey: "uslugi.torgovlya.services.negotiations.title", descKey: "uslugi.torgovlya.services.negotiations.desc", url: `${BASE}/torgovlya/peregovory/` },
-    { slug: "kontrol-proizvodstva", icon: "camera", titleKey: "uslugi.torgovlya.services.control.title", descKey: "uslugi.torgovlya.services.control.desc", url: `${BASE}/torgovlya/kontrol-proizvodstva/` },
-    { slug: "inspekciya", icon: "scan-search", titleKey: "uslugi.torgovlya.services.inspection.title", descKey: "uslugi.torgovlya.services.inspection.desc", url: `${BASE}/torgovlya/inspekciya/` },
-    { slug: "upakovka-markirovka", icon: "package", titleKey: "uslugi.torgovlya.services.packaging.title", descKey: "uslugi.torgovlya.services.packaging.desc", url: `${BASE}/torgovlya/upakovka-markirovka/` },
-    { slug: "sertifikaciya", icon: "badge-check", titleKey: "uslugi.torgovlya.services.certification.title", descKey: "uslugi.torgovlya.services.certification.desc", url: `${BASE}/torgovlya/sertifikaciya/` },
-    { slug: "vykup-tovara", icon: "landmark", titleKey: "uslugi.torgovlya.services.buyout.title", descKey: "uslugi.torgovlya.services.buyout.desc", url: `${BASE}/torgovlya/vykup-tovara/` },
-    { slug: "vozvrat-nds", icon: "receipt", titleKey: "uslugi.torgovlya.services.vat.title", descKey: "uslugi.torgovlya.services.vat.desc", url: `${BASE}/torgovlya/vozvrat-nds/` },
-    { slug: "proverka-zavoda", icon: "shield-check", titleKey: "uslugi.torgovlya.services.factoryCheck.title", descKey: "uslugi.torgovlya.services.factoryCheck.desc", url: `${BASE}/torgovlya/proverka-zavoda/` },
+    { slug: "poisk-postavshchika", icon: "search", nameKey: "uslugi.torgovlya.services.search", url: `${BASE}/torgovlya/poisk-postavshchika/` },
+    { slug: "audit-proizvodstva", icon: "factory", nameKey: "uslugi.torgovlya.services.audit", url: `${BASE}/torgovlya/audit-proizvodstva/` },
+    { slug: "peregovory", icon: "messages-square", nameKey: "uslugi.torgovlya.services.negotiations", url: `${BASE}/torgovlya/peregovory/` },
+    { slug: "kontrol-proizvodstva", icon: "camera", nameKey: "uslugi.torgovlya.services.control", url: `${BASE}/torgovlya/kontrol-proizvodstva/` },
+    { slug: "inspekciya", icon: "scan-search", nameKey: "uslugi.torgovlya.services.inspection", url: `${BASE}/torgovlya/inspekciya/` },
+    { slug: "upakovka-markirovka", icon: "package", nameKey: "uslugi.torgovlya.services.packaging", url: `${BASE}/torgovlya/upakovka-markirovka/` },
+    { slug: "sertifikaciya", icon: "badge-check", nameKey: "uslugi.torgovlya.services.certification", url: `${BASE}/torgovlya/sertifikaciya/` },
+    { slug: "vykup-tovara", icon: "landmark", nameKey: "uslugi.torgovlya.services.buyout", url: `${BASE}/torgovlya/vykup-tovara/` },
+    { slug: "vozvrat-nds", icon: "receipt", nameKey: "uslugi.torgovlya.services.vat", url: `${BASE}/torgovlya/vozvrat-nds/` },
+    { slug: "proverka-zavoda", icon: "shield-check", nameKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/torgovlya/proverka-zavoda/` },
   ],
 };
 

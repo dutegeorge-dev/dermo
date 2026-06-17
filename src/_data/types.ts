@@ -292,57 +292,26 @@ export interface Breadcrumb {
 }
 
 /**
- * Способ доставки в витрине услуг (/uslugi/dostavka/): иконка, срок, описание.
- * Названия и тексты — по ключам словаря (i18n), URL — новый путь под /uslugi/.
- */
-export interface UslugiMethod {
-  /** Слаг способа (avto/zhd/more/avia). */
-  slug: string;
-  /** Имя иконки Lucide (см. partials/icon.njk). */
-  icon: string;
-  /** Ключ перевода названия способа. */
-  nameKey: string;
-  /** Ключ перевода срока доставки (акцент). */
-  timeKey: string;
-  /** Ключ перевода короткого описания. */
-  descKey: string;
-  /** URL страницы способа. */
-  url: string;
-}
-
-/**
- * Запись списка (категория товара или город) — простая ссылка с именем
- * по ключу словаря и опциональной иконкой. URL — новый путь под /uslugi/.
+ * Запись-карточка раздела «Услуги»: способ доставки, категория товара, город,
+ * торговая услуга или подраздел витрины. Единый простой формат — иконка Lucide,
+ * название по ключу словаря и URL. Из него строятся все сетки карточек.
  */
 export interface UslugiEntry {
-  /** Слаг категории/города. */
-  slug: string;
-  /** Ключ перевода названия. */
-  nameKey: string;
-  /** Имя иконки Lucide (опц.). */
-  icon?: string;
-  /** URL страницы. */
-  url: string;
-}
-
-/** Торговая услуга-карточка витрины (/uslugi/torgovlya/). */
-export interface UslugiService {
-  /** Слаг услуги. */
-  slug: string;
+  /** Слаг (для якорей/отладки; опц. для составных карточек витрины). */
+  slug?: string;
   /** Имя иконки Lucide (см. partials/icon.njk). */
   icon: string;
-  /** Ключ перевода названия услуги. */
-  titleKey: string;
-  /** Ключ перевода пояснения (одна строка). */
-  descKey: string;
-  /** URL страницы услуги. */
+  /** Ключ перевода названия. */
+  nameKey: string;
+  /** URL страницы. */
   url: string;
 }
 
 /**
  * Единый источник структуры раздела «Услуги» (/uslugi/): способы доставки,
- * категории товаров, города и торговые услуги. Из этих данных строятся витрины,
- * списки и (через URL) хлебные крошки. Тексты — по ключам словаря (i18n).
+ * категории товаров, города и торговые услуги. Из этих данных строятся витрины
+ * (сетки карточек), списки и (через URL) хлебные крошки. Тексты — по ключам
+ * словаря (i18n).
  */
 export interface UslugiData {
   /** URL витрины доставки. */
@@ -354,13 +323,13 @@ export interface UslugiData {
   /** URL витрины торговли. */
   torgovlyaUrl: string;
   /** Способы доставки (4). */
-  methods: UslugiMethod[];
+  methods: UslugiEntry[];
   /** Категории товаров. */
   tovary: UslugiEntry[];
   /** Города. */
   goroda: UslugiEntry[];
   /** Торговые услуги (10). */
-  torgovlyaServices: UslugiService[];
+  torgovlyaServices: UslugiEntry[];
 }
 
 /** Карточка «иконка + заголовок + описание» (безопасность, оплата, услуги). */
@@ -580,80 +549,46 @@ export interface OKompanii {
   finalCta: { title: string; subtitle: string; button: string };
 }
 
-/** Заголовок + текст (для блоков витрин услуг). */
-export interface UslugiTitleDesc {
+/**
+ * Тексты простой страницы раздела «Услуги».
+ * `title` — заголовок (layout page.njk использует его и как <title>, и как H1);
+ * `description` — meta-описание; `subtitle` — вводная строка под заголовком.
+ */
+export interface UslugiPageText {
   title: string;
-  desc: string;
+  description: string;
+  subtitle: string;
 }
 
 /**
- * Тексты раздела «Услуги» (три витрины + списки). RU — финальный, en/zh —
- * заглушки (выводятся из ru). Структурные данные (слаги/иконки/URL) — в
- * _data/uslugi.ts; здесь только строки, резолвятся фильтром `t`.
+ * Тексты раздела «Услуги» (три витрины + два списка). Каждая страница —
+ * простой шаблон: H1 + подзаголовок + сетка карточек. RU — финальный, en/zh —
+ * заглушки (выводятся из ru). Структура карточек (иконки/URL/названия) — в
+ * _data/uslugi.ts; здесь только строки страниц и названия торговых услуг,
+ * резолвятся фильтром `t`.
  */
 export interface UslugiDict {
   /** Витрина верхнего уровня /uslugi/. */
-  meta: { title: string; description: string };
-  hero: { h1: string; subtitle: string };
-  wings: {
-    logistics: {
-      title: string;
-      desc: string;
-      cta: string;
-      t1: string;
-      t2: string;
-      t3: string;
-    };
-    trade: { title: string; desc: string; cta: string; teaser: string };
-  };
+  index: UslugiPageText;
   /** Витрина доставки /uslugi/dostavka/. */
-  dostavka: {
-    meta: { title: string; description: string };
-    h1: string;
-    subtitle: string;
-    byMethod: { title: string; subtitle: string };
-    byGoods: UslugiTitleDesc & { cta: string };
-    byCity: UslugiTitleDesc & { cta: string };
-    note: string;
-  };
-  /** Срок + описание способов доставки (для карточек витрины). */
-  methods: {
-    avto: { time: string; desc: string };
-    zhd: { time: string; desc: string };
-    more: { time: string; desc: string };
-    avia: { time: string; desc: string };
-  };
+  dostavka: UslugiPageText;
   /** Список категорий товаров /uslugi/dostavka/tovary/. */
-  tovaryList: {
-    meta: { title: string; description: string };
-    h1: string;
-    subtitle: string;
-    more: string;
-  };
+  tovaryList: UslugiPageText;
   /** Список городов /uslugi/dostavka/goroda/. */
-  gorodaList: {
-    meta: { title: string; description: string };
-    h1: string;
-    subtitle: string;
-    more: string;
-  };
-  /** Витрина торговли /uslugi/torgovlya/. */
-  torgovlya: {
-    meta: { title: string; description: string };
-    h1: string;
-    subtitle: string;
-    more: string;
+  gorodaList: UslugiPageText;
+  /** Витрина торговли /uslugi/torgovlya/ + названия 10 услуг. */
+  torgovlya: UslugiPageText & {
     services: {
-      search: UslugiTitleDesc;
-      audit: UslugiTitleDesc;
-      negotiations: UslugiTitleDesc;
-      control: UslugiTitleDesc;
-      inspection: UslugiTitleDesc;
-      packaging: UslugiTitleDesc;
-      certification: UslugiTitleDesc;
-      buyout: UslugiTitleDesc;
-      vat: UslugiTitleDesc;
-      factoryCheck: UslugiTitleDesc;
+      search: string;
+      audit: string;
+      negotiations: string;
+      control: string;
+      inspection: string;
+      packaging: string;
+      certification: string;
+      buyout: string;
+      vat: string;
+      factoryCheck: string;
     };
   };
 }

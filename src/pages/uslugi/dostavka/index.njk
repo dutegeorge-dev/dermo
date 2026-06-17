@@ -1,102 +1,18 @@
 ---
-layout: layouts/base.njk
 permalink: /uslugi/dostavka/
-titleKey: uslugi.dostavka.meta.title
-descriptionKey: uslugi.dostavka.meta.description
-sitemap: true
+titleKey: uslugi.dostavka.title
+descriptionKey: uslugi.dostavka.description
 ---
-{#
-  Витрина доставки (/uslugi/dostavka/).
-  Три подраздела: по способу (карточки со сроками), по товару и по городу
-  (переходы к спискам). Тексты — dict.uslugi.dostavka, способы — _data/uslugi.ts.
-  Стиль — эталон логистики: карточки с иконками, бирюза, воздух.
-#}
-{% from "partials/icon.njk" import icon %}
-{% set U = dict.uslugi.dostavka %}
-{% set tovaryUrl = uslugi.tovaryUrl | localizedUrl(locale) %}
-{% set gorodaUrl = uslugi.gorodaUrl | localizedUrl(locale) %}
+{# Витрина «Доставка» — простой шаблон: H1 + подзаголовок + сетка карточек:
+   способы доставки + переходы к спискам «по товару» и «по городу». #}
+{% from "components/link-card.njk" import linkCard %}
 
-{% include "partials/header.njk" %}
+<p class="mt-2 max-w-2xl text-base leading-relaxed text-muted">{{ "uslugi.dostavka.subtitle" | t(locale) }}</p>
 
-<main class="flex-1">
-  {% include "partials/breadcrumbs.njk" %}
-
-  {# ── Hero ─────────────────────────────────────────────────────────────── #}
-  <section class="bg-brand text-white">
-    <div class="container py-16 md:py-20 lg:py-24">
-      <h1 class="max-w-3xl text-4xl font-light leading-tight tracking-tight md:text-5xl">{{ U.h1 }}</h1>
-      <p class="mt-6 max-w-2xl text-lg font-light leading-relaxed text-white/85 md:text-xl">{{ U.subtitle }}</p>
-    </div>
-  </section>
-
-  {# ── По способу ───────────────────────────────────────────────────────── #}
-  <section class="container section">
-    <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ U.byMethod.title }}</h2>
-    <p class="mt-3 max-w-2xl text-base text-muted">{{ U.byMethod.subtitle }}</p>
-    <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {% for m in uslugi.methods %}
-        <a href="{{ m.url | localizedUrl(locale) }}" class="group flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-cyan">
-          {{ icon(m.icon, "h-8 w-8 text-cyan") }}
-          <h3 class="mt-4 text-base font-semibold text-ink">{{ m.nameKey | t(locale) }}</h3>
-          <p class="mt-2 text-2xl font-semibold text-cyan">{{ m.timeKey | t(locale) }}</p>
-          <p class="mt-2 text-sm text-muted">{{ m.descKey | t(locale) }}</p>
-          <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-cyan-dark">
-            {{ "home.cases.more" | t(locale) }}
-            {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover:translate-x-1") }}
-          </span>
-        </a>
-      {% endfor %}
-    </div>
-    <p class="mt-5 flex items-center gap-2 text-sm font-medium text-muted">
-      {{ icon("package", "h-4 w-4 text-cyan") }}
-      {{ U.note }}
-    </p>
-  </section>
-
-  {# ── По товару / по городу ────────────────────────────────────────────── #}
-  <section class="bg-surface-alt">
-    <div class="container section">
-      <div class="grid gap-6 lg:grid-cols-2">
-
-        {# По товару → список категорий #}
-        <a href="{{ tovaryUrl }}" class="group flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-8 shadow-sm ring-1 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl hover:ring-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan md:p-10">
-          <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan/10">
-            {{ icon("package", "h-7 w-7 text-cyan") }}
-          </span>
-          <h2 class="mt-6 text-2xl font-light tracking-tight text-ink md:text-3xl">{{ U.byGoods.title }}</h2>
-          <p class="mt-4 flex-1 text-base leading-relaxed text-muted">{{ U.byGoods.desc }}</p>
-          <ul class="mt-6 flex flex-wrap gap-2">
-            {% for t in uslugi.tovary %}
-              <li class="rounded-full bg-surface-alt px-3 py-1 text-sm text-ink">{{ t.nameKey | t(locale) }}</li>
-            {% endfor %}
-          </ul>
-          <span class="mt-8 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors group-hover:text-cyan">
-            {{ U.byGoods.cta }}
-            {{ icon("arrow-right", "h-5 w-5 transition-transform group-hover:translate-x-1") }}
-          </span>
-        </a>
-
-        {# По городу → список городов #}
-        <a href="{{ gorodaUrl }}" class="group flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-8 shadow-sm ring-1 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl hover:ring-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan md:p-10">
-          <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan/10">
-            {{ icon("map-pin", "h-7 w-7 text-cyan") }}
-          </span>
-          <h2 class="mt-6 text-2xl font-light tracking-tight text-ink md:text-3xl">{{ U.byCity.title }}</h2>
-          <p class="mt-4 flex-1 text-base leading-relaxed text-muted">{{ U.byCity.desc }}</p>
-          <ul class="mt-6 flex flex-wrap gap-2">
-            {% for c in uslugi.goroda %}
-              <li class="rounded-full bg-surface-alt px-3 py-1 text-sm text-ink">{{ c.nameKey | t(locale) }}</li>
-            {% endfor %}
-          </ul>
-          <span class="mt-8 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors group-hover:text-cyan">
-            {{ U.byCity.cta }}
-            {{ icon("arrow-right", "h-5 w-5 transition-transform group-hover:translate-x-1") }}
-          </span>
-        </a>
-
-      </div>
-    </div>
-  </section>
-</main>
-
-{% include "partials/footer.njk" %}
+<div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% for m in uslugi.methods %}
+    {{ linkCard(m.icon, (m.nameKey | t(locale)), m.url | localizedUrl(locale)) }}
+  {% endfor %}
+  {{ linkCard("package", ("mega.byGoods" | t(locale)), uslugi.tovaryUrl | localizedUrl(locale)) }}
+  {{ linkCard("map-pin", ("mega.byCity" | t(locale)), uslugi.gorodaUrl | localizedUrl(locale)) }}
+</div>

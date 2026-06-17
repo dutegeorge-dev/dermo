@@ -1,55 +1,15 @@
 ---
-layout: layouts/base.njk
 permalink: /uslugi/torgovlya/
-titleKey: uslugi.torgovlya.meta.title
-descriptionKey: uslugi.torgovlya.meta.description
-sitemap: true
+titleKey: uslugi.torgovlya.title
+descriptionKey: uslugi.torgovlya.description
 ---
-{#
-  Витрина торговли (/uslugi/torgovlya/).
-  Сетка из 10 карточек-услуг, каждая → /uslugi/torgovlya/<услуга>/.
-  Тексты — dict.uslugi.torgovlya, состав услуг — _data/uslugi.ts.
-  Стиль — эталон торговли: карточки с иконками, янтарь/бирюза, воздух.
-#}
-{% from "partials/icon.njk" import icon %}
-{% set U = dict.uslugi.torgovlya %}
+{# Витрина «Торговля» — простой шаблон: H1 + подзаголовок + сетка из 10 услуг. #}
+{% from "components/link-card.njk" import linkCard %}
 
-{% include "partials/header.njk" %}
+<p class="mt-2 max-w-2xl text-base leading-relaxed text-muted">{{ "uslugi.torgovlya.subtitle" | t(locale) }}</p>
 
-<main class="flex-1">
-  {% include "partials/breadcrumbs.njk" %}
-
-  {# ── Hero ─────────────────────────────────────────────────────────────── #}
-  <section class="bg-brand text-white">
-    <div class="container py-16 md:py-20 lg:py-24">
-      <h1 class="max-w-3xl text-4xl font-light leading-tight tracking-tight md:text-5xl">{{ U.h1 }}</h1>
-      <p class="mt-6 max-w-2xl text-lg font-light leading-relaxed text-white/85 md:text-xl">{{ U.subtitle }}</p>
-    </div>
-  </section>
-
-  {# ── Сетка услуг (10) ─────────────────────────────────────────────────── #}
-  <section class="bg-surface">
-    <div class="container section">
-      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {% for service in uslugi.torgovlyaServices %}
-          <a
-            href="{{ service.url | localizedUrl(locale) }}"
-            class="group flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
-          >
-            <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan/15">
-              {{ icon(service.icon, "h-7 w-7 text-cyan") }}
-            </span>
-            <h2 class="mt-5 text-lg font-medium text-ink">{{ service.titleKey | t(locale) }}</h2>
-            <p class="mt-2 flex-1 text-sm leading-relaxed text-muted">{{ service.descKey | t(locale) }}</p>
-            <span class="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-cyan-dark transition-colors group-hover:text-cyan">
-              {{ U.more }}
-              {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover:translate-x-1") }}
-            </span>
-          </a>
-        {% endfor %}
-      </div>
-    </div>
-  </section>
-</main>
-
-{% include "partials/footer.njk" %}
+<div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% for s in uslugi.torgovlyaServices %}
+    {{ linkCard(s.icon, (s.nameKey | t(locale)), s.url | localizedUrl(locale)) }}
+  {% endfor %}
+</div>
