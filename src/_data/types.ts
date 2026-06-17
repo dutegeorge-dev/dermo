@@ -291,6 +291,78 @@ export interface Breadcrumb {
   last?: boolean;
 }
 
+/**
+ * Способ доставки в витрине услуг (/uslugi/dostavka/): иконка, срок, описание.
+ * Названия и тексты — по ключам словаря (i18n), URL — новый путь под /uslugi/.
+ */
+export interface UslugiMethod {
+  /** Слаг способа (avto/zhd/more/avia). */
+  slug: string;
+  /** Имя иконки Lucide (см. partials/icon.njk). */
+  icon: string;
+  /** Ключ перевода названия способа. */
+  nameKey: string;
+  /** Ключ перевода срока доставки (акцент). */
+  timeKey: string;
+  /** Ключ перевода короткого описания. */
+  descKey: string;
+  /** URL страницы способа. */
+  url: string;
+}
+
+/**
+ * Запись списка (категория товара или город) — простая ссылка с именем
+ * по ключу словаря и опциональной иконкой. URL — новый путь под /uslugi/.
+ */
+export interface UslugiEntry {
+  /** Слаг категории/города. */
+  slug: string;
+  /** Ключ перевода названия. */
+  nameKey: string;
+  /** Имя иконки Lucide (опц.). */
+  icon?: string;
+  /** URL страницы. */
+  url: string;
+}
+
+/** Торговая услуга-карточка витрины (/uslugi/torgovlya/). */
+export interface UslugiService {
+  /** Слаг услуги. */
+  slug: string;
+  /** Имя иконки Lucide (см. partials/icon.njk). */
+  icon: string;
+  /** Ключ перевода названия услуги. */
+  titleKey: string;
+  /** Ключ перевода пояснения (одна строка). */
+  descKey: string;
+  /** URL страницы услуги. */
+  url: string;
+}
+
+/**
+ * Единый источник структуры раздела «Услуги» (/uslugi/): способы доставки,
+ * категории товаров, города и торговые услуги. Из этих данных строятся витрины,
+ * списки и (через URL) хлебные крошки. Тексты — по ключам словаря (i18n).
+ */
+export interface UslugiData {
+  /** URL витрины доставки. */
+  dostavkaUrl: string;
+  /** URL списка категорий товаров. */
+  tovaryUrl: string;
+  /** URL списка городов. */
+  gorodaUrl: string;
+  /** URL витрины торговли. */
+  torgovlyaUrl: string;
+  /** Способы доставки (4). */
+  methods: UslugiMethod[];
+  /** Категории товаров. */
+  tovary: UslugiEntry[];
+  /** Города. */
+  goroda: UslugiEntry[];
+  /** Торговые услуги (10). */
+  torgovlyaServices: UslugiService[];
+}
+
 /** Карточка «иконка + заголовок + описание» (безопасность, оплата, услуги). */
 export interface LogiCard {
   /** Имя иконки Lucide (см. partials/icon.njk). */
@@ -506,6 +578,84 @@ export interface OKompanii {
   partners: { title: string; linkLabel: string; items: AboutPartner[] };
   /** Финальный CTA. */
   finalCta: { title: string; subtitle: string; button: string };
+}
+
+/** Заголовок + текст (для блоков витрин услуг). */
+export interface UslugiTitleDesc {
+  title: string;
+  desc: string;
+}
+
+/**
+ * Тексты раздела «Услуги» (три витрины + списки). RU — финальный, en/zh —
+ * заглушки (выводятся из ru). Структурные данные (слаги/иконки/URL) — в
+ * _data/uslugi.ts; здесь только строки, резолвятся фильтром `t`.
+ */
+export interface UslugiDict {
+  /** Витрина верхнего уровня /uslugi/. */
+  meta: { title: string; description: string };
+  hero: { h1: string; subtitle: string };
+  wings: {
+    logistics: {
+      title: string;
+      desc: string;
+      cta: string;
+      t1: string;
+      t2: string;
+      t3: string;
+    };
+    trade: { title: string; desc: string; cta: string; teaser: string };
+  };
+  /** Витрина доставки /uslugi/dostavka/. */
+  dostavka: {
+    meta: { title: string; description: string };
+    h1: string;
+    subtitle: string;
+    byMethod: { title: string; subtitle: string };
+    byGoods: UslugiTitleDesc & { cta: string };
+    byCity: UslugiTitleDesc & { cta: string };
+    note: string;
+  };
+  /** Срок + описание способов доставки (для карточек витрины). */
+  methods: {
+    avto: { time: string; desc: string };
+    zhd: { time: string; desc: string };
+    more: { time: string; desc: string };
+    avia: { time: string; desc: string };
+  };
+  /** Список категорий товаров /uslugi/dostavka/tovary/. */
+  tovaryList: {
+    meta: { title: string; description: string };
+    h1: string;
+    subtitle: string;
+    more: string;
+  };
+  /** Список городов /uslugi/dostavka/goroda/. */
+  gorodaList: {
+    meta: { title: string; description: string };
+    h1: string;
+    subtitle: string;
+    more: string;
+  };
+  /** Витрина торговли /uslugi/torgovlya/. */
+  torgovlya: {
+    meta: { title: string; description: string };
+    h1: string;
+    subtitle: string;
+    more: string;
+    services: {
+      search: UslugiTitleDesc;
+      audit: UslugiTitleDesc;
+      negotiations: UslugiTitleDesc;
+      control: UslugiTitleDesc;
+      inspection: UslugiTitleDesc;
+      packaging: UslugiTitleDesc;
+      certification: UslugiTitleDesc;
+      buyout: UslugiTitleDesc;
+      vat: UslugiTitleDesc;
+      factoryCheck: UslugiTitleDesc;
+    };
+  };
 }
 
 /**
@@ -849,4 +999,6 @@ export interface Dictionary {
   logistika: Logistika;
   /** Контент страницы «О компании» (/o-kompanii/). */
   oKompanii: OKompanii;
+  /** Тексты раздела «Услуги» (/uslugi/ — три витрины и списки). */
+  uslugi: UslugiDict;
 }

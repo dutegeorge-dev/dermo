@@ -198,6 +198,8 @@ const en: Dictionary = {
   },
   // Крупная экспертная секция — заглушка выводится из ru с префиксом [EN].
   torgovlya: stubBranch(ru.torgovlya, "[EN] "),
+  // Раздел «Услуги» (три витрины) — заглушка выводится из ru с префиксом [EN].
+  uslugi: stubBranch(ru.uslugi, "[EN] "),
   a11y: {
     openMenu: "[EN] Открыть меню",
     closeMenu: "[EN] Закрыть меню",

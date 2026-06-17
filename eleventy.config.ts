@@ -79,6 +79,7 @@ const LABELS: Record<string, string> = {
   "vykup-tovara": "Выкуп товара",
   "vozvrat-nds": "Возврат экспортного НДС",
   "proverka-zavoda": "Проверка завода",
+  sertifikaciya: "Сертификация",
   "napolnye-pokrytiya": "Напольные покрытия",
   stroymaterialy: "Стройматериалы",
   "keramika-plitka": "Керамика и плитка",

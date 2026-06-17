@@ -1,0 +1,21 @@
+---
+permalink: /uslugi/dostavka/tovary/
+titleKey: uslugi.tovaryList.h1
+descriptionKey: uslugi.tovaryList.meta.description
+---
+{# Список категорий товаров (шаблонный). Карточки строятся из _data/uslugi.ts. #}
+{% from "partials/icon.njk" import icon %}
+
+<p class="mt-2 max-w-2xl text-base leading-relaxed text-muted">{{ "uslugi.tovaryList.subtitle" | t(locale) }}</p>
+
+<div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% for t in uslugi.tovary %}
+    <a href="{{ t.url | localizedUrl(locale) }}" class="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-cyan">
+      <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-cyan/10">
+        {{ icon(t.icon, "h-6 w-6 text-cyan") }}
+      </span>
+      <span class="flex-1 text-base font-semibold text-ink">{{ t.nameKey | t(locale) }}</span>
+      {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan transition-transform group-hover:translate-x-1") }}
+    </a>
+  {% endfor %}
+</div>

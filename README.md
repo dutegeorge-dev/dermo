@@ -73,7 +73,7 @@ tsconfig.json
 - `title` / `description` / `canonical` / Open Graph на каждой странице (фолбэки в `src/_data/site.ts`).
 - JSON-LD `Organization` (все страницы), `BreadcrumbList` (вложенные), `Article` (статьи/кейсы).
 - `robots.txt` и `sitemap.xml` генерируются автоматически.
-- Страницы `/r/` — `noindex, nofollow` и **исключены из sitemap** (защита от каннибализации с `/tovary/`).
+- Страницы `/r/` — `noindex, nofollow` и **исключены из sitemap** (защита от каннибализации с `/uslugi/dostavka/tovary/`).
 
 ## Формы
 

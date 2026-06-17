@@ -198,6 +198,8 @@ const zh: Dictionary = {
   },
   // Крупная экспертная секция — заглушка выводится из ru с префиксом [ZH].
   torgovlya: stubBranch(ru.torgovlya, "[ZH] "),
+  // Раздел «Услуги» (три витрины) — заглушка выводится из ru с префиксом [ZH].
+  uslugi: stubBranch(ru.uslugi, "[ZH] "),
   a11y: {
     openMenu: "[ZH] Открыть меню",
     closeMenu: "[ZH] Закрыть меню",

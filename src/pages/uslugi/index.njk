@@ -1,23 +1,83 @@
 ---
+layout: layouts/base.njk
 permalink: /uslugi/
-title: Услуги закупки в Китае
-description: "Услуги ООО ТЛК БАРС по закупке товара в Китае: поиск производителя, аудит и контроль производства, переговоры, инспекция качества, упаковка и маркировка, сертификация, выкуп товара, возврат экспортного НДС, проверка завода. Полный цикл или отдельные задачи."
+titleKey: uslugi.meta.title
+descriptionKey: uslugi.meta.description
+sitemap: true
 ---
-{% from "components/card.njk" import card %}
+{#
+  Витрина верхнего уровня «Услуги» (/uslugi/).
+  Навигационная страница: два весомых раздела-крыла — Логистика и Торговля.
+  Тексты — из словаря (dict.uslugi), структура переходов — из _data/uslugi.ts.
+  Стиль — эталон главной/логистики: ультрамариновый hero, крупные карточки,
+  иконки Lucide, бирюза/янтарь, много воздуха.
+#}
+{% from "partials/icon.njk" import icon %}
+{% set U = dict.uslugi %}
+{% set dostavkaUrl = uslugi.dostavkaUrl | localizedUrl(locale) %}
+{% set torgovlyaUrl = uslugi.torgovlyaUrl | localizedUrl(locale) %}
 
-<p class="mt-2 max-w-2xl text-base leading-relaxed text-gray-600">
-  Полный цикл закупки под ключ — или любая услуга отдельно, если вы уже нашли поставщика
-  или ведёте часть работы сами. Выберите услугу, чтобы узнать подробнее.
-</p>
+{% include "partials/header.njk" %}
 
-<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-  {{ card("Поиск производителя и поставщика", "/uslugi/poisk-postavshchika/", "") }}
-  {{ card("Аудит производства", "/uslugi/audit-proizvodstva/", "") }}
-  {{ card("Переговоры на китайском", "/uslugi/peregovory/", "") }}
-  {{ card("Контроль производства", "/uslugi/kontrol-proizvodstva/", "") }}
-  {{ card("Инспекция качества", "/uslugi/inspekciya/", "") }}
-  {{ card("Упаковка и маркировка (Private Label)", "/uslugi/upakovka-markirovka/", "") }}
-  {{ card("Выкуп товара", "/uslugi/vykup-tovara/", "") }}
-  {{ card("Возврат экспортного НДС", "/uslugi/vozvrat-nds/", "") }}
-  {{ card("Проверка завода", "/uslugi/proverka-zavoda/", "") }}
-</div>
+<main class="flex-1">
+  {% include "partials/breadcrumbs.njk" %}
+
+  {# ── Hero ─────────────────────────────────────────────────────────────── #}
+  <section class="bg-brand text-white">
+    <div class="container py-16 md:py-20 lg:py-24">
+      <h1 class="max-w-3xl text-4xl font-light leading-tight tracking-tight md:text-5xl">{{ U.hero.h1 }}</h1>
+      <p class="mt-6 max-w-2xl text-lg font-light leading-relaxed text-white/85 md:text-xl">{{ U.hero.subtitle }}</p>
+    </div>
+  </section>
+
+  {# ── Два крыла: Логистика | Торговля ──────────────────────────────────── #}
+  <section class="bg-surface-alt">
+    <div class="container section">
+      <div class="grid gap-6 lg:grid-cols-2">
+
+        {# Крыло «Логистика» — бирюза (cyan). #}
+        <a
+          href="{{ dostavkaUrl }}"
+          class="group flex h-full flex-col rounded-2xl border border-slate-200 border-t-4 border-t-cyan bg-surface p-8 shadow-sm ring-1 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl hover:ring-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan md:p-10"
+        >
+          <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan/10">
+            {{ icon("truck", "h-7 w-7 text-cyan") }}
+          </span>
+          <h2 class="mt-6 text-2xl font-light tracking-tight text-ink md:text-3xl">{{ U.wings.logistics.title }}</h2>
+          <p class="mt-4 text-base leading-relaxed text-muted">{{ U.wings.logistics.desc }}</p>
+          <ul class="mt-6 flex flex-wrap gap-2">
+            <li class="rounded-full bg-surface-alt px-3 py-1 text-sm text-ink">{{ U.wings.logistics.t1 }}</li>
+            <li class="rounded-full bg-surface-alt px-3 py-1 text-sm text-ink">{{ U.wings.logistics.t2 }}</li>
+            <li class="rounded-full bg-surface-alt px-3 py-1 text-sm text-ink">{{ U.wings.logistics.t3 }}</li>
+          </ul>
+          <span class="mt-8 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors group-hover:text-cyan">
+            {{ U.wings.logistics.cta }}
+            {{ icon("arrow-right", "h-5 w-5 transition-transform group-hover:translate-x-1") }}
+          </span>
+        </a>
+
+        {# Крыло «Торговля» — янтарь (accent). #}
+        <a
+          href="{{ torgovlyaUrl }}"
+          class="group flex h-full flex-col rounded-2xl border border-slate-200 border-t-4 border-t-accent bg-surface p-8 shadow-sm ring-1 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl hover:ring-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:p-10"
+        >
+          <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/15">
+            {{ icon("store", "h-7 w-7 text-accent-dark") }}
+          </span>
+          <h2 class="mt-6 text-2xl font-light tracking-tight text-ink md:text-3xl">{{ U.wings.trade.title }}</h2>
+          <p class="mt-4 text-base leading-relaxed text-muted">{{ U.wings.trade.desc }}</p>
+          <ul class="mt-6 flex flex-wrap gap-2">
+            <li class="rounded-full bg-surface-alt px-3 py-1 text-sm text-ink">{{ U.wings.trade.teaser }}</li>
+          </ul>
+          <span class="mt-8 inline-flex items-center gap-1.5 text-base font-medium text-accent-dark transition-colors group-hover:text-accent">
+            {{ U.wings.trade.cta }}
+            {{ icon("arrow-right", "h-5 w-5 transition-transform group-hover:translate-x-1") }}
+          </span>
+        </a>
+
+      </div>
+    </div>
+  </section>
+</main>
+
+{% include "partials/footer.njk" %}
