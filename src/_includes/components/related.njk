@@ -1,0 +1,28 @@
+{#
+  Блок перелинковки («вместе заказывают», связанные статьи/кейсы/услуги).
+  Опциональный продающий модуль читательского шаблона. Карточки — единый
+  link-card (иконка + название + стрелка).
+
+  Параметры:
+    items — массив { label, url, icon } (icon опц., по умолчанию стрелка);
+    title — заголовок секции (опц.).
+  Использование:
+    {% from "components/related.njk" import related %}
+    {{ related(items, "Вместе заказывают") }}
+#}
+{% from "components/link-card.njk" import linkCard %}
+
+{% macro related(items, title="Читайте также") %}
+{% if items and items.length %}
+<section class="container section">
+  <div class="container-narrow !px-0">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ title }}</h2>
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
+      {% for item in items %}
+        {{ linkCard(item.icon or "arrow-right", item.label, item.url) }}
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endmacro %}

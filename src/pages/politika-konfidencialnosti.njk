@@ -1,4 +1,5 @@
 ---
+layout: layouts/reading.njk
 title: "Политика конфиденциальности"
 description: "Политика обработки персональных данных ООО ТЛК БАРС в соответствии с Федеральным законом № 152-ФЗ «О персональных данных»."
 policyUpdated: 2026-06-17
@@ -6,28 +7,11 @@ policyUpdated: 2026-06-17
 {#
   Политика конфиденциальности (/politika-konfidencialnosti/).
   Рабочий шаблон по 152-ФЗ. Реквизиты оператора — из общих данных сайта (site.*).
-  Layout page.njk (из pages.json) даёт хлебные крошки на синем и H1 из title.
-  Длинный текст: оглавление-якоря + разделы 1–10 с комфортными отступами.
+  Читательский шаблон (reading.njk): хлебные крошки на синем, H1 из title,
+  колонка контента + правое sticky-оглавление со scroll-spy (строится из
+  разделов автоматически). Чистый каркас — без продающих вставок.
+  Разделы — <section id="…"> с h2; этого достаточно для оглавления и якорей.
 #}
-<div class="mt-8 max-w-3xl">
-  {# Оглавление-якоря по разделам. #}
-  <nav class="rounded-xl border border-slate-200 bg-surface-alt p-5" aria-label="Содержание">
-    <p class="text-sm font-semibold text-ink">Содержание</p>
-    <ol class="mt-3 grid gap-x-6 gap-y-1.5 text-sm text-cyan-dark sm:grid-cols-2">
-      <li><a href="#obshchie" class="hover:underline">1. Общие положения</a></li>
-      <li><a href="#dannye" class="hover:underline">2. Какие данные обрабатываем</a></li>
-      <li><a href="#celi" class="hover:underline">3. Цели обработки</a></li>
-      <li><a href="#osnovaniya" class="hover:underline">4. Правовые основания</a></li>
-      <li><a href="#peredacha" class="hover:underline">5. Передача третьим лицам</a></li>
-      <li><a href="#sroki" class="hover:underline">6. Сроки обработки и хранения</a></li>
-      <li><a href="#prava" class="hover:underline">7. Права пользователя</a></li>
-      <li><a href="#cookies" class="hover:underline">8. Cookies</a></li>
-      <li><a href="#zashchita" class="hover:underline">9. Защита данных</a></li>
-      <li><a href="#izmeneniya" class="hover:underline">10. Изменения Политики</a></li>
-    </ol>
-  </nav>
-
-  <div class="prose mt-10">
     <section id="obshchie" class="scroll-mt-28">
       <h2>1. Общие положения</h2>
       <p>
@@ -149,5 +133,3 @@ policyUpdated: 2026-06-17
     <p class="text-sm text-muted">
       <em>Дата последней редакции: {{ policyUpdated | readableDate }}</em>
     </p>
-  </div>
-</div>

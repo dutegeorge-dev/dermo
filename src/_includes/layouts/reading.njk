@@ -1,0 +1,95 @@
+---
+layout: layouts/base.njk
+---
+{#
+  Читательский шаблон — единый каркас для нелендингового («читательского»)
+  сегмента сайта: страницы услуг, кейсы, статьи блога, политика и прочие
+  текстовые страницы. Флагманские лендинги (главная, /logistika/, /torgovlya/)
+  этот шаблон НЕ используют.
+
+  Структура:
+    хлебные крошки (на синем) → [опц. hero] → колонка контента ограниченной
+    ширины + правое sticky-оглавление (scroll-spy на TS, см. assets/ts/toc.ts) →
+    [опц. продающие модули: перелинковка, FAQ, CTA].
+
+  Оглавление строится автоматически из разделов контента (section[id]) и
+  показывается только при 3+ разделах (порог в toc.ts). На мобайле — блок
+  «Содержание» сверху (аккордеон). Контент размечается как <section id="…">
+  с заголовком h2 — этого достаточно, чтобы попасть в оглавление.
+
+  Опциональные продающие модули (подключаются данными страницы, всё опц.):
+    heroInclude   — путь include с hero (напр. "components/hero.njk");
+    relatedLinks  — [{ label, url, icon }] → блок перелинковки;
+    relatedTitle  — заголовок блока перелинковки;
+    faqItems      — [{ q, a }] → FAQ-аккордеон + FAQPage;
+    faqTitle      — заголовок FAQ;
+    ctaFinal      — true → финальная CTA-полоса (components/cta-final.njk).
+#}
+{% from "components/faq.njk" import faq %}
+{% from "components/related.njk" import related %}
+
+{% include "partials/header.njk" %}
+
+<main class="flex-1">
+  {# Опциональный hero (форма расчёта и т.п.) — над контентом, во всю ширину. #}
+  {% if heroInclude %}{% include heroInclude %}{% endif %}
+
+  {% include "partials/breadcrumbs.njk" %}
+
+  <div class="container section">
+    <div data-reading class="lg:flex lg:items-start lg:gap-10 xl:gap-16">
+      {# ── Колонка контента: ограниченная ширина, комфортная типографика ── #}
+      <div
+        data-reading-content
+        class="w-full min-w-0 lg:max-w-[45rem] lg:flex-1 lg:mx-auto"
+      >
+        {% if title and showTitle !== false %}
+          <h1 class="text-3xl font-bold tracking-tight text-ink md:text-4xl">{{ title }}</h1>
+        {% endif %}
+
+        {# Мобильное «Содержание» (аккордеон). Наполняется и показывается на TS
+           при 3+ разделах; на десктопе скрыто (есть правое оглавление). #}
+        <div data-toc-mobile hidden class="mt-6 lg:hidden">
+          <div class="rounded-xl border border-slate-200 bg-surface-alt">
+            <button
+              type="button"
+              data-toc-mobile-toggle
+              class="flex w-full items-center justify-between gap-4 px-5 py-3 text-left text-sm font-semibold text-ink"
+              aria-expanded="false"
+            >
+              <span>Содержание</span>
+              {% from "partials/icon.njk" import icon %}
+              {{ icon("chevron-down", "accordion-caret h-5 w-5 shrink-0 text-cyan transition-transform duration-200") }}
+            </button>
+            <div data-toc-mobile-panel hidden class="hidden px-5 pb-2">
+              <ol data-toc-list></ol>
+            </div>
+          </div>
+        </div>
+
+        <div class="prose prose-reading mt-8 max-w-none">
+          {{ content | safe }}
+        </div>
+      </div>
+
+      {# ── Правое sticky-оглавление (десктоп). Скрыто, пока TS не наполнит
+         его и не покажет (добавит lg:block) при 3+ разделах. ── #}
+      <aside data-toc-desktop class="hidden lg:w-60 lg:shrink-0">
+        <nav class="sticky top-28" aria-label="Содержание">
+          <p class="text-sm font-semibold text-ink">Содержание</p>
+          <ol data-toc-list class="mt-3 space-y-0.5 border-l border-slate-200"></ol>
+        </nav>
+      </aside>
+    </div>
+  </div>
+
+  {# ── Опциональные продающие модули ── #}
+  {% if relatedLinks %}{{ related(relatedLinks, relatedTitle or "Читайте также") }}{% endif %}
+  {% if faqItems %}{{ faq(faqItems, faqTitle or "Частые вопросы") }}{% endif %}
+  {% if ctaFinal %}{% include "components/cta-final.njk" %}{% endif %}
+
+  {# JSON-LD Article — для статей блога/кейсов (по флагу страницы). #}
+  {% if ogType == "article" %}{% include "partials/schema-article.njk" %}{% endif %}
+</main>
+
+{% include "partials/footer.njk" %}

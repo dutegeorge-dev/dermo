@@ -15,6 +15,9 @@ import "./slider";
 // Баннер согласия на cookies (глобальный) — см. ./cookie.ts.
 import "./cookie";
 
+// Sticky-оглавление + scroll-spy читательского шаблона — см. ./toc.ts.
+import { initToc } from "./toc";
+
 // Типизация глобальных функций аналитики (могут отсутствовать в dev).
 declare global {
   interface Window {
@@ -128,6 +131,7 @@ function initForms(): void {
 
 document.addEventListener("DOMContentLoaded", () => {
   initForms();
+  initToc();
 });
 
 export {};
