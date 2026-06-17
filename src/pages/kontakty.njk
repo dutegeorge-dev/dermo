@@ -30,14 +30,16 @@
 </div>
 
 {# ── Офис в Гуанчжоу: карта с меткой + фото и приглашение ──────────── #}
-<section class="mt-12 grid gap-8 lg:grid-cols-2">
-  <div>
-    <h2 class="flex items-center gap-2 text-xl font-semibold text-ink">
-      {{ icon("map-pin", "h-5 w-5 text-cyan") }}
-      Наш офис в Гуанчжоу
-    </h2>
-    <p class="mt-2 text-gray-700">{{ site.addressCn }}</p>
-    <div class="mt-4 aspect-[4/3] w-full overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+<section class="mt-12">
+  <h2 class="flex items-center gap-2 text-xl font-semibold text-ink">
+    {{ icon("map-pin", "h-5 w-5 text-cyan") }}
+    Наш офис в Гуанчжоу
+  </h2>
+  <p class="mt-2 text-gray-700">{{ site.addressCn }}</p>
+
+  <div class="mt-4 grid items-stretch gap-8 lg:grid-cols-2">
+    {# Карта с меткой офиса. #}
+    <div class="aspect-[4/3] w-full overflow-hidden rounded-lg border border-gray-200 shadow-sm">
       <iframe
         src="{{ site.mapEmbedSrc }}"
         class="h-full w-full"
@@ -47,16 +49,15 @@
         loading="lazy"
       ></iframe>
     </div>
-  </div>
 
-  <div>
     {# Фото офиса — плейсхолдер (заменяется реальным <img loading="lazy">). #}
     <div class="flex aspect-[4/3] w-full items-center justify-center rounded-lg border border-gray-200 bg-surface-alt shadow-sm" aria-hidden="true">
       {{ icon("camera", "h-12 w-12 text-slate-300") }}
     </div>
-    <p class="mt-4 text-gray-700">
-      Наш офис в Гуанчжоу — открытая площадка. Приезжайте лично: познакомиться
-      с командой, обсудить поставку и убедиться, что мы реально работаем в Китае.
-    </p>
   </div>
+
+  <p class="mt-4 max-w-3xl text-gray-700">
+    Наш офис в Гуанчжоу — открытая площадка. Приезжайте лично: познакомиться
+    с командой, обсудить поставку и убедиться, что мы реально работаем в Китае.
+  </p>
 </section>
