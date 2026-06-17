@@ -214,6 +214,7 @@ sitemap: true
     <div class="container section">
       <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.process.title" | t(locale) }}</h2>
 
+      {# 7 этапов + 8-я ячейка-CTA (оранжевая карточка) → ровная сетка 4×2. #}
       <ol class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {% for step in torgovlya.process %}
           <li class="flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 transition hover:border-cyan hover:shadow-md">
@@ -225,12 +226,25 @@ sitemap: true
             <p class="mt-2 text-sm leading-relaxed text-muted">{{ step.textKey | t(locale) }}</p>
           </li>
         {% endfor %}
+
+        {# 8-я карточка — призыв к действию: оранжевый фон, белый текст, светлая кнопка. #}
+        <li class="flex h-full flex-col justify-between rounded-2xl bg-accent p-6 text-white shadow-sm">
+          <div>
+            <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20">
+              {{ icon("calculator", "h-6 w-6 text-white") }}
+            </span>
+            <p class="mt-5 text-lg font-semibold leading-snug">{{ "torgovlya.cta2" | t(locale) }}</p>
+          </div>
+          <a
+            href="{{ calcUrl }}"
+            class="mt-5 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-white px-5 py-3 text-base font-semibold text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-accent"
+          >
+            {{ "cta.calculate" | t(locale) }}
+          </a>
+        </li>
       </ol>
     </div>
   </section>
-
-  {# → CTA-2 (после блока этапов) — единый дизайн /logistika/ #}
-  {{ ctaBand(("cta.calculate" | t(locale)), calcUrl, text=("torgovlya.cta2" | t(locale)), tone="inline") }}
 
   {# ── 7. Ответственность за качество (тёмный акцент, образец-эталон) ── #}
   <section class="bg-brand text-white">
