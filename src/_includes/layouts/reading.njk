@@ -77,6 +77,11 @@ layout: layouts/base.njk
         <div class="prose prose-reading mt-8 max-w-none">
           {{ content | safe }}
         </div>
+
+        {# Перелинковка торговой услуги — внутри контентной колонки, под FAQ
+           (та же ширина, что основной контент). Финальный CTA — ниже, во всю
+           ширину. #}
+        {% if svc %}{% include "components/service-related.njk" %}{% endif %}
       </div>
 
       {# ── Правое sticky-оглавление (десктоп). Скрыто, пока TS не наполнит
@@ -100,8 +105,7 @@ layout: layouts/base.njk
   {% if faqItems %}{{ faq(faqItems, faqTitle or "Частые вопросы") }}{% endif %}
   {% if ctaFinal %}{% include "components/cta-final.njk" %}{% endif %}
 
-  {# Перелинковка и финальный CTA торговой услуги (по svc). #}
-  {% if svc %}{% include "components/service-related.njk" %}{% endif %}
+  {# Финальный CTA торговой услуги (по svc) — полноширинная полоса. #}
   {% if svc %}{% include "components/service-cta.njk" %}{% endif %}
 
   {# JSON-LD Article — для статей блога/кейсов (по флагу страницы). #}

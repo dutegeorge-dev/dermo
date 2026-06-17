@@ -225,12 +225,17 @@
   .prose-reading > section + section {
     @apply mt-12 md:mt-14;
   }
-  /* Заголовок раздела: отступ задаёт сам раздел, поэтому сверху не дублируем. */
+  /* Заголовок раздела: отступ задаёт сам раздел, поэтому сверху не дублируем.
+     Снизу — заметный воздух до текста (заголовок не сливается с абзацем), но
+     меньше, чем интервал между разделами — заголовок «принадлежит» своему тексту. */
   .prose-reading section > h2:first-child {
     @apply mt-0;
   }
   .prose-reading h2 {
-    @apply text-2xl md:text-[1.6rem];
+    @apply mb-6 text-2xl md:text-[1.6rem];
+  }
+  .prose-reading h3 {
+    @apply mb-4;
   }
   .prose-reading p,
   .prose-reading ul,

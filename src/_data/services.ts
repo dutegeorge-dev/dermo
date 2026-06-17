@@ -26,7 +26,9 @@ const services: ServicesData = {
       { icon: "factory", labelKey: "uslugi.torgovlya.services.audit", url: `${BASE}/audit-proizvodstva/` },
     ],
     fullCycleUrl: "/torgovlya/",
-    // articleUrl / caseUrl не заданы → блоки скрыты (статьи/кейса ещё нет).
+    // Связанный кейс есть → строка-ссылка в перелинковке. Статья ещё не написана
+    // (articleUrl не задан) → блок статьи скрыт.
+    caseUrl: "/kejsy/poisk-postavshchika-gazon/",
   },
 };
 

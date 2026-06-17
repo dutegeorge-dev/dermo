@@ -1,5 +1,6 @@
 {
-  "layout": "layouts/article.njk",
+  "layout": "layouts/reading.njk",
+  "ogType": "article",
   "tags": "kejsy",
   "permalink": "/kejsy/{{ page.fileSlug }}/",
   "sitemap": true

@@ -95,6 +95,7 @@ const LABELS: Record<string, string> = {
   novosibirsk: "Новосибирск",
   kazan: "Казань",
   kejsy: "Кейсы",
+  "poisk-postavshchika-gazon": "Поиск поставщика искусственного газона",
   blog: "Блог",
   r: "Акция",
   "belaya-dostavka": "Белая доставка",

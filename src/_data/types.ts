@@ -574,6 +574,32 @@ export interface ServiceFaqItem {
   a: string;
 }
 
+/** Раздел «Кому подходит / с какими товарами работаем» (опц. у услуги). */
+export interface ServiceAudience {
+  title: string;
+  text: string;
+  /** Категории товаров/задач, с которыми работаем. */
+  categories: string[];
+  /** Приписка «если вашей категории нет — напишите». */
+  note: string;
+}
+
+/** Строка сравнения «Сам / Через агента / Через БАРС». */
+export interface ServiceComparisonRow {
+  criterion: string;
+  self: string;
+  agent: string;
+  bars: string;
+}
+
+/** Раздел-сравнение «Сам, через агента или через БАРС» (опц. у услуги). */
+export interface ServiceComparison {
+  title: string;
+  /** Подписи колонок. */
+  columns: { self: string; agent: string; bars: string };
+  rows: ServiceComparisonRow[];
+}
+
 /**
  * Тексты страницы торговой услуги на читательском шаблоне (эталон —
  * «Поиск поставщика»). Все строки финальные для RU; en/zh — заглушки.
@@ -589,8 +615,12 @@ export interface ServicePageText {
   chtoEto: { title: string; text: string };
   /** Раздел 2 «Зачем это нужно». */
   zachem: { title: string; text: string };
+  /** Раздел «Кому подходит» — опционален (есть не у каждой услуги). */
+  komuPodhodit?: ServiceAudience;
   /** Раздел 3 «Как мы это делаем» — заголовок + нумерованные шаги. */
   kakDelaem: { title: string; steps: ServiceStep[] };
+  /** Раздел-сравнение «Сам/Агент/БАРС» — опционален. */
+  sravnenie?: ServiceComparison;
   /** Раздел 4 «Что вы получаете». */
   chtoPoluchaete: { title: string; text: string };
   /** Раздел 5 «Частые вопросы» — заголовок + пары вопрос/ответ. */
@@ -599,6 +629,8 @@ export interface ServicePageText {
   /** Перелинковка: заголовок блока «вместе заказывают» + ссылка «полный цикл». */
   relatedTitle: string;
   fullCycle: { label: string; text: string };
+  /** Подпись ссылки на связанный кейс (если у услуги есть кейс). */
+  caseLink?: string;
   /** Финальный CTA. */
   cta: { title: string; subtitle: string; button: string };
 }
