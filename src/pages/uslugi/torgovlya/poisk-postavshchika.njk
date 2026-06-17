@@ -11,25 +11,38 @@ showTitle: false
 
   Каркас (reading.njk): хлебные крошки → hero (service-hero) → колонка контента
   с правым sticky-оглавлением → перелинковка (service-related) → финальный CTA
-  (service-cta). Здесь — только 5 разделов контента (они формируют оглавление и
+  (service-cta). Здесь — 7 разделов контента (они формируют оглавление и
   scroll-spy). Тексты — из i18n (ветка uslugi.torgovlya.poisk), берём через
   локаль-резолвленный `dict`. Структура/ссылки — в _data/services.ts.
 
   По образцу этой страницы делаются остальные торговые услуги.
 #}
+{% from "components/photo-placeholder.njk" import photoPlaceholder %}
 {% set P = dict.uslugi.torgovlya.poisk %}
 
+{# Раздел 1 — Что это за услуга. #}
 <section id="chto-eto" class="scroll-mt-28">
   <h2>{{ P.chtoEto.title }}</h2>
-  <p>{{ P.chtoEto.text }}</p>
+  {% if P.chtoEto.subtitle %}<h3>{{ P.chtoEto.subtitle }}</h3>{% endif %}
+  {% for para in P.chtoEto.paragraphs %}
+    <p>{{ para }}</p>
+  {% endfor %}
 </section>
 
+{# Раздел 2 — Зачем это нужно (боли импортёра). #}
 <section id="zachem" class="scroll-mt-28">
   <h2>{{ P.zachem.title }}</h2>
-  <p>{{ P.zachem.text }}</p>
+  {% if P.zachem.subtitle %}<h3>{{ P.zachem.subtitle }}</h3>{% endif %}
+  <p>{{ P.zachem.intro }}</p>
+  <ul>
+    {% for pain in P.zachem.pains %}
+      <li><strong>{{ pain.lead }}</strong> {{ pain.text }}</li>
+    {% endfor %}
+  </ul>
+  <p>{{ P.zachem.closing }}</p>
 </section>
 
-{# Опциональный раздел «Кому подходит» (есть не у каждой услуги). #}
+{# Раздел 3 — Кому подходит (опц., есть не у каждой услуги). #}
 {% if P.komuPodhodit %}
 <section id="komu-podhodit" class="scroll-mt-28">
   <h2>{{ P.komuPodhodit.title }}</h2>
@@ -43,16 +56,26 @@ showTitle: false
 </section>
 {% endif %}
 
+{# Раздел 4 — Как мы это делаем (этапы + место под фото). #}
 <section id="kak-delaem" class="scroll-mt-28">
   <h2>{{ P.kakDelaem.title }}</h2>
+  {% if P.kakDelaem.subtitle %}<h3>{{ P.kakDelaem.subtitle }}</h3>{% endif %}
   <ol>
     {% for step in P.kakDelaem.steps %}
-      <li><strong>{{ step.title }}.</strong> {{ step.text }}</li>
+      <li>
+        <strong>{{ step.title }}.</strong> {{ step.text }}
+        {% if step.items %}
+          <ul>
+            {% for sub in step.items %}<li>{{ sub }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+      </li>
     {% endfor %}
   </ol>
+  {% if P.kakDelaem.photoCaption %}{{ photoPlaceholder(P.kakDelaem.photoCaption, "light") }}{% endif %}
 </section>
 
-{# Опциональный раздел-сравнение «Сам / Агент / БАРС» (визуальная таблица). #}
+{# Раздел 5 — Сравнение «Сам / Агент / БАРС» (опц., визуальная таблица). #}
 {% if P.sravnenie %}
 <section id="sravnenie" class="scroll-mt-28">
   <h2>{{ P.sravnenie.title }}</h2>
@@ -81,12 +104,19 @@ showTitle: false
 </section>
 {% endif %}
 
+{# Раздел 6 — Что вы получаете (результат). #}
 <section id="chto-poluchaete" class="scroll-mt-28">
   <h2>{{ P.chtoPoluchaete.title }}</h2>
-  <p>{{ P.chtoPoluchaete.text }}</p>
+  {% if P.chtoPoluchaete.subtitle %}<h3>{{ P.chtoPoluchaete.subtitle }}</h3>{% endif %}
+  <ul>
+    {% for item in P.chtoPoluchaete.items %}
+      <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+  {% if P.chtoPoluchaete.closing %}<p>{{ P.chtoPoluchaete.closing }}</p>{% endif %}
 </section>
 
-{# Раздел 5 — FAQ-аккордеон (внутри колонки, чтобы попасть в оглавление) +
+{# Раздел 7 — FAQ-аккордеон (внутри колонки, чтобы попасть в оглавление) +
    микроразметка FAQPage. Аккордеон — общий (data-accordion-*, см. header.ts). #}
 <section id="faq" class="scroll-mt-28">
   <h2>{{ P.faqTitle }}</h2>

@@ -5,6 +5,7 @@
   Данные: глобальный `svc` (services.ts) + тексты из i18n по svc.i18nBase.
 #}
 {% from "partials/icon.njk" import icon %}
+{% from "components/photo-placeholder.njk" import photoPlaceholder %}
 
 <section class="bg-brand text-white">
   <div class="container grid items-center gap-10 py-14 md:py-16 lg:grid-cols-2 lg:gap-16">
@@ -34,11 +35,9 @@
       </div>
     </div>
 
-    {# Фото-плейсхолдер (заменяется реальным фото позже). #}
+    {# Место под фото (заменяется реальным фото позже). #}
     <div class="hidden lg:block">
-      <div class="flex aspect-[4/3] items-center justify-center rounded-2xl bg-white/10 ring-1 ring-inset ring-white/15">
-        {{ icon(svc.heroIcon, "h-20 w-20 text-white/40") }}
-      </div>
+      {{ photoPlaceholder((svc.i18nBase + ".hero.photoCaption") | t(locale), "dark") }}
     </div>
   </div>
 </section>
