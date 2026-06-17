@@ -26,6 +26,7 @@ const home: HomeData = {
       descKey: "home.wings.logistics.desc",
       ctaKey: "home.wings.logistics.cta",
       url: "/logistika/",
+      tone: "brand",
       teaserKeys: [
         "home.wings.logistics.t1",
         "home.wings.logistics.t2",
@@ -38,6 +39,7 @@ const home: HomeData = {
       descKey: "home.wings.trade.desc",
       ctaKey: "home.wings.trade.cta",
       url: "/torgovlya/",
+      tone: "accent",
       teaserKeys: [
         "home.wings.trade.t1",
         "home.wings.trade.t2",

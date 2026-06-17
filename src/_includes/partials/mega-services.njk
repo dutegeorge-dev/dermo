@@ -14,13 +14,13 @@
         {# Кликабельные «ворота» — вход на экспертную страницу. #}
         <a
           href="{{ megaMenu.logistics.gate.url | localizedUrl(locale) }}"
-          class="group/gate flex items-start justify-between gap-4 rounded-xl bg-surface-alt p-4 ring-1 ring-transparent transition hover:bg-white hover:ring-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+          class="group/gate flex items-start justify-between gap-4 rounded-xl border-l-4 border-l-brand bg-brand/5 p-4 ring-1 ring-transparent transition hover:bg-white hover:ring-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           <span>
-            <span class="block text-sm font-semibold uppercase tracking-wider text-ink">{{ megaMenu.logistics.gate.titleKey | t(locale) }}</span>
+            <span class="block text-sm font-semibold uppercase tracking-wider text-brand">{{ megaMenu.logistics.gate.titleKey | t(locale) }}</span>
             <span class="mt-1 block text-sm text-muted">{{ megaMenu.logistics.gate.subtitleKey | t(locale) }}</span>
           </span>
-          {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan transition-transform group-hover/gate:translate-x-1") }}
+          {{ icon("arrow-right", "h-5 w-5 shrink-0 text-brand transition-transform group-hover/gate:translate-x-1") }}
         </a>
 
         {# Три подгруппы с кликабельными подзаголовками-хабами.
@@ -30,15 +30,15 @@
           <div>
             {% for group in megaMenu.logistics.groups %}{% if loop.first %}
               <div>
-                <a href="{{ group.url | localizedUrl(locale) }}" class="inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-cyan focus-visible:outline-none focus-visible:text-cyan">
+                <a href="{{ group.url | localizedUrl(locale) }}" class="inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-brand focus-visible:outline-none focus-visible:text-brand">
                   {{ group.titleKey | t(locale) }}
-                  {{ icon("chevron-right", "h-4 w-4 text-cyan") }}
+                  {{ icon("chevron-right", "h-4 w-4 text-brand") }}
                 </a>
                 <ul class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1">
                   {% for item in group.items %}
                     <li>
-                      <a href="{{ item.url | localizedUrl(locale) }}" class="flex items-center gap-2 rounded-md py-1 text-sm text-muted transition-colors hover:text-cyan focus-visible:outline-none focus-visible:text-cyan">
-                        {% if item.icon %}{{ icon(item.icon, "h-4 w-4 shrink-0 text-cyan") }}{% endif %}
+                      <a href="{{ item.url | localizedUrl(locale) }}" class="flex items-center gap-2 rounded-md py-1 text-sm text-muted transition-colors hover:text-brand focus-visible:outline-none focus-visible:text-brand">
+                        {% if item.icon %}{{ icon(item.icon, "h-4 w-4 shrink-0 text-brand") }}{% endif %}
                         <span>{{ item.titleKey | t(locale) }}</span>
                       </a>
                     </li>
@@ -50,15 +50,15 @@
           <div class="space-y-6">
             {% for group in megaMenu.logistics.groups %}{% if not loop.first %}
               <div>
-                <a href="{{ group.url | localizedUrl(locale) }}" class="inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-cyan focus-visible:outline-none focus-visible:text-cyan">
+                <a href="{{ group.url | localizedUrl(locale) }}" class="inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-brand focus-visible:outline-none focus-visible:text-brand">
                   {{ group.titleKey | t(locale) }}
-                  {{ icon("chevron-right", "h-4 w-4 text-cyan") }}
+                  {{ icon("chevron-right", "h-4 w-4 text-brand") }}
                 </a>
                 <ul class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1">
                   {% for item in group.items %}
                     <li>
-                      <a href="{{ item.url | localizedUrl(locale) }}" class="flex items-center gap-2 rounded-md py-1 text-sm text-muted transition-colors hover:text-cyan focus-visible:outline-none focus-visible:text-cyan">
-                        {% if item.icon %}{{ icon(item.icon, "h-4 w-4 shrink-0 text-cyan") }}{% endif %}
+                      <a href="{{ item.url | localizedUrl(locale) }}" class="flex items-center gap-2 rounded-md py-1 text-sm text-muted transition-colors hover:text-brand focus-visible:outline-none focus-visible:text-brand">
+                        {% if item.icon %}{{ icon(item.icon, "h-4 w-4 shrink-0 text-brand") }}{% endif %}
                         <span>{{ item.titleKey | t(locale) }}</span>
                       </a>
                     </li>
@@ -74,13 +74,13 @@
       <div>
         <a
           href="{{ megaMenu.trade.gate.url | localizedUrl(locale) }}"
-          class="group/gate flex items-start justify-between gap-4 rounded-xl bg-surface-alt p-4 ring-1 ring-transparent transition hover:bg-white hover:ring-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+          class="group/gate flex items-start justify-between gap-4 rounded-xl border-l-4 border-l-accent bg-accent/5 p-4 ring-1 ring-transparent transition hover:bg-white hover:ring-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <span>
-            <span class="block text-sm font-semibold uppercase tracking-wider text-ink">{{ megaMenu.trade.gate.titleKey | t(locale) }}</span>
+            <span class="block text-sm font-semibold uppercase tracking-wider text-accent-dark">{{ megaMenu.trade.gate.titleKey | t(locale) }}</span>
             <span class="mt-1 block text-sm text-muted">{{ megaMenu.trade.gate.subtitleKey | t(locale) }}</span>
           </span>
-          {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan transition-transform group-hover/gate:translate-x-1") }}
+          {{ icon("arrow-right", "h-5 w-5 shrink-0 text-accent-dark transition-transform group-hover/gate:translate-x-1") }}
         </a>
 
         <ul class="mt-6 space-y-1">
@@ -88,9 +88,9 @@
             <li>
               <a
                 href="{{ service.url | localizedUrl(locale) }}"
-                class="flex items-center gap-3 rounded-lg p-2 text-sm text-ink transition-colors hover:bg-surface-alt hover:text-cyan focus-visible:outline-none focus-visible:bg-surface-alt"
+                class="flex items-center gap-3 rounded-lg p-2 text-sm text-ink transition-colors hover:bg-accent/5 hover:text-accent-dark focus-visible:outline-none focus-visible:bg-accent/5"
               >
-                {{ icon(service.icon, "h-5 w-5 shrink-0 text-cyan") }}
+                {{ icon(service.icon, "h-5 w-5 shrink-0 text-accent-dark") }}
                 <span>{{ service.titleKey | t(locale) }}</span>
               </a>
             </li>

@@ -150,13 +150,13 @@
             {{ icon("chevron-down", "accordion-caret h-5 w-5 text-cyan transition-transform duration-200") }}
           </button>
           <div data-accordion-panel class="hidden pb-3" hidden>
-            {# Крыло: Логистика #}
-            <a href="{{ megaMenu.logistics.gate.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center justify-between gap-3 rounded-lg bg-surface-alt px-3 py-2">
+            {# Крыло: Логистика — цветовой код «ультрамарин». #}
+            <a href="{{ megaMenu.logistics.gate.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center justify-between gap-3 rounded-lg border-l-4 border-l-brand bg-brand/5 px-3 py-2">
               <span>
-                <span class="block text-sm font-semibold uppercase tracking-wide text-ink">{{ megaMenu.logistics.gate.titleKey | t(locale) }}</span>
+                <span class="block text-sm font-semibold uppercase tracking-wide text-brand">{{ megaMenu.logistics.gate.titleKey | t(locale) }}</span>
                 <span class="mt-0.5 block text-xs text-muted">{{ megaMenu.logistics.gate.subtitleKey | t(locale) }}</span>
               </span>
-              {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan") }}
+              {{ icon("arrow-right", "h-5 w-5 shrink-0 text-brand") }}
             </a>
             <div class="mt-1 pl-2">
               {% for group in megaMenu.logistics.groups %}
@@ -181,13 +181,13 @@
                 </div>
               {% endfor %}
             </div>
-            {# Крыло: Торговля #}
-            <a href="{{ megaMenu.trade.gate.url | localizedUrl(locale) }}" class="mt-2 flex min-h-[44px] items-center justify-between gap-3 rounded-lg bg-surface-alt px-3 py-2">
+            {# Крыло: Торговля — цветовой код «оранжевый». #}
+            <a href="{{ megaMenu.trade.gate.url | localizedUrl(locale) }}" class="mt-2 flex min-h-[44px] items-center justify-between gap-3 rounded-lg border-l-4 border-l-accent bg-accent/5 px-3 py-2">
               <span>
-                <span class="block text-sm font-semibold uppercase tracking-wide text-ink">{{ megaMenu.trade.gate.titleKey | t(locale) }}</span>
+                <span class="block text-sm font-semibold uppercase tracking-wide text-accent-dark">{{ megaMenu.trade.gate.titleKey | t(locale) }}</span>
                 <span class="mt-0.5 block text-xs text-muted">{{ megaMenu.trade.gate.subtitleKey | t(locale) }}</span>
               </span>
-              {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan") }}
+              {{ icon("arrow-right", "h-5 w-5 shrink-0 text-accent-dark") }}
             </a>
             <ul class="mt-1 pl-2">
               {% for service in megaMenu.trade.services %}
