@@ -49,6 +49,23 @@ function initForms(): void {
   forms.forEach((form) => {
     const success = form.querySelector<HTMLElement>("[data-form-success]");
 
+    // Согласие на обработку ПДн (152-ФЗ): если чекбокс есть, кнопка отправки
+    // блокируется до его отметки. Состояние синхронизируется на старте и по change.
+    const consent = form.querySelector<HTMLInputElement>("[data-consent]");
+    const submitBtn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const consentError = form.querySelector<HTMLElement>('[data-error-for="consent"]');
+
+    const syncConsent = (): void => {
+      if (consent && submitBtn) submitBtn.disabled = !consent.checked;
+    };
+    if (consent) {
+      syncConsent();
+      consent.addEventListener("change", () => {
+        syncConsent();
+        if (consent.checked) consentError?.classList.add("hidden");
+      });
+    }
+
     form.addEventListener("submit", (event) => {
       event.preventDefault();
 
@@ -78,6 +95,16 @@ function initForms(): void {
         }
       });
 
+      // Согласие обязательно, если чекбокс присутствует в форме.
+      if (consent && !consent.checked) {
+        valid = false;
+        consent.setAttribute("aria-invalid", "true");
+        consentError?.classList.remove("hidden");
+      } else {
+        consent?.removeAttribute("aria-invalid");
+        consentError?.classList.add("hidden");
+      }
+
       if (!valid) return;
 
       // Заглушка «отправки»: показываем подтверждение и шлём событие в аналитику.
@@ -87,6 +114,8 @@ function initForms(): void {
         success.classList.remove("hidden");
       }
       form.reset();
+      // reset() снимает отметку согласия — снова блокируем кнопку отправки.
+      syncConsent();
     });
   });
 }

@@ -9,7 +9,7 @@ import type { SiteConfig } from "./types.js";
 const site: SiteConfig = {
   name: "ТЛК БАРС",
   legalName: "ООО «ТЛК БАРС»",
-  url: process.env.SITE_URL || "https://tlk-bars.ru",
+  url: process.env.SITE_URL || "https://tlkbars.ru",
   locale: "ru_RU",
   lang: "ru",
   defaultTitle: "ООО ТЛК БАРС — торгово-логистическая компания",
@@ -22,8 +22,13 @@ const site: SiteConfig = {
   phoneCnHref: "+8600000000000",
   calculateUrl: "/kontakty/#raschet",
   telegram: "https://t.me/tlkbars",
-  email: "info@tlk-bars.ru",
+  email: "info@tlkbars.ru",
   address: "Россия, г. Москва (адрес уточняется)",
+  addressCn: "Китай, г. Гуанчжоу (адрес офиса уточняется)",
+  workingHours:
+    "Отвечаем в течение рабочего дня. Команда работает по китайскому времени (UTC+8) — это +5 часов к Москве.",
+  mapEmbedSrc:
+    "https://yandex.ru/map-widget/v1/?ll=113.264385%2C23.129163&z=11&mode=search&text=%D0%93%D1%83%D0%B0%D0%BD%D1%87%D0%B6%D0%BE%D1%83",
   inn: "0000000000",
   ogrn: "0000000000000",
   analytics: {

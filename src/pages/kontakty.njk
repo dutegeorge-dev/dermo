@@ -1,14 +1,62 @@
-{# Контакты — реквизиты-заглушки + форма заявки. #}
+{# Контакты — реквизиты + форма заявки + офис в Гуанчжоу (карта и фото). #}
+{% from "partials/icon.njk" import icon %}
+
 <div class="mt-8 grid gap-8 lg:grid-cols-2">
   <div class="space-y-3 text-gray-700">
-    <p><span class="font-semibold">Телефон:</span> <a href="tel:{{ site.phoneHref }}" class="text-brand">{{ site.phone }}</a></p>
+    <p><span class="font-semibold">Телефон (РФ):</span> <a href="tel:{{ site.phoneHref }}" class="text-brand">{{ site.phone }}</a></p>
+    <p><span class="font-semibold">Телефон (Китай):</span> <a href="tel:{{ site.phoneCnHref }}" class="text-brand">{{ site.phoneCn }}</a></p>
     <p><span class="font-semibold">E-mail:</span> <a href="mailto:{{ site.email }}" class="text-brand">{{ site.email }}</a></p>
     <p><span class="font-semibold">Telegram:</span> <a href="{{ site.telegram }}" class="text-brand" rel="nofollow noopener" target="_blank">{{ site.telegram }}</a></p>
-    <p><span class="font-semibold">Адрес:</span> {{ site.address }}</p>
-    <p class="text-sm text-gray-500">{{ site.legalName }} · ИНН {{ site.inn }} · ОГРН {{ site.ogrn }}</p>
+    <p><span class="font-semibold">Офис в Гуанчжоу:</span> {{ site.addressCn }}</p>
+
+    {# Время ответа с учётом разницы во времени РФ/Китай. #}
+    <p class="flex items-start gap-2 rounded-md bg-surface-alt px-3 py-2 text-sm text-muted">
+      {{ icon("phone", "mt-0.5 h-4 w-4 shrink-0 text-cyan") }}
+      <span>{{ site.workingHours }}</span>
+    </p>
+
+    {# Реквизиты — юр. присутствие в Москве. #}
+    <div class="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-500">
+      <p>{{ site.legalName }}</p>
+      <p>ИНН {{ site.inn }} · ОГРН {{ site.ogrn }}</p>
+      <p>Юр. адрес: {{ site.address }}</p>
+    </div>
   </div>
 
-  <div>
+  {# Якорь #raschet — на него ведут кнопки «Рассчитать»/«Оставить заявку». #}
+  <div id="raschet" class="scroll-mt-24">
     {% include "partials/lead-form.njk" %}
   </div>
 </div>
+
+{# ── Офис в Гуанчжоу: карта с меткой + фото и приглашение ──────────── #}
+<section class="mt-12 grid gap-8 lg:grid-cols-2">
+  <div>
+    <h2 class="flex items-center gap-2 text-xl font-semibold text-ink">
+      {{ icon("map-pin", "h-5 w-5 text-cyan") }}
+      Наш офис в Гуанчжоу
+    </h2>
+    <p class="mt-2 text-gray-700">{{ site.addressCn }}</p>
+    <div class="mt-4 aspect-[4/3] w-full overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <iframe
+        src="{{ site.mapEmbedSrc }}"
+        class="h-full w-full"
+        title="Офис ООО ТЛК БАРС в Гуанчжоу на карте"
+        frameborder="0"
+        allowfullscreen
+        loading="lazy"
+      ></iframe>
+    </div>
+  </div>
+
+  <div>
+    {# Фото офиса — плейсхолдер (заменяется реальным <img loading="lazy">). #}
+    <div class="flex aspect-[4/3] w-full items-center justify-center rounded-lg border border-gray-200 bg-surface-alt shadow-sm" aria-hidden="true">
+      {{ icon("camera", "h-12 w-12 text-slate-300") }}
+    </div>
+    <p class="mt-4 text-gray-700">
+      Наш офис в Гуанчжоу — открытая площадка. Приезжайте лично: познакомиться
+      с командой, обсудить поставку и убедиться, что мы реально работаем в Китае.
+    </p>
+  </div>
+</section>

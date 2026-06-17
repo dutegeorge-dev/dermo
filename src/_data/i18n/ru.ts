@@ -447,6 +447,12 @@ const ru: Dictionary = {
     phoneCn: "Телефон в Китае",
     telegram: "Написать в Telegram",
   },
+  forms: {
+    consentPrefix: "Отправляя заявку, я соглашаюсь с обработкой персональных данных и ",
+    consentLink: "политикой конфиденциальности",
+    consentSuffix: ".",
+    consentError: "Подтвердите согласие на обработку персональных данных.",
+  },
   logistika: {
     meta: {
       title:
