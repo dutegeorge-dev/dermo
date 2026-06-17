@@ -17,12 +17,12 @@ const megaMenu: MegaMenu = {
     groups: [
       {
         titleKey: "mega.byMethod",
-        url: "/uslugi/dostavka/",
+        url: "/uslugi/dostavka/sposoby/",
         items: [
-          { titleKey: "method.avto", url: "/uslugi/dostavka/avto/", icon: "truck" },
-          { titleKey: "method.zhd", url: "/uslugi/dostavka/zhd/", icon: "train-front" },
-          { titleKey: "method.more", url: "/uslugi/dostavka/more/", icon: "ship" },
-          { titleKey: "method.avia", url: "/uslugi/dostavka/avia/", icon: "plane" },
+          { titleKey: "method.avto", url: "/uslugi/dostavka/sposoby/avto/", icon: "truck" },
+          { titleKey: "method.zhd", url: "/uslugi/dostavka/sposoby/zhd/", icon: "train-front" },
+          { titleKey: "method.more", url: "/uslugi/dostavka/sposoby/more/", icon: "ship" },
+          { titleKey: "method.avia", url: "/uslugi/dostavka/sposoby/avia/", icon: "plane" },
         ],
       },
       {

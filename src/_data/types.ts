@@ -316,6 +316,8 @@ export interface UslugiEntry {
 export interface UslugiData {
   /** URL витрины доставки. */
   dostavkaUrl: string;
+  /** URL списка способов доставки. */
+  sposobyUrl: string;
   /** URL списка категорий товаров. */
   tovaryUrl: string;
   /** URL списка городов. */
@@ -572,6 +574,8 @@ export interface UslugiDict {
   index: UslugiPageText;
   /** Витрина доставки /uslugi/dostavka/. */
   dostavka: UslugiPageText;
+  /** Список способов доставки /uslugi/dostavka/sposoby/. */
+  sposobyList: UslugiPageText;
   /** Список категорий товаров /uslugi/dostavka/tovary/. */
   tovaryList: UslugiPageText;
   /** Список городов /uslugi/dostavka/goroda/. */

@@ -17,16 +17,17 @@ const DELIVERY = `${BASE}/dostavka`;
 
 const uslugi: UslugiData = {
   dostavkaUrl: `${DELIVERY}/`,
+  sposobyUrl: `${DELIVERY}/sposoby/`,
   tovaryUrl: `${DELIVERY}/tovary/`,
   gorodaUrl: `${DELIVERY}/goroda/`,
   torgovlyaUrl: `${BASE}/torgovlya/`,
 
   // По способу — простые карточки (иконка + название).
   methods: [
-    { slug: "avto", icon: "truck", nameKey: "method.avto", url: `${DELIVERY}/avto/` },
-    { slug: "zhd", icon: "train-front", nameKey: "method.zhd", url: `${DELIVERY}/zhd/` },
-    { slug: "more", icon: "ship", nameKey: "method.more", url: `${DELIVERY}/more/` },
-    { slug: "avia", icon: "plane", nameKey: "method.avia", url: `${DELIVERY}/avia/` },
+    { slug: "avto", icon: "truck", nameKey: "method.avto", url: `${DELIVERY}/sposoby/avto/` },
+    { slug: "zhd", icon: "train-front", nameKey: "method.zhd", url: `${DELIVERY}/sposoby/zhd/` },
+    { slug: "more", icon: "ship", nameKey: "method.more", url: `${DELIVERY}/sposoby/more/` },
+    { slug: "avia", icon: "plane", nameKey: "method.avia", url: `${DELIVERY}/sposoby/avia/` },
   ],
 
   // По товару — категории грузов (названия из ветки `goods`).

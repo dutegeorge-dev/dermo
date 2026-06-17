@@ -3,16 +3,14 @@ permalink: /uslugi/dostavka/
 titleKey: uslugi.dostavka.title
 descriptionKey: uslugi.dostavka.description
 ---
-{# Витрина «Доставка» — простой шаблон: H1 + подзаголовок + сетка карточек:
-   способы доставки + переходы к спискам «по товару» и «по городу». #}
+{# Витрина «Доставка» — простой шаблон: H1 + подзаголовок + три карточки-перехода
+   к спискам: по способу, по товару, по городу. #}
 {% from "components/link-card.njk" import linkCard %}
 
 <p class="mt-2 max-w-2xl text-base leading-relaxed text-muted">{{ "uslugi.dostavka.subtitle" | t(locale) }}</p>
 
 <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-  {% for m in uslugi.methods %}
-    {{ linkCard(m.icon, (m.nameKey | t(locale)), m.url | localizedUrl(locale)) }}
-  {% endfor %}
+  {{ linkCard("truck", ("mega.byMethod" | t(locale)), uslugi.sposobyUrl | localizedUrl(locale)) }}
   {{ linkCard("package", ("mega.byGoods" | t(locale)), uslugi.tovaryUrl | localizedUrl(locale)) }}
   {{ linkCard("map-pin", ("mega.byCity" | t(locale)), uslugi.gorodaUrl | localizedUrl(locale)) }}
 </div>

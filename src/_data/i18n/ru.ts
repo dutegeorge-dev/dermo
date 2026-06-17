@@ -482,28 +482,28 @@ const ru: Dictionary = {
           title: "Морской контейнер (FCL)",
           time: "40–55 дней",
           desc: "Для плановых поставок крупными партиями.",
-          url: "/uslugi/dostavka/more/",
+          url: "/uslugi/dostavka/sposoby/more/",
         },
         {
           icon: "train-front",
           title: "Железная дорога (FCL/LCL)",
           time: "20–30 дней",
           desc: "Оптимально для большинства товаров среднего объёма.",
-          url: "/uslugi/dostavka/zhd/",
+          url: "/uslugi/dostavka/sposoby/zhd/",
         },
         {
           icon: "truck",
           title: "Авто (TIR, FTL/LTL)",
           time: "7–14 дней",
           desc: "Быстро, но дороже ЖД примерно вдвое.",
-          url: "/uslugi/dostavka/avto/",
+          url: "/uslugi/dostavka/sposoby/avto/",
         },
         {
           icon: "plane",
           title: "Авиа",
           time: "7–14 дней",
           desc: "Образцы, электроника, дорогие товары.",
-          url: "/uslugi/dostavka/avia/",
+          url: "/uslugi/dostavka/sposoby/avia/",
         },
       ],
       note: "Сборные грузы (LCL) — от 1 м³.",
@@ -750,7 +750,7 @@ const ru: Dictionary = {
         },
         {
           text: "Авиадоставка образцов из Китая для сертификации",
-          url: "/uslugi/dostavka/avia/",
+          url: "/uslugi/dostavka/sposoby/avia/",
         },
       ],
     },
@@ -767,7 +767,7 @@ const ru: Dictionary = {
         },
         {
           q: "Какой минимальный объём груза?",
-          a: 'Возим сборные грузы (LCL) от 1 м³ и <a href="/uslugi/dostavka/more/" class="link-inline">полные контейнеры (FCL)</a>. Под небольшие партии подберём сборную отправку.',
+          a: 'Возим сборные грузы (LCL) от 1 м³ и <a href="/uslugi/dostavka/sposoby/more/" class="link-inline">полные контейнеры (FCL)</a>. Под небольшие партии подберём сборную отправку.',
         },
         {
           q: "Нужны ли сертификаты на мой товар?",
@@ -966,6 +966,12 @@ const ru: Dictionary = {
         "Доставка грузов из Китая: авто, ЖД, море, авиа. Подбор по способу, товарной категории и городу назначения. Белая доставка с полным пакетом документов.",
       subtitle:
         "Подберём схему под ваш груз — по способу перевозки, категории товара и городу назначения.",
+    },
+    sposobyList: {
+      title: "Доставка по способу",
+      description:
+        "Способы доставки грузов из Китая: авто, железная дорога, море и авиа. Подберём перевозку под ваш груз, сроки и бюджет.",
+      subtitle: "Выберите способ перевозки — подскажем сроки и условия под ваш груз.",
     },
     tovaryList: {
       title: "Доставка по товару",
