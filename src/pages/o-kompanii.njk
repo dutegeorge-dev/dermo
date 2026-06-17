@@ -33,22 +33,23 @@ sitemap: true
   </section>
 
   {# ── 2. Цитата руководителя ───────────────────────────────────────────── #}
-  {# Тёмный ультрамарин для контраста — сердце страницы (личный опыт). #}
-  <section class="bg-brand-dark text-white">
+  {# Светло-серый фон (surface-alt) — отделяет блок от синего hero, читается
+     как самостоятельная секция. Сердце страницы (личный опыт руководителя). #}
+  <section class="bg-surface-alt text-ink">
     <div class="container section">
       <div class="grid items-center gap-8 md:grid-cols-3">
         <div class="md:col-span-1">
           {# Фото-плейсхолдер руководителя (заменяется при наполнении). #}
-          <div class="mx-auto flex aspect-square w-48 max-w-full items-center justify-center rounded-2xl border border-white/20 bg-white/10 md:w-full" role="img" aria-label="{{ A.quote.photoAlt }}">
-            {{ icon("user", "h-20 w-20 text-white/40") }}
+          <div class="mx-auto flex aspect-square w-48 max-w-full items-center justify-center rounded-2xl border border-slate-200 bg-white md:w-full" role="img" aria-label="{{ A.quote.photoAlt }}">
+            {{ icon("user", "h-20 w-20 text-slate-300") }}
           </div>
         </div>
         <figure class="md:col-span-2">
-          <blockquote class="text-lg font-light leading-relaxed text-white/95 md:text-xl">
+          <blockquote class="text-lg font-light leading-relaxed text-ink md:text-xl">
             «{{ A.quote.text }}»
           </blockquote>
-          <figcaption class="mt-5 text-sm text-white/80">
-            <span class="font-semibold text-white">{{ A.quote.author }}</span>, {{ A.quote.role }}
+          <figcaption class="mt-5 text-sm text-muted">
+            <span class="font-semibold text-ink">{{ A.quote.author }}</span>, {{ A.quote.role }}
           </figcaption>
         </figure>
       </div>
@@ -146,7 +147,7 @@ sitemap: true
   <section class="bg-surface">
     <div class="container section">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ A.partners.title }}</h2>
-      {{ partners(A.partners.items) }}
+      {{ partners(A.partners) }}
     </div>
   </section>
 

@@ -893,6 +893,11 @@ const ru: Dictionary = {
           desc: "Без цепочки посредников и их наценки. Заводская цена и контроль на производстве.",
         },
         {
+          icon: "badge-check",
+          title: "Контроль качества до отгрузки",
+          desc: "Образец-эталон в контракте и инспекция на заводе. Брак выявляем в Китае — до того, как товар уйдёт в контейнере.",
+        },
+        {
           icon: "shield-check",
           title: "Только белый ввоз",
           desc: "Таможенное оформление и полный пакет документов на каждую поставку. Никаких серых схем.",
@@ -911,21 +916,25 @@ const ru: Dictionary = {
     },
     partners: {
       title: "Партнёры",
+      linkLabel: "Перейти на сайт",
       items: [
         {
-          icon: "landmark",
           name: "ВТБ",
           desc: "Банк-партнёр — расчёты и валютный контроль.",
+          logo: "/assets/img/partners/placeholder-logo.svg",
+          url: "https://www.vtb.ru/",
         },
         {
-          icon: "badge-check",
           name: "Россертцентр",
           desc: "Партнёр по сертификации товаров.",
+          logo: "/assets/img/partners/placeholder-logo.svg",
+          url: "#",
         },
         {
-          icon: "warehouse",
           name: "Фулфилмент-партнёр",
           desc: "Обработка и подготовка товара.",
+          logo: "/assets/img/partners/placeholder-logo.svg",
+          url: "#",
         },
       ],
     },

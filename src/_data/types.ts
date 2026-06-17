@@ -448,12 +448,14 @@ export interface AboutWhyItem {
   desc: string;
 }
 
-/** Карточка партнёра: лого-плейсхолдер + название + короткая подпись. */
+/** Карточка партнёра: лого-плейсхолдер + название + подпись + ссылка на сайт. */
 export interface AboutPartner {
-  /** Имя иконки Lucide для лого-плейсхолдера. */
-  icon: string;
   name: string;
   desc: string;
+  /** Путь к логотипу (плейсхолдер, lazy-load; заменяется реальным лого). */
+  logo: string;
+  /** URL сайта партнёра (открывается в новой вкладке). */
+  url: string;
 }
 
 /**
@@ -493,7 +495,7 @@ export interface OKompanii {
   /** «Почему работают с нами» — 5 отличий. */
   why: { title: string; items: AboutWhyItem[] };
   /** Партнёры. */
-  partners: { title: string; items: AboutPartner[] };
+  partners: { title: string; linkLabel: string; items: AboutPartner[] };
   /** Финальный CTA. */
   finalCta: { title: string; subtitle: string; button: string };
 }
