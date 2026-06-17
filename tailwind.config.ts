@@ -49,6 +49,11 @@ const config: Config = {
           DEFAULT: "#22B8CF",
           dark: "#1098AD",
         },
+        // telegram — фирменный синий Telegram (кнопка «Написать в Telegram»).
+        telegram: {
+          DEFAULT: "#229ED9",
+          hover: "#1B8FC4",
+        },
         ink: "#0F172A", // основной текст на светлом
         muted: "#64748B", // вторичный текст
         surface: "#FFFFFF", // фон мега-меню, светлые блоки

@@ -18,23 +18,24 @@
       <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85 md:text-xl">
         {{ "home.hero.subtitle" | t(locale) }}
       </p>
-      {# Две вторичные кнопки — НЕ дублируют форму расчёта справа: альтернативный
-         канал (Telegram) + переход к обзорному блоку «Как мы работаем». #}
+      {# Две кнопки — НЕ дублируют форму расчёта справа: Telegram (в фирменных
+         цветах) + белая кнопка-переход на статью блога «Как мы работаем». #}
       <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <a
           href="{{ site.telegram }}"
           rel="nofollow noopener"
           target="_blank"
-          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-white/70 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-white hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
         >
           {{ icon("send", "h-5 w-5") }}
           {{ "cta.telegramWrite" | t(locale) }}
         </a>
         <a
-          href="#kak-rabotaem"
-          class="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/70 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-white hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+          href="{{ '/blog/kak-my-rabotaem/' | localizedUrl(locale) }}"
+          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-medium text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
         >
           {{ "home.hero.secondary" | t(locale) }}
+          {{ icon("arrow-right", "h-4 w-4") }}
         </a>
       </div>
     </div>

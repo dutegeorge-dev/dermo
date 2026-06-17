@@ -32,22 +32,24 @@ sitemap: true
         <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85 md:text-xl">
           {{ "torgovlya.hero.subtitle" | t(locale) }}
         </p>
-        {# Две вторичные кнопки — не дубль формы: Telegram + переход к направлениям. #}
+        {# Две кнопки — не дубль формы: Telegram (фирменные цвета) + белая кнопка
+           на статью блога «Наши направления». #}
         <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <a
             href="{{ site.telegram }}"
             rel="nofollow noopener"
             target="_blank"
-            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-white/70 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-white hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
           >
             {{ icon("send", "h-5 w-5") }}
             {{ "cta.telegramWrite" | t(locale) }}
           </a>
           <a
-            href="#napravleniya"
-            class="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/70 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-white hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+            href="{{ '/blog/napravleniya-zakupok/' | localizedUrl(locale) }}"
+            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-medium text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
           >
             {{ "torgovlya.hero.secondary" | t(locale) }}
+            {{ icon("arrow-right", "h-4 w-4") }}
           </a>
         </div>
       </div>

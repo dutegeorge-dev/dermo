@@ -188,6 +188,33 @@
     @apply mt-1 hidden text-sm text-red-600;
   }
 
+  /* Базовая типографика статей блога (.prose) — лёгкая замена typography-плагина.
+     Preflight Tailwind сбрасывает стили заголовков/списков, поэтому задаём явно. */
+  .prose {
+    @apply text-base leading-relaxed text-ink;
+  }
+  .prose > * + * {
+    @apply mt-4;
+  }
+  .prose h2 {
+    @apply mt-8 text-2xl font-semibold tracking-tight text-ink;
+  }
+  .prose h3 {
+    @apply mt-6 text-xl font-semibold text-ink;
+  }
+  .prose ul {
+    @apply list-disc space-y-1 pl-6;
+  }
+  .prose ol {
+    @apply list-decimal space-y-1 pl-6;
+  }
+  .prose a {
+    @apply font-medium text-cyan-dark underline decoration-cyan/40 underline-offset-2 hover:decoration-cyan;
+  }
+  .prose strong {
+    @apply font-semibold text-ink;
+  }
+
   /* --- Хедер: utility-полоса (ярус 1) сворачивается при скролле вниз --- */
   .utility-bar {
     max-height: 3rem;

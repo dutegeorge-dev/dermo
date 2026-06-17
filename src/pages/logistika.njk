@@ -32,13 +32,17 @@ sitemap: true
       <div>
         <h1 class="max-w-2xl text-3xl font-light leading-tight tracking-tight sm:text-4xl md:text-5xl">{{ L.hero.h1 }}</h1>
         <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85 md:text-xl">{{ L.hero.subtitle }}</p>
-        {# Две вторичные кнопки — не дубль формы расчёта: Telegram + способы доставки. #}
+        {# Две кнопки — не дубль формы: Telegram (фирменные цвета) + белая кнопка
+           на статью блога «Способы доставки». #}
         <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="btn-outline gap-2 border-white px-6 py-3 text-base text-white hover:bg-white hover:text-brand">
+          <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
             {{ icon("send", "h-5 w-5") }}
             {{ "cta.telegramWrite" | t(locale) }}
           </a>
-          <a href="#sposoby" class="btn-outline border-white px-6 py-3 text-base text-white hover:bg-white hover:text-brand">{{ L.hero.ctaSecondary }}</a>
+          <a href="{{ '/blog/sposoby-dostavki-iz-kitaya/' | localizedUrl(locale) }}" class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-medium text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
+            {{ L.hero.ctaSecondary }}
+            {{ icon("arrow-right", "h-4 w-4") }}
+          </a>
         </div>
       </div>
       {# Правая колонка: мини-форма расчёта (единый компонент с главной) #}
