@@ -1,0 +1,50 @@
+{#
+  Слайдер-карусель команды (один ряд карточек со стрелками).
+  Прогрессивное улучшение: трек — нативно прокручиваемый контейнер
+  (свайп на тач работает из коробки), стрелки ‹/› прокручивают на одну
+  «страницу» через JS (assets/ts/slider.ts). Без стрелок/JS карточки
+  остаются доступны горизонтальной прокруткой/свайпом.
+
+  Параметр team — объект dict.oKompanii.team (members[], подписи стрелок).
+#}
+{% from "partials/icon.njk" import icon %}
+
+{% macro teamSlider(team) %}
+<div data-slider class="relative mt-8">
+  {# Стрелки навигации — бирюзовый акцент, доступны с клавиатуры (button). #}
+  <div class="mb-5 flex justify-end gap-2">
+    <button
+      type="button"
+      data-slider-prev
+      aria-label="{{ team.prevLabel }}"
+      class="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-cyan/40 bg-white text-cyan-dark transition-colors hover:bg-cyan hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-cyan-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2"
+    >
+      {{ icon("chevron-left", "h-5 w-5") }}
+    </button>
+    <button
+      type="button"
+      data-slider-next
+      aria-label="{{ team.nextLabel }}"
+      class="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-cyan/40 bg-white text-cyan-dark transition-colors hover:bg-cyan hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-cyan-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2"
+    >
+      {{ icon("chevron-right", "h-5 w-5") }}
+    </button>
+  </div>
+
+  {# Трек: десктоп 4 карточки, планшет 2–3, мобайл ~1.4 со свайпом. #}
+  <ul data-slider-track class="scrollbar-none flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2">
+    {% for m in team.members %}
+      <li data-slider-item class="flex shrink-0 basis-[72%] snap-start sm:basis-1/2 md:basis-1/3 lg:basis-1/4">
+        <article class="flex w-full flex-col rounded-xl border border-slate-200 bg-white p-5">
+          {# Фото-плейсхолдер (заменяется при наполнении). #}
+          <div class="flex aspect-square w-full items-center justify-center rounded-lg bg-surface-alt" role="img" aria-label="{{ m.photoAlt }}">
+            {{ icon("user", "h-16 w-16 text-slate-300") }}
+          </div>
+          <h3 class="mt-4 text-base font-semibold text-ink">{{ m.name }}</h3>
+          <p class="mt-1 text-sm font-medium text-cyan-dark">{{ m.role }}</p>
+        </article>
+      </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endmacro %}

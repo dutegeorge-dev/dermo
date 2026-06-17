@@ -1,0 +1,39 @@
+{#
+  Сетка партнёров: лого-плейсхолдер (одинаковой высоты, lazy-load) + название +
+  короткая подпись. Каждая карточка — ссылка на сайт партнёра (новая вкладка,
+  rel="noopener"). Логотипы — плейсхолдеры, заменяются реальными лого позже.
+
+  Параметр data — объект dict.oKompanii.partners (items[] + linkLabel).
+#}
+{% from "partials/icon.njk" import icon %}
+
+{% macro partners(data) %}
+<div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+  {% for p in data.items %}
+    <a
+      href="{{ p.url }}"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="group flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2"
+    >
+      {# Лого-плейсхолдер: фиксированная высота для ровного ряда, lazy-load. #}
+      <span class="flex h-12 items-center">
+        <img
+          src="{{ p.logo }}"
+          alt="Логотип «{{ p.name }}»"
+          loading="lazy"
+          width="160"
+          height="48"
+          class="h-10 w-auto max-w-[160px] object-contain object-left"
+        />
+      </span>
+      <p class="mt-4 text-base font-semibold text-ink">{{ p.name }}</p>
+      <p class="mt-1 text-sm text-muted">{{ p.desc }}</p>
+      <span class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-cyan-dark">
+        {{ data.linkLabel }}
+        {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover:translate-x-1") }}
+      </span>
+    </a>
+  {% endfor %}
+</div>
+{% endmacro %}

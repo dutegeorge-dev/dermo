@@ -414,6 +414,92 @@ export interface Logistika {
   finalCta: { title: string; subtitle: string; button: string };
 }
 
+/** Карточка сотрудника в слайдере команды (имя и фото — плейсхолдеры). */
+export interface AboutTeamMember {
+  /** Имя сотрудника (плейсхолдер «[Имя]» до наполнения). */
+  name: string;
+  /** Должность/роль. */
+  role: string;
+  /** Alt фото-плейсхолдера (для доступности). */
+  photoAlt: string;
+}
+
+/**
+ * Карточка блока «Документы и легальность».
+ * Сам документ — плейсхолдер скана; для российского юрлица вместо скана
+ * выводятся реквизиты из общих данных сайта (флаг requisites).
+ */
+export interface AboutDoc {
+  /** Имя иконки Lucide. */
+  icon: string;
+  title: string;
+  desc: string;
+  /** Подпись к плейсхолдеру скана/фото документа. */
+  scanLabel: string;
+  /** true — вместо скана показать реквизиты РФ (ИНН/ОГРН/адрес из site). */
+  requisites?: boolean;
+}
+
+/** Карточка «иконка + заголовок + описание» (отличия «Почему БАРС»). */
+export interface AboutWhyItem {
+  /** Имя иконки Lucide. */
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+/** Карточка партнёра: лого-плейсхолдер + название + подпись + ссылка на сайт. */
+export interface AboutPartner {
+  name: string;
+  desc: string;
+  /** Путь к логотипу (плейсхолдер, lazy-load; заменяется реальным лого). */
+  logo: string;
+  /** URL сайта партнёра (открывается в новой вкладке). */
+  url: string;
+}
+
+/**
+ * Контент страницы «О компании» (/o-kompanii/).
+ * Тексты — финальные в ru, заглушки в en/zh. Доступ из шаблонов через
+ * глобальные данные `dict.oKompanii` (вычисляются по локали страницы).
+ * Принцип честности: НЕТ цифр «N лет / N клиентов / N поставок» —
+ * опора на личный опыт руководителя и прозрачность.
+ */
+export interface OKompanii {
+  meta: { title: string; description: string };
+  hero: { h1: string; subtitle: string };
+  /** Цитата руководителя (личная история, фото-плейсхолдер). */
+  quote: { text: string; author: string; role: string; photoAlt: string };
+  /** Блок «Кто мы / суть» — 3 абзаца. */
+  who: { title: string; p1: string; p2: string; p3: string };
+  /** Команда — слайдер карточек с ролями. */
+  team: {
+    title: string;
+    subtitle: string;
+    members: AboutTeamMember[];
+    /** aria-label стрелок навигации слайдера. */
+    prevLabel: string;
+    nextLabel: string;
+  };
+  /** Документы и легальность. */
+  docs: {
+    title: string;
+    subtitle: string;
+    items: AboutDoc[];
+    /** Подписи реквизитов РФ (значения — из общих данных сайта). */
+    legalNameLabel: string;
+    innLabel: string;
+    ogrnLabel: string;
+    addressLabel: string;
+  };
+  /** «Почему работают с нами» — 5 отличий. */
+  why: { title: string; items: AboutWhyItem[] };
+  /** Партнёры. */
+  partners: { title: string; linkLabel: string; items: AboutPartner[] };
+  /** Финальный CTA. */
+  finalCta: { title: string; subtitle: string; button: string };
+}
+
 /**
  * Общий интерфейс словаря переводов.
  * Все три локали (ru/en/zh) реализуют один и тот же интерфейс — пропуск
@@ -740,4 +826,6 @@ export interface Dictionary {
   };
   /** Контент страницы «Логистика» (/logistika/). */
   logistika: Logistika;
+  /** Контент страницы «О компании» (/o-kompanii/). */
+  oKompanii: OKompanii;
 }

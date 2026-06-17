@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="48" viewBox="0 0 160 48" fill="none" role="img" aria-label="Логотип партнёра — плейсхолдер">
+  <rect x="0.5" y="0.5" width="159" height="47" rx="7" fill="#F1F5F9" stroke="#CBD5E1" stroke-dasharray="4 4"/>
+  <rect x="16" y="16" width="20" height="16" rx="2" stroke="#94A3B8" stroke-width="1.5"/>
+  <circle cx="22" cy="22" r="2" stroke="#94A3B8" stroke-width="1.5"/>
+  <path d="m16 30 6-5 5 4 4-3 5 4" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="48" y="28" font-family="Onest, system-ui, sans-serif" font-size="13" font-weight="600" letter-spacing="1.5" fill="#94A3B8">ЛОГОТИП</text>
+</svg>
