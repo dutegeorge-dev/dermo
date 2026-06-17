@@ -76,9 +76,9 @@ const torgovlya: TorgovlyaData = {
     "torgovlya.spec.parts.supply4",
   ],
   partsAdvantages: [
-    "torgovlya.spec.parts.adv1",
-    "torgovlya.spec.parts.adv2",
-    "torgovlya.spec.parts.adv3",
+    { icon: "scan-barcode", textKey: "torgovlya.spec.parts.adv1" },
+    { icon: "landmark", textKey: "torgovlya.spec.parts.adv2" },
+    { icon: "shield-check", textKey: "torgovlya.spec.parts.adv3" },
   ],
   machineTypes: [
     "torgovlya.spec.machines.type1",
@@ -87,9 +87,9 @@ const torgovlya: TorgovlyaData = {
     "torgovlya.spec.machines.type4",
   ],
   machineHow: [
-    "torgovlya.spec.machines.how1",
-    "torgovlya.spec.machines.how2",
-    "torgovlya.spec.machines.how3",
+    { icon: "search", textKey: "torgovlya.spec.machines.how1" },
+    { icon: "shield-check", textKey: "torgovlya.spec.machines.how2" },
+    { icon: "file-text", textKey: "torgovlya.spec.machines.how3" },
   ],
 
   // Раздел 14 ТЗ: FAQ (8 вопросов, микроразметка FAQPage).

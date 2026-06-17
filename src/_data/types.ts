@@ -186,6 +186,14 @@ export interface TitleTextKeys {
   textKey: string;
 }
 
+/** Иконка Lucide + текст по ключу словаря (акцентные пункты-преимущества). */
+export interface IconText {
+  /** Имя иконки Lucide (см. partials/icon.njk). */
+  icon: string;
+  /** Ключ перевода текста. */
+  textKey: string;
+}
+
 /** Услуга-карточка со ссылкой на отдельную страницу услуги (/uslugi/<slug>/). */
 export interface ServiceLink {
   /** Имя иконки Lucide (см. partials/icon.njk). */
@@ -226,12 +234,12 @@ export interface TorgovlyaData {
   partsBrands: string[];
   /** «Что поставляем» по запчастям — ключи словаря (4). */
   partsSupply: string[];
-  /** Преимущества направления «Запчасти» — ключи словаря (3). */
-  partsAdvantages: string[];
+  /** Преимущества направления «Запчасти» — иконка + текст (3). */
+  partsAdvantages: IconText[];
   /** Типы станков — ключи словаря (4). */
   machineTypes: string[];
-  /** «Как работаем» по станкам — ключи словаря (3). */
-  machineHow: string[];
+  /** «Как работаем» по станкам — иконка + текст (3). */
+  machineHow: IconText[];
   /** Частые вопросы — 8 пар вопрос/ответ. */
   faq: FaqEntry[];
 }
@@ -632,6 +640,8 @@ export interface Dictionary {
       flooring: {
         title: string;
         lead: string;
+        accentValue: string;
+        accentLabel: string;
         pt1: { title: string; text: string };
         pt2: { title: string; text: string };
         pt3: { title: string; text: string };
@@ -640,6 +650,8 @@ export interface Dictionary {
       parts: {
         title: string;
         lead: string;
+        accentValue: string;
+        accentLabel: string;
         brandsLabel: string;
         brand1: string;
         brand2: string;
@@ -661,6 +673,8 @@ export interface Dictionary {
       machines: {
         title: string;
         lead: string;
+        accentValue: string;
+        accentLabel: string;
         typesTitle: string;
         type1: string;
         type2: string;
