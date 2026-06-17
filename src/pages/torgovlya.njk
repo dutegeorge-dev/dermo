@@ -263,11 +263,10 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 8. Специализация: 3 направления ──────────────────────────────── #}
-  {# Каждое направление — отдельная секция с чередованием фона (белый / alt /
-     белый), точкой фокуса (акцент-блок) и плейсхолдером под фото. #}
-
-  {# 8.1 Напольные покрытия — белый фон, плюс интро всего блока. #}
+  {# ── 8. Наши направления — горизонтальные карточки с фото ──────────── #}
+  {# Каждое направление — цельная горизонтальная карточка: фото ~50% (на всю
+     высоту), компактный контент рядом. Сторона фото чередуется. Мобайл — фото
+     сверху, контент под ним. Данные/тексты — _data/torgovlya.ts + словарь. #}
   <section class="bg-surface">
     <div class="container section">
       <div class="max-w-2xl">
@@ -275,177 +274,40 @@ sitemap: true
         <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "torgovlya.spec.subtitle" | t(locale) }}</p>
       </div>
 
-      <div class="mt-10 grid gap-8 lg:grid-cols-3 lg:gap-12">
-        <div class="lg:col-span-2">
-          <div class="flex items-start gap-4">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan/15">
-              {{ icon("package", "h-7 w-7 text-cyan-dark") }}
-            </span>
-            <div>
-              <h3 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ "torgovlya.spec.flooring.title" | t(locale) }}</h3>
-              <p class="mt-2 text-base leading-relaxed text-muted">{{ "torgovlya.spec.flooring.lead" | t(locale) }}</p>
-            </div>
-          </div>
-
-          <div class="mt-6 grid gap-4 sm:grid-cols-3">
-            {% for pt in torgovlya.flooringPoints %}
-              <div class="rounded-xl border border-slate-200 bg-surface-alt p-5">
-                <h4 class="text-base font-semibold text-ink">{{ pt.titleKey | t(locale) }}</h4>
-                <p class="mt-2 text-sm leading-relaxed text-muted">{{ pt.textKey | t(locale) }}</p>
+      <div class="mt-10 space-y-6">
+        {% for dir in torgovlya.specDirections %}
+          <article class="overflow-hidden rounded-2xl border border-slate-200 bg-surface shadow-sm transition hover:shadow-md">
+            <div class="grid md:grid-cols-2">
+              {# Фото — плейсхолдер 16:10 (мобайл сверху), на десктопе чередует
+                 сторону и тянется на всю высоту карточки. Заменяется на
+                 <img loading="lazy"> позже. #}
+              <div class="flex aspect-[16/10] items-center justify-center bg-surface-alt md:aspect-auto md:h-full md:min-h-[19rem]{% if dir.photoRight %} md:order-2{% endif %}" aria-hidden="true">
+                {{ icon(dir.photoIcon, "h-14 w-14 text-slate-300") }}
               </div>
-            {% endfor %}
-          </div>
 
-          <a href="{{ '/tovary/napolnye-pokrytiya/' | localizedUrl(locale) }}" class="mt-6 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors hover:text-cyan">
-            {{ "torgovlya.spec.flooring.link" | t(locale) }}
-            {{ icon("arrow-right", "h-4 w-4") }}
-          </a>
-        </div>
-
-        <aside class="space-y-5">
-          {# Точка фокуса — акцент-выгода. #}
-          <div class="rounded-2xl bg-brand px-6 py-8 text-center text-white shadow-lg">
-            <span class="block text-4xl font-light leading-none tracking-tight text-cyan md:text-5xl">{{ "torgovlya.spec.flooring.accentValue" | t(locale) }}</span>
-            <span class="mx-auto mt-3 block max-w-[13rem] text-sm font-light leading-relaxed text-white/90">{{ "torgovlya.spec.flooring.accentLabel" | t(locale) }}</span>
-          </div>
-          {# Плейсхолдер под фото (образцы покрытий) — заменяется на <img loading="lazy"> позже. #}
-          <div class="flex aspect-[4/3] w-full items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white" aria-hidden="true">
-            {{ icon("camera", "h-10 w-10 text-slate-300") }}
-          </div>
-        </aside>
-      </div>
-    </div>
-  </section>
-
-  {# 8.2 Запчасти и двигатели — светлый фон (surface-alt). #}
-  <section class="bg-surface-alt">
-    <div class="container section">
-      <div class="grid gap-8 lg:grid-cols-3 lg:gap-12">
-        <div class="lg:col-span-2">
-          <div class="flex items-start gap-4">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan/15">
-              {{ icon("truck", "h-7 w-7 text-cyan-dark") }}
-            </span>
-            <div>
-              <h3 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ "torgovlya.spec.parts.title" | t(locale) }}</h3>
-              <p class="mt-2 text-base leading-relaxed text-muted">{{ "torgovlya.spec.parts.lead" | t(locale) }}</p>
-            </div>
-          </div>
-
-          {# Марки — контрастные плашки (белый фон, бирюзовая обводка, тень). #}
-          <p class="mt-6 text-sm font-semibold uppercase tracking-wide text-muted">{{ "torgovlya.spec.parts.brandsLabel" | t(locale) }}</p>
-          <ul class="mt-3 flex flex-wrap gap-2.5">
-            {% for brand in torgovlya.partsBrands %}
-              <li class="rounded-lg border border-cyan/40 bg-white px-4 py-2 text-base font-semibold text-ink shadow-sm">{{ brand | t(locale) }}</li>
-            {% endfor %}
-          </ul>
-
-          <div class="mt-8 grid gap-8 md:grid-cols-2">
-            {# «Что поставляем» — перечень (чек-лист). #}
-            <div>
-              <h4 class="text-base font-semibold text-ink">{{ "torgovlya.spec.parts.supplyTitle" | t(locale) }}</h4>
-              <ul class="mt-4 space-y-3">
-                {% for item in torgovlya.partsSupply %}
-                  <li class="flex items-start gap-2.5">
-                    {{ icon("badge-check", "mt-0.5 h-5 w-5 shrink-0 text-cyan-dark") }}
-                    <span class="text-sm leading-relaxed text-ink/80">{{ item | t(locale) }}</span>
-                  </li>
-                {% endfor %}
-              </ul>
-            </div>
-            {# «Преимущества» — акцентные карточки с иконками (иная подача). #}
-            <div>
-              <h4 class="text-base font-semibold text-ink">{{ "torgovlya.spec.parts.advantagesTitle" | t(locale) }}</h4>
-              <div class="mt-4 space-y-3">
-                {% for adv in torgovlya.partsAdvantages %}
-                  <div class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan/15">
-                      {{ icon(adv.icon, "h-5 w-5 text-cyan-dark") }}
-                    </span>
-                    <span class="text-sm leading-relaxed text-ink/80">{{ adv.textKey | t(locale) }}</span>
-                  </div>
-                {% endfor %}
+              {# Контент — заголовок + бейдж, строка сути, буллеты, ссылка. #}
+              <div class="flex flex-col justify-center gap-4 p-7 md:p-10{% if dir.photoRight %} md:order-1{% endif %}">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <h3 class="text-2xl font-light tracking-tight text-ink">{{ dir.titleKey | t(locale) }}</h3>
+                  <span class="inline-flex items-center rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent-dark">{{ dir.badgeKey | t(locale) }}</span>
+                </div>
+                <p class="text-base font-medium text-ink">{{ dir.leadKey | t(locale) }}</p>
+                <ul class="space-y-2.5">
+                  {% for b in dir.bulletKeys %}
+                    <li class="flex items-start gap-2.5">
+                      {{ icon("badge-check", "mt-0.5 h-5 w-5 shrink-0 text-cyan-dark") }}
+                      <span class="text-sm leading-relaxed text-muted">{{ b | t(locale) }}</span>
+                    </li>
+                  {% endfor %}
+                </ul>
+                <a href="{{ dir.url | localizedUrl(locale) }}" class="mt-1 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors hover:text-cyan">
+                  {{ dir.linkKey | t(locale) }}
+                  {{ icon("arrow-right", "h-4 w-4") }}
+                </a>
               </div>
             </div>
-          </div>
-
-          <a href="{{ '/tovary/zapchasti/' | localizedUrl(locale) }}" class="mt-8 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors hover:text-cyan">
-            {{ "torgovlya.spec.parts.link" | t(locale) }}
-            {{ icon("arrow-right", "h-4 w-4") }}
-          </a>
-        </div>
-
-        <aside class="space-y-5">
-          <div class="rounded-2xl bg-brand px-6 py-8 text-center text-white shadow-lg">
-            <span class="block text-3xl font-light leading-none tracking-tight text-cyan md:text-4xl">{{ "torgovlya.spec.parts.accentValue" | t(locale) }}</span>
-            <span class="mx-auto mt-3 block max-w-[13rem] text-sm font-light leading-relaxed text-white/90">{{ "torgovlya.spec.parts.accentLabel" | t(locale) }}</span>
-          </div>
-          {# Плейсхолдер под фото (двигатель / склад запчастей). #}
-          <div class="flex aspect-[4/3] w-full items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white" aria-hidden="true">
-            {{ icon("camera", "h-10 w-10 text-slate-300") }}
-          </div>
-        </aside>
-      </div>
-    </div>
-  </section>
-
-  {# 8.3 Токарные и металлообрабатывающие станки («под запрос») — белый фон. #}
-  <section class="bg-surface">
-    <div class="container section">
-      <div class="grid gap-8 lg:grid-cols-3 lg:gap-12">
-        <div class="lg:col-span-2">
-          <div class="flex items-start gap-4">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan/15">
-              {{ icon("factory", "h-7 w-7 text-cyan-dark") }}
-            </span>
-            <div>
-              <h3 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ "torgovlya.spec.machines.title" | t(locale) }}</h3>
-              <p class="mt-2 text-base leading-relaxed text-muted">{{ "torgovlya.spec.machines.lead" | t(locale) }}</p>
-            </div>
-          </div>
-
-          <div class="mt-8 grid gap-8 md:grid-cols-2">
-            {# «Типы оборудования» — перечень (чек-лист). #}
-            <div>
-              <h4 class="text-base font-semibold text-ink">{{ "torgovlya.spec.machines.typesTitle" | t(locale) }}</h4>
-              <ul class="mt-4 space-y-3">
-                {% for item in torgovlya.machineTypes %}
-                  <li class="flex items-start gap-2.5">
-                    {{ icon("badge-check", "mt-0.5 h-5 w-5 shrink-0 text-cyan-dark") }}
-                    <span class="text-sm leading-relaxed text-ink/80">{{ item | t(locale) }}</span>
-                  </li>
-                {% endfor %}
-              </ul>
-            </div>
-            {# «Как работаем» — акцентные карточки с иконками. #}
-            <div>
-              <h4 class="text-base font-semibold text-ink">{{ "torgovlya.spec.machines.howTitle" | t(locale) }}</h4>
-              <div class="mt-4 space-y-3">
-                {% for step in torgovlya.machineHow %}
-                  <div class="flex items-start gap-3 rounded-xl border border-slate-200 bg-surface-alt p-4">
-                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan/15">
-                      {{ icon(step.icon, "h-5 w-5 text-cyan-dark") }}
-                    </span>
-                    <span class="text-sm leading-relaxed text-ink/80">{{ step.textKey | t(locale) }}</span>
-                  </div>
-                {% endfor %}
-              </div>
-            </div>
-          </div>
-
-          <p class="mt-6 rounded-xl border border-slate-200 bg-surface-alt px-5 py-4 text-sm italic leading-relaxed text-muted">{{ "torgovlya.spec.machines.note" | t(locale) }}</p>
-        </div>
-
-        <aside class="space-y-5">
-          <div class="rounded-2xl bg-brand px-6 py-8 text-center text-white shadow-lg">
-            <span class="block text-3xl font-light leading-none tracking-tight text-cyan md:text-4xl">{{ "torgovlya.spec.machines.accentValue" | t(locale) }}</span>
-            <span class="mx-auto mt-3 block max-w-[13rem] text-sm font-light leading-relaxed text-white/90">{{ "torgovlya.spec.machines.accentLabel" | t(locale) }}</span>
-          </div>
-          {# Плейсхолдер под фото (станок). #}
-          <div class="flex aspect-[4/3] w-full items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white" aria-hidden="true">
-            {{ icon("camera", "h-10 w-10 text-slate-300") }}
-          </div>
-        </aside>
+          </article>
+        {% endfor %}
       </div>
     </div>
   </section>

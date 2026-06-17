@@ -55,41 +55,52 @@ const torgovlya: TorgovlyaData = {
     { num: "07", icon: "truck", titleKey: "torgovlya.process.s7.title", textKey: "torgovlya.process.s7.text" },
   ],
 
-  // Раздел 10 ТЗ: специализация — направления.
-  flooringPoints: [
-    { titleKey: "torgovlya.spec.flooring.pt1.title", textKey: "torgovlya.spec.flooring.pt1.text" },
-    { titleKey: "torgovlya.spec.flooring.pt2.title", textKey: "torgovlya.spec.flooring.pt2.text" },
-    { titleKey: "torgovlya.spec.flooring.pt3.title", textKey: "torgovlya.spec.flooring.pt3.text" },
-  ],
-  partsBrands: [
-    "torgovlya.spec.parts.brand1",
-    "torgovlya.spec.parts.brand2",
-    "torgovlya.spec.parts.brand3",
-    "torgovlya.spec.parts.brand4",
-    "torgovlya.spec.parts.brand5",
-    "torgovlya.spec.parts.brand6",
-  ],
-  partsSupply: [
-    "torgovlya.spec.parts.supply1",
-    "torgovlya.spec.parts.supply2",
-    "torgovlya.spec.parts.supply3",
-    "torgovlya.spec.parts.supply4",
-  ],
-  partsAdvantages: [
-    { icon: "scan-barcode", textKey: "torgovlya.spec.parts.adv1" },
-    { icon: "landmark", textKey: "torgovlya.spec.parts.adv2" },
-    { icon: "shield-check", textKey: "torgovlya.spec.parts.adv3" },
-  ],
-  machineTypes: [
-    "torgovlya.spec.machines.type1",
-    "torgovlya.spec.machines.type2",
-    "torgovlya.spec.machines.type3",
-    "torgovlya.spec.machines.type4",
-  ],
-  machineHow: [
-    { icon: "search", textKey: "torgovlya.spec.machines.how1" },
-    { icon: "shield-check", textKey: "torgovlya.spec.machines.how2" },
-    { icon: "file-text", textKey: "torgovlya.spec.machines.how3" },
+  // Раздел 10 ТЗ: направления — горизонтальные карточки с фото.
+  // Сторона фото чередуется (слева / справа / слева). Тексты — короткие
+  // (заголовок + бейдж + строка сути + 3 буллета + ссылка).
+  specDirections: [
+    {
+      photoIcon: "package",
+      photoRight: false,
+      titleKey: "torgovlya.spec.flooring.title",
+      badgeKey: "torgovlya.spec.flooring.badge",
+      leadKey: "torgovlya.spec.flooring.lead",
+      bulletKeys: [
+        "torgovlya.spec.flooring.b1",
+        "torgovlya.spec.flooring.b2",
+        "torgovlya.spec.flooring.b3",
+      ],
+      linkKey: "torgovlya.spec.flooring.link",
+      url: "/tovary/napolnye-pokrytiya/",
+    },
+    {
+      photoIcon: "truck",
+      photoRight: true,
+      titleKey: "torgovlya.spec.parts.title",
+      badgeKey: "torgovlya.spec.parts.badge",
+      leadKey: "torgovlya.spec.parts.lead",
+      bulletKeys: [
+        "torgovlya.spec.parts.b1",
+        "torgovlya.spec.parts.b2",
+        "torgovlya.spec.parts.b3",
+      ],
+      linkKey: "torgovlya.spec.parts.link",
+      url: "/tovary/zapchasti/",
+    },
+    {
+      photoIcon: "factory",
+      photoRight: false,
+      titleKey: "torgovlya.spec.machines.title",
+      badgeKey: "torgovlya.spec.machines.badge",
+      leadKey: "torgovlya.spec.machines.lead",
+      bulletKeys: [
+        "torgovlya.spec.machines.b1",
+        "torgovlya.spec.machines.b2",
+        "torgovlya.spec.machines.b3",
+      ],
+      linkKey: "torgovlya.spec.machines.link",
+      url: "/tovary/oborudovanie/",
+    },
   ],
 
   // Раздел 14 ТЗ: FAQ (8 вопросов, микроразметка FAQPage).

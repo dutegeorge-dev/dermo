@@ -186,14 +186,6 @@ export interface TitleTextKeys {
   textKey: string;
 }
 
-/** Иконка Lucide + текст по ключу словаря (акцентные пункты-преимущества). */
-export interface IconText {
-  /** Имя иконки Lucide (см. partials/icon.njk). */
-  icon: string;
-  /** Ключ перевода текста. */
-  textKey: string;
-}
-
 /** Услуга-карточка со ссылкой на отдельную страницу услуги (/uslugi/<slug>/). */
 export interface ServiceLink {
   /** Имя иконки Lucide (см. partials/icon.njk). */
@@ -228,20 +220,34 @@ export interface TorgovlyaData {
   services: ServiceLink[];
   /** Этапы работы (процесс закупки) — 7 шагов с номерами. */
   process: ProcessStep[];
-  /** Преимущества направления «Напольные покрытия» — 3 пункта. */
-  flooringPoints: TitleTextKeys[];
-  /** Марки китайских грузовиков — ключи словаря (6). */
-  partsBrands: string[];
-  /** «Что поставляем» по запчастям — ключи словаря (4). */
-  partsSupply: string[];
-  /** Преимущества направления «Запчасти» — иконка + текст (3). */
-  partsAdvantages: IconText[];
-  /** Типы станков — ключи словаря (4). */
-  machineTypes: string[];
-  /** «Как работаем» по станкам — иконка + текст (3). */
-  machineHow: IconText[];
+  /** Направления специализации — горизонтальные карточки с фото (3). */
+  specDirections: SpecDirection[];
   /** Частые вопросы — 8 пар вопрос/ответ. */
   faq: FaqEntry[];
+}
+
+/**
+ * Направление специализации — цельная горизонтальная карточка с фото.
+ * Фото чередует сторону (photoRight), контент компактный: заголовок + бейдж +
+ * строка сути + короткие буллеты + ссылка. Тексты — по ключам словаря.
+ */
+export interface SpecDirection {
+  /** Имя иконки Lucide для плейсхолдера фото. */
+  photoIcon: string;
+  /** true — фото справа на десктопе (для ритма чередования сторон). */
+  photoRight: boolean;
+  /** Ключ перевода заголовка направления. */
+  titleKey: string;
+  /** Ключ перевода бейджа-акцента (напр. «25–40% дешевле»). */
+  badgeKey: string;
+  /** Ключ перевода строки сути (одна строка, не абзац). */
+  leadKey: string;
+  /** Ключи перевода коротких буллетов (3–4). */
+  bulletKeys: string[];
+  /** Ключ перевода подписи ссылки «Подробнее…». */
+  linkKey: string;
+  /** URL целевой страницы направления. */
+  url: string;
 }
 
 /**
@@ -639,52 +645,30 @@ export interface Dictionary {
       subtitle: string;
       flooring: {
         title: string;
+        badge: string;
         lead: string;
-        accentValue: string;
-        accentLabel: string;
-        pt1: { title: string; text: string };
-        pt2: { title: string; text: string };
-        pt3: { title: string; text: string };
+        b1: string;
+        b2: string;
+        b3: string;
         link: string;
       };
       parts: {
         title: string;
+        badge: string;
         lead: string;
-        accentValue: string;
-        accentLabel: string;
-        brandsLabel: string;
-        brand1: string;
-        brand2: string;
-        brand3: string;
-        brand4: string;
-        brand5: string;
-        brand6: string;
-        supplyTitle: string;
-        supply1: string;
-        supply2: string;
-        supply3: string;
-        supply4: string;
-        advantagesTitle: string;
-        adv1: string;
-        adv2: string;
-        adv3: string;
+        b1: string;
+        b2: string;
+        b3: string;
         link: string;
       };
       machines: {
         title: string;
+        badge: string;
         lead: string;
-        accentValue: string;
-        accentLabel: string;
-        typesTitle: string;
-        type1: string;
-        type2: string;
-        type3: string;
-        type4: string;
-        howTitle: string;
-        how1: string;
-        how2: string;
-        how3: string;
-        note: string;
+        b1: string;
+        b2: string;
+        b3: string;
+        link: string;
       };
     };
     partnership: {
