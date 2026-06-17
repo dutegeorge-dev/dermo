@@ -7,6 +7,7 @@ sitemap: true
 ---
 {% from "partials/icon.njk" import icon %}
 {% from "components/cta-band.njk" import ctaBand %}
+{% from "components/form-consent.njk" import formConsent %}
 
 {#
   Страница «Торговля» (/torgovlya/) — экспертный разворот закупки в Китае.
@@ -75,9 +76,11 @@ sitemap: true
             <p class="field-error" data-error-for="contact">{{ "torgovlya.heroForm.contactError" | t(locale) }}</p>
           </div>
 
+          {{ formConsent(locale, "trade") }}
+
           <button
             type="submit"
-            class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+            class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {{ "cta.calculate" | t(locale) }}
           </button>

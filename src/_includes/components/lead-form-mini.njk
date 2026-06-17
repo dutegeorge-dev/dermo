@@ -9,6 +9,7 @@
                  шаблона недоступен, а фильтр t требует локаль);
     id_prefix  — префикс id полей (уникальность на странице; по умолчанию "hero").
 #}
+{% from "components/form-consent.njk" import formConsent %}
 {% macro leadFormMini(locale, id_prefix="hero") %}
 <form
   data-lead-form
@@ -30,9 +31,11 @@
       <p class="field-error" data-error-for="contact">{{ "home.heroForm.contactError" | t(locale) }}</p>
     </div>
 
+    {{ formConsent(locale, id_prefix) }}
+
     <button
       type="submit"
-      class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+      class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {{ "cta.calculate" | t(locale) }}
     </button>

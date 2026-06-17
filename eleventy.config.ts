@@ -61,6 +61,8 @@ const LABELS: Record<string, string> = {
   torgovlya: "Торговля",
   "o-kompanii": "О компании",
   kontakty: "Контакты",
+  "politika-konfidencialnosti": "Политика конфиденциальности",
+  spasibo: "Заявка принята",
   dostavka: "Доставка",
   avto: "Доставка автотранспортом",
   zhd: "Доставка ЖД",

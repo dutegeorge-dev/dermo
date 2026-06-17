@@ -48,8 +48,14 @@ export interface SiteConfig {
   telegram: string;
   /** E-mail для связи. */
   email: string;
-  /** Юридический адрес (заглушка). */
+  /** Юридический адрес РФ (заглушка). */
   address: string;
+  /** Адрес офиса в Гуанчжоу (текст для блока контактов и карты). */
+  addressCn: string;
+  /** Строка о времени ответа с учётом разницы РФ/Китай. */
+  workingHours: string;
+  /** URL встраиваемой карты (виджет Яндекс.Карт) с меткой офиса в Гуанчжоу. */
+  mapEmbedSrc: string;
   /** ИНН (заглушка). */
   inn: string;
   /** ОГРН (заглушка). */
@@ -804,6 +810,17 @@ export interface Dictionary {
     phoneRu: string;
     phoneCn: string;
     telegram: string;
+  };
+  /** Общие тексты форм: согласие на обработку ПДн (152-ФЗ). */
+  forms: {
+    /** Текст согласия до ссылки на политику. */
+    consentPrefix: string;
+    /** Подпись ссылки на политику конфиденциальности. */
+    consentLink: string;
+    /** Текст согласия после ссылки. */
+    consentSuffix: string;
+    /** Ошибка, если согласие не отмечено. */
+    consentError: string;
   };
   /** Контент страницы «Логистика» (/logistika/). */
   logistika: Logistika;

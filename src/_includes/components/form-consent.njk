@@ -1,0 +1,30 @@
+{#
+  Согласие на обработку персональных данных (152-ФЗ) — единый блок для всех форм.
+  Вставляется под полями, перед кнопкой отправки. Чекбокс по умолчанию НЕ отмечен;
+  кнопка отправки блокируется до отметки (логика — assets/ts/main.ts по [data-consent]).
+  Тексты — из словаря (forms.*), ссылка ведёт на /politika-konfidencialnosti/.
+
+  Параметры:
+    locale     — текущая локаль (для фильтра t и localizedUrl);
+    id_prefix  — префикс id чекбокса (уникальность на странице; по умолчанию "form").
+#}
+{% macro formConsent(locale, id_prefix="form") %}
+<div>
+  <label class="flex items-start gap-2 text-xs leading-relaxed text-muted" for="{{ id_prefix }}-consent">
+    <input
+      class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand focus:ring-brand"
+      id="{{ id_prefix }}-consent"
+      name="consent"
+      type="checkbox"
+      data-consent
+    />
+    <span>{{ "forms.consentPrefix" | t(locale) }}<a
+      href="{{ '/politika-konfidencialnosti/' | localizedUrl(locale) }}"
+      class="underline decoration-cyan/40 underline-offset-2 hover:text-brand"
+      target="_blank"
+      rel="noopener"
+    >{{ "forms.consentLink" | t(locale) }}</a>{{ "forms.consentSuffix" | t(locale) }}</span>
+  </label>
+  <p class="field-error" data-error-for="consent">{{ "forms.consentError" | t(locale) }}</p>
+</div>
+{% endmacro %}
