@@ -425,6 +425,7 @@ export interface Dictionary {
     request: string;
     calculate: string;
     telegram: string;
+    telegramWrite: string;
   };
   mega: {
     logistics: { title: string; subtitle: string };

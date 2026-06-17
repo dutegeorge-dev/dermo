@@ -32,12 +32,13 @@ sitemap: true
       <div>
         <h1 class="max-w-2xl text-3xl font-light leading-tight tracking-tight sm:text-4xl md:text-5xl">{{ L.hero.h1 }}</h1>
         <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85 md:text-xl">{{ L.hero.subtitle }}</p>
+        {# Две вторичные кнопки — не дубль формы расчёта: Telegram + способы доставки. #}
         <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <a href="{{ calcUrl }}" class="btn-accent px-6 py-3 text-base">
-            {{ L.hero.ctaPrimary }}
-            {{ icon("arrow-right", "ml-1.5 h-5 w-5") }}
+          <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="btn-outline gap-2 border-white px-6 py-3 text-base text-white hover:bg-white hover:text-brand">
+            {{ icon("send", "h-5 w-5") }}
+            {{ "cta.telegramWrite" | t(locale) }}
           </a>
-          <a href="#bezopasnost" class="btn-outline border-white px-6 py-3 text-base text-white hover:bg-white hover:text-brand">{{ L.hero.ctaSecondary }}</a>
+          <a href="#sposoby" class="btn-outline border-white px-6 py-3 text-base text-white hover:bg-white hover:text-brand">{{ L.hero.ctaSecondary }}</a>
         </div>
       </div>
       {# Правая колонка: мини-форма расчёта (единый компонент с главной) #}

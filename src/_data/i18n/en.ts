@@ -38,6 +38,7 @@ const en: Dictionary = {
     request: "[EN] Оставить заявку",
     calculate: "[EN] Рассчитать",
     telegram: "Telegram",
+    telegramWrite: "[EN] Написать в Telegram",
   },
   mega: {
     logistics: {

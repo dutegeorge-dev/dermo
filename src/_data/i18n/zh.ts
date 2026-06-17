@@ -38,6 +38,7 @@ const zh: Dictionary = {
     request: "[ZH] Оставить заявку",
     calculate: "[ZH] Рассчитать",
     telegram: "Telegram",
+    telegramWrite: "[ZH] Написать в Telegram",
   },
   mega: {
     logistics: {
