@@ -73,9 +73,14 @@ layout: layouts/base.njk
       </div>
 
       {# ── Правое sticky-оглавление (десктоп). Скрыто, пока TS не наполнит
-         его и не покажет (добавит lg:block) при 3+ разделах. ── #}
-      <aside data-toc-desktop class="hidden lg:w-60 lg:shrink-0">
-        <nav class="sticky top-28" aria-label="Содержание">
+         его и не покажет (добавит lg:block) при 3+ разделах. Sticky — на самом
+         <aside>: он залипает относительно высокой колонки контента (на <nav>
+         не сработало бы — родитель по высоте равен оглавлению). ── #}
+      <aside
+        data-toc-desktop
+        class="hidden lg:w-60 lg:shrink-0 lg:self-start lg:sticky lg:top-28"
+      >
+        <nav aria-label="Содержание">
           <p class="text-sm font-semibold text-ink">Содержание</p>
           <ol data-toc-list class="mt-3 space-y-0.5 border-l border-slate-200"></ol>
         </nav>
