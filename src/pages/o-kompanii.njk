@@ -1,1 +1,158 @@
-{# О компании — пустой шаблон-заглушка. Контент добавляется позже. #}
+---
+layout: layouts/base.njk
+permalink: /o-kompanii/
+titleKey: oKompanii.meta.title
+descriptionKey: oKompanii.meta.description
+sitemap: true
+---
+{#
+  Уникальная статичная страница «О компании» (/o-kompanii/).
+  Тексты — из i18n-словаря: dict.oKompanii (см. _data/i18n/ru.ts).
+  Принцип честности: НЕТ цифр «N лет / N клиентов / N поставок» — опора на
+  личный опыт руководителя (с 2008) и прозрачность.
+  Порядок секций по ТЗ: hero → цитата → кто мы → команда (слайдер) →
+  документы → почему БАРС → партнёры → финальный CTA.
+#}
+{% from "partials/icon.njk" import icon %}
+{% from "components/cta-band.njk" import ctaBand %}
+{% from "components/team-slider.njk" import teamSlider %}
+{% from "components/partners.njk" import partners %}
+{% set A = dict.oKompanii %}
+{% set requestUrl = "/kontakty/" | localizedUrl(locale) %}
+
+{% include "partials/header.njk" %}
+
+<main class="flex-1">
+  {# ── 1. Hero ─────────────────────────────────────────────────────────── #}
+  <section class="bg-brand text-white">
+    {% include "partials/breadcrumbs.njk" %}
+    <div class="container pb-16 pt-6 md:pb-20 md:pt-8 lg:pb-24">
+      <h1 class="max-w-3xl text-3xl font-light leading-tight tracking-tight sm:text-4xl md:text-5xl">{{ A.hero.h1 }}</h1>
+      <p class="mt-6 max-w-2xl text-lg font-light leading-relaxed text-white/85 md:text-xl">{{ A.hero.subtitle }}</p>
+    </div>
+  </section>
+
+  {# ── 2. Цитата руководителя ───────────────────────────────────────────── #}
+  {# Тёмный ультрамарин для контраста — сердце страницы (личный опыт). #}
+  <section class="bg-brand-dark text-white">
+    <div class="container section">
+      <div class="grid items-center gap-8 md:grid-cols-3">
+        <div class="md:col-span-1">
+          {# Фото-плейсхолдер руководителя (заменяется при наполнении). #}
+          <div class="mx-auto flex aspect-square w-48 max-w-full items-center justify-center rounded-2xl border border-white/20 bg-white/10 md:w-full" role="img" aria-label="{{ A.quote.photoAlt }}">
+            {{ icon("user", "h-20 w-20 text-white/40") }}
+          </div>
+        </div>
+        <figure class="md:col-span-2">
+          <blockquote class="text-lg font-light leading-relaxed text-white/95 md:text-xl">
+            «{{ A.quote.text }}»
+          </blockquote>
+          <figcaption class="mt-5 text-sm text-white/80">
+            <span class="font-semibold text-white">{{ A.quote.author }}</span>, {{ A.quote.role }}
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  {# ── 3. Кто мы / суть ─────────────────────────────────────────────────── #}
+  <section class="bg-surface">
+    <div class="container section">
+      <div class="container-narrow !px-0">
+        <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ A.who.title }}</h2>
+        <div class="mt-6 space-y-4 text-base leading-relaxed text-muted">
+          <p>{{ A.who.p1 }}</p>
+          <p>{{ A.who.p2 }}</p>
+          <p>{{ A.who.p3 }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ── 4. Команда (слайдер) ─────────────────────────────────────────────── #}
+  <section class="bg-surface-alt">
+    <div class="container section">
+      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ A.team.title }}</h2>
+      <p class="mt-3 max-w-3xl text-base text-muted">{{ A.team.subtitle }}</p>
+      {{ teamSlider(A.team) }}
+    </div>
+  </section>
+
+  {# ── 5. Документы и легальность ───────────────────────────────────────── #}
+  <section class="bg-surface">
+    <div class="container section">
+      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ A.docs.title }}</h2>
+      <p class="mt-3 max-w-3xl text-base text-muted">{{ A.docs.subtitle }}</p>
+      <div class="mt-8 grid gap-5 md:grid-cols-3">
+        {% for d in A.docs.items %}
+          <div class="flex flex-col rounded-xl border border-slate-200 bg-white p-6">
+            <span class="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-cyan/10">
+              {{ icon(d.icon, "h-6 w-6 text-cyan") }}
+            </span>
+            <h3 class="mt-4 text-base font-semibold text-ink">{{ d.title }}</h3>
+            <p class="mt-2 text-sm text-muted">{{ d.desc }}</p>
+            {% if d.requisites %}
+              {# Реквизиты РФ — из общих данных сайта (site.*). #}
+              <dl class="mt-4 space-y-2 rounded-lg bg-surface-alt p-4 text-sm">
+                <div>
+                  <dt class="text-xs text-muted">{{ A.docs.legalNameLabel }}</dt>
+                  <dd class="font-medium text-ink">{{ site.legalName }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-muted">{{ A.docs.innLabel }}</dt>
+                  <dd class="font-medium text-ink">{{ site.inn }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-muted">{{ A.docs.ogrnLabel }}</dt>
+                  <dd class="font-medium text-ink">{{ site.ogrn }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-muted">{{ A.docs.addressLabel }}</dt>
+                  <dd class="font-medium text-ink">{{ site.address }}</dd>
+                </div>
+              </dl>
+            {% else %}
+              {# Плейсхолдер скана/фото документа (заменяется реальным сканом). #}
+              <div class="mt-4 flex flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-surface-alt px-4 py-8 text-center">
+                {{ icon("file-text", "h-8 w-8 text-slate-300") }}
+                <span class="text-xs text-muted">{{ d.scanLabel }}</span>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ── 6. Почему БАРС ───────────────────────────────────────────────────── #}
+  <section class="bg-surface-alt">
+    <div class="container section">
+      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ A.why.title }}</h2>
+      <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {% for w in A.why.items %}
+          <div class="flex flex-col rounded-xl border border-slate-200 bg-white p-6">
+            <span class="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-cyan/10">
+              {{ icon(w.icon, "h-6 w-6 text-cyan") }}
+            </span>
+            <h3 class="mt-4 text-base font-semibold text-ink">{{ w.title }}</h3>
+            <p class="mt-2 text-sm text-muted">{{ w.desc }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ── 7. Партнёры ──────────────────────────────────────────────────────── #}
+  <section class="bg-surface">
+    <div class="container section">
+      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ A.partners.title }}</h2>
+      {{ partners(A.partners.items) }}
+    </div>
+  </section>
+
+  {# ── 8. Финальный CTA ─────────────────────────────────────────────────── #}
+  {{ ctaBand(A.finalCta.button, requestUrl, text=A.finalCta.subtitle, title=A.finalCta.title, tone="final") }}
+
+</main>
+
+{% include "partials/footer.njk" %}

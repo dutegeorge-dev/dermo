@@ -260,6 +260,16 @@
 }
 
 @layer utilities {
+  /* Скрытие нативного скроллбара у трека слайдера (свайп/прокрутка остаются).
+     Сам слайдер управляется стрелками — полоса прокрутки визуально лишняя. */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Уважение к prefers-reduced-motion: убираем сдвиги/анимации хедера. */
   @media (prefers-reduced-motion: reduce) {
     .mega-panel,

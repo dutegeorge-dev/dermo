@@ -9,6 +9,9 @@
 // Хедер: sticky, мега-меню, off-canvas, аккордеоны (см. ./header.ts).
 import "./header";
 
+// Слайдер-карусели (команда на странице «О компании») — см. ./slider.ts.
+import "./slider";
+
 // Типизация глобальных функций аналитики (могут отсутствовать в dev).
 declare global {
   interface Window {

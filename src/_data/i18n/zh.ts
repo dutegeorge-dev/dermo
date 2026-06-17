@@ -211,6 +211,8 @@ const zh: Dictionary = {
   // Заглушка: большой контент страницы «Логистика» пока берётся из ru —
   // ZH-страница физически не генерируется. Заменим на реальный перевод позже.
   logistika: ru.logistika,
+  // Заглушка: контент страницы «О компании» — из ru с префиксом [ZH].
+  oKompanii: stubBranch(ru.oKompanii, "[ZH] "),
 };
 
 export default zh;

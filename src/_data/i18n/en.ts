@@ -211,6 +211,8 @@ const en: Dictionary = {
   // Заглушка: большой контент страницы «Логистика» пока берётся из ru —
   // EN-страница физически не генерируется. Заменим на реальный перевод позже.
   logistika: ru.logistika,
+  // Заглушка: контент страницы «О компании» — из ru с префиксом [EN].
+  oKompanii: stubBranch(ru.oKompanii, "[EN] "),
 };
 
 export default en;

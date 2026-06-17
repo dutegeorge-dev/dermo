@@ -1,0 +1,23 @@
+{#
+  Сетка партнёров: лого-плейсхолдер + название + короткая подпись.
+  Параметр items — массив dict.oKompanii.partners.items (icon/name/desc).
+  Логотипы — плейсхолдеры (иконка), заменяются на реальные лого позже.
+#}
+{% from "partials/icon.njk" import icon %}
+
+{% macro partners(items) %}
+<div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+  {% for p in items %}
+    <div class="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-6">
+      {# Лого-плейсхолдер (заменяется реальным логотипом партнёра). #}
+      <span class="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-surface-alt" role="img" aria-label="Логотип «{{ p.name }}»">
+        {{ icon(p.icon, "h-7 w-7 text-cyan") }}
+      </span>
+      <div>
+        <p class="text-base font-semibold text-ink">{{ p.name }}</p>
+        <p class="mt-1 text-sm text-muted">{{ p.desc }}</p>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endmacro %}
