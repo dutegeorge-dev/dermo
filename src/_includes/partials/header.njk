@@ -150,13 +150,13 @@
             {{ icon("chevron-down", "accordion-caret h-5 w-5 text-cyan transition-transform duration-200") }}
           </button>
           <div data-accordion-panel class="hidden pb-3" hidden>
-            {# Крыло: Логистика — цветовой код «ультрамарин». #}
-            <a href="{{ megaMenu.logistics.gate.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center justify-between gap-3 rounded-lg border-l-4 border-l-brand bg-brand/5 px-3 py-2">
+            {# Крыло: Логистика — цветовой код «бирюза». #}
+            <a href="{{ megaMenu.logistics.gate.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center justify-between gap-3 rounded-lg border-l-4 border-l-cyan bg-cyan/5 px-3 py-2">
               <span>
-                <span class="block text-sm font-semibold uppercase tracking-wide text-brand">{{ megaMenu.logistics.gate.titleKey | t(locale) }}</span>
+                <span class="block text-sm font-semibold uppercase tracking-wide text-cyan-dark">{{ megaMenu.logistics.gate.titleKey | t(locale) }}</span>
                 <span class="mt-0.5 block text-xs text-muted">{{ megaMenu.logistics.gate.subtitleKey | t(locale) }}</span>
               </span>
-              {{ icon("arrow-right", "h-5 w-5 shrink-0 text-brand") }}
+              {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan") }}
             </a>
             <div class="mt-1 pl-2">
               {% for group in megaMenu.logistics.groups %}
@@ -193,7 +193,7 @@
               {% for service in megaMenu.trade.services %}
                 <li>
                   <a href="{{ service.url | localizedUrl(locale) }}" class="flex min-h-[44px] items-center gap-2 text-sm text-ink">
-                    {{ icon(service.icon, "h-4 w-4 shrink-0 text-cyan") }}
+                    {{ icon(service.icon, "h-4 w-4 shrink-0 text-accent-dark") }}
                     <span>{{ service.titleKey | t(locale) }}</span>
                   </a>
                 </li>

@@ -26,7 +26,7 @@ const home: HomeData = {
       descKey: "home.wings.logistics.desc",
       ctaKey: "home.wings.logistics.cta",
       url: "/logistika/",
-      tone: "brand",
+      tone: "cyan",
       teaserKeys: [
         "home.wings.logistics.t1",
         "home.wings.logistics.t2",
