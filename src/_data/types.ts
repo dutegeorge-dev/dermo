@@ -20,8 +20,12 @@ export interface VerificationConfig {
 export interface SiteConfig {
   /** Короткое название бренда. */
   name: string;
-  /** Юридическое наименование. */
+  /** Юридическое наименование (короткая форма). */
   legalName: string;
+  /** Полное юридическое наименование (для юридических документов). */
+  fullLegalName: string;
+  /** ФИО генерального директора (для юридических документов). */
+  director: string;
   /** Абсолютный базовый URL сайта без завершающего слеша. */
   url: string;
   /** Локаль для og:locale. */
@@ -48,7 +52,9 @@ export interface SiteConfig {
   telegram: string;
   /** E-mail для связи. */
   email: string;
-  /** Юридический адрес РФ (заглушка). */
+  /** E-mail для обращений по вопросам обработки персональных данных. */
+  privacyEmail: string;
+  /** Юридический адрес РФ. */
   address: string;
   /** Адрес офиса в Гуанчжоу (текст для блока контактов и карты). */
   addressCn: string;
@@ -56,9 +62,11 @@ export interface SiteConfig {
   workingHours: string;
   /** URL встраиваемой карты (виджет Яндекс.Карт) с меткой офиса в Гуанчжоу. */
   mapEmbedSrc: string;
-  /** ИНН (заглушка). */
+  /** ИНН. */
   inn: string;
-  /** ОГРН (заглушка). */
+  /** КПП. */
+  kpp: string;
+  /** ОГРН. */
   ogrn: string;
   analytics: AnalyticsConfig;
   verification: VerificationConfig;
@@ -823,6 +831,19 @@ export interface Dictionary {
     consentSuffix: string;
     /** Ошибка, если согласие не отмечено. */
     consentError: string;
+  };
+  /** Баннер согласия на использование cookies (глобальный). */
+  cookie: {
+    /** aria-label контейнера баннера. */
+    aria: string;
+    /** Текст до ссылки на политику. */
+    text: string;
+    /** Подпись ссылки на политику конфиденциальности. */
+    link: string;
+    /** Текст после ссылки (например, точка). */
+    suffix: string;
+    /** Подпись кнопки «Принять». */
+    accept: string;
   };
   /** Контент страницы «Логистика» (/logistika/). */
   logistika: Logistika;

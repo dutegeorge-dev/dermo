@@ -209,6 +209,7 @@ const zh: Dictionary = {
     telegram: "[ZH] Написать в Telegram",
   },
   forms: stubBranch(ru.forms, "[ZH] "),
+  cookie: stubBranch(ru.cookie, "[ZH] "),
   // Заглушка: большой контент страницы «Логистика» пока берётся из ru —
   // ZH-страница физически не генерируется. Заменим на реальный перевод позже.
   logistika: ru.logistika,

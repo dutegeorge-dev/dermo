@@ -12,6 +12,9 @@ import "./header";
 // Слайдер-карусели (команда на странице «О компании») — см. ./slider.ts.
 import "./slider";
 
+// Баннер согласия на cookies (глобальный) — см. ./cookie.ts.
+import "./cookie";
+
 // Типизация глобальных функций аналитики (могут отсутствовать в dev).
 declare global {
   interface Window {

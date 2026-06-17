@@ -1,0 +1,29 @@
+{#
+  Глобальный баннер согласия на cookies. Рендерится на всех страницах скрытым
+  (атрибут hidden); скрипт assets/ts/cookie.ts показывает его, если согласие
+  ещё не дано (localStorage/cookie), и прячет после нажатия «Принять».
+  Тексты — из словаря (dict.cookie). Не перекрывает навигацию: фиксирован снизу.
+#}
+{% set C = dict.cookie %}
+<div
+  data-cookie-banner
+  hidden
+  role="dialog"
+  aria-live="polite"
+  aria-label="{{ C.aria }}"
+  class="fixed inset-x-0 bottom-0 z-40 translate-y-full opacity-0 transition-all duration-300 ease-out motion-reduce:transition-none"
+>
+  <div class="container pb-4">
+    <div class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-lg sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <p class="text-sm leading-relaxed text-muted">
+        {{ C.text }}<a
+          href="{{ '/politika-konfidencialnosti/' | localizedUrl(locale) }}"
+          class="font-medium text-cyan-dark underline decoration-cyan/40 underline-offset-2 hover:decoration-cyan"
+        >{{ C.link }}</a>{{ C.suffix }}
+      </p>
+      <button type="button" data-cookie-accept class="btn-accent shrink-0">
+        {{ C.accept }}
+      </button>
+    </div>
+  </div>
+</div>
