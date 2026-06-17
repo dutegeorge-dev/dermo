@@ -8,9 +8,9 @@ import type { SiteConfig } from "./types.js";
  */
 const site: SiteConfig = {
   name: "ТЛК БАРС",
-  legalName: "ООО ТЛК «БАРС»",
+  legalName: "ООО ТЛК БАРС",
   fullLegalName:
-    "Общество с ограниченной ответственностью Торгово-логистическая компания «БАРС»",
+    "ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ ТОРГОВО-ЛОГИСТИЧЕСКАЯ КОМПАНИЯ БАРС",
   director: "Фотин Евгений Петрович",
   url: process.env.SITE_URL || "https://tlkbars.ru",
   locale: "ru_RU",
