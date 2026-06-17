@@ -71,7 +71,7 @@ const LABELS: Record<string, string> = {
   avia: "Доставка авиа",
   tovary: "Товары",
   uslugi: "Услуги",
-  "poisk-postavshchika": "Поиск производителя и поставщика",
+  "poisk-postavshchika": "Поиск поставщика",
   "audit-proizvodstva": "Аудит производства",
   peregovory: "Переговоры на китайском",
   "kontrol-proizvodstva": "Контроль производства",

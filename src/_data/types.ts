@@ -562,6 +562,47 @@ export interface UslugiPageText {
   subtitle: string;
 }
 
+/** Шаг процесса «Как мы это делаем»: короткий заголовок + пояснение. */
+export interface ServiceStep {
+  title: string;
+  text: string;
+}
+
+/** Пара «вопрос — ответ» FAQ страницы услуги (уже строки, не ключи). */
+export interface ServiceFaqItem {
+  q: string;
+  a: string;
+}
+
+/**
+ * Тексты страницы торговой услуги на читательском шаблоне (эталон —
+ * «Поиск поставщика»). Все строки финальные для RU; en/zh — заглушки.
+ * Структура страницы (иконки, URL, перелинковка) — в _data/services.ts.
+ */
+export interface ServicePageText {
+  /** <title> и meta description страницы. */
+  metaTitle: string;
+  metaDescription: string;
+  /** Hero: H1 под поисковый запрос + подзаголовок. */
+  hero: { title: string; subtitle: string };
+  /** Раздел 1 «Что это за услуга». */
+  chtoEto: { title: string; text: string };
+  /** Раздел 2 «Зачем это нужно». */
+  zachem: { title: string; text: string };
+  /** Раздел 3 «Как мы это делаем» — заголовок + нумерованные шаги. */
+  kakDelaem: { title: string; steps: ServiceStep[] };
+  /** Раздел 4 «Что вы получаете». */
+  chtoPoluchaete: { title: string; text: string };
+  /** Раздел 5 «Частые вопросы» — заголовок + пары вопрос/ответ. */
+  faqTitle: string;
+  faq: ServiceFaqItem[];
+  /** Перелинковка: заголовок блока «вместе заказывают» + ссылка «полный цикл». */
+  relatedTitle: string;
+  fullCycle: { label: string; text: string };
+  /** Финальный CTA. */
+  cta: { title: string; subtitle: string; button: string };
+}
+
 /**
  * Тексты раздела «Услуги» (три витрины + два списка). Каждая страница —
  * простой шаблон: H1 + подзаголовок + сетка карточек. RU — финальный, en/zh —
@@ -594,8 +635,47 @@ export interface UslugiDict {
       vat: string;
       factoryCheck: string;
     };
+    /** Эталонная страница торговой услуги «Поиск поставщика». */
+    poisk: ServicePageText;
   };
 }
+
+/** Карточка перелинковки «вместе заказывают»: иконка + название + URL. */
+export interface ServiceRelatedCard {
+  /** Имя иконки Lucide (см. partials/icon.njk). */
+  icon: string;
+  /** Ключ перевода названия (переиспользуем названия услуг). */
+  labelKey: string;
+  /** URL страницы услуги. */
+  url: string;
+}
+
+/**
+ * Структура страницы торговой услуги (иконки, URL, перелинковка). Тексты — в
+ * i18n-словаре (ветка uslugi.torgovlya.<slug>), резолвятся по i18nBase. Эталон —
+ * «Поиск поставщика»; по этому образцу добавляются остальные торговые услуги.
+ */
+export interface ServicePageConfig {
+  /** Слаг страницы (для отладки/ключей). */
+  slug: string;
+  /** Базовый ключ i18n-ветки услуги (для фильтра t и dump). */
+  i18nBase: string;
+  /** Иконка-плейсхолдер hero-фото (Lucide). */
+  heroIcon: string;
+  /** URL CTA «Оставить заявку» (hero и финальный CTA). */
+  requestUrl: string;
+  /** «Вместе с этим заказывают» — связанные услуги. */
+  related: ServiceRelatedCard[];
+  /** Ссылка «нужен полный цикл?» (на витрину направления). */
+  fullCycleUrl: string;
+  /** Связанная статья блога. Пусто → блок не выводится. */
+  articleUrl?: string;
+  /** Связанный кейс. Пусто → блок не выводится. */
+  caseUrl?: string;
+}
+
+/** Карта «слаг услуги → конфиг страницы» (глобальные данные `services`). */
+export type ServicesData = Record<string, ServicePageConfig>;
 
 /**
  * Общий интерфейс словаря переводов.

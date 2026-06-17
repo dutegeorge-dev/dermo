@@ -1,1 +1,103 @@
-{# uslugi/torgovlya/poisk-postavshchika — шаблон-заглушка услуги. Контент добавляется позже. #}
+---
+layout: layouts/reading.njk
+service: poisk-postavshchika
+titleKey: uslugi.torgovlya.poisk.metaTitle
+descriptionKey: uslugi.torgovlya.poisk.metaDescription
+showTitle: false
+---
+{#
+  Эталонная страница торговой услуги «Поиск поставщика»
+  (/uslugi/torgovlya/poisk-postavshchika/) на читательском шаблоне.
+
+  Каркас (reading.njk): хлебные крошки → hero (service-hero) → колонка контента
+  с правым sticky-оглавлением → перелинковка (service-related) → финальный CTA
+  (service-cta). Здесь — только 5 разделов контента (они формируют оглавление и
+  scroll-spy). Тексты — из i18n (ветка uslugi.torgovlya.poisk), берём через
+  локаль-резолвленный `dict`. Структура/ссылки — в _data/services.ts.
+
+  По образцу этой страницы делаются остальные торговые услуги.
+#}
+{% set P = dict.uslugi.torgovlya.poisk %}
+
+<section id="chto-eto" class="scroll-mt-28">
+  <h2>{{ P.chtoEto.title }}</h2>
+  <p>{{ P.chtoEto.text }}</p>
+</section>
+
+<section id="zachem" class="scroll-mt-28">
+  <h2>{{ P.zachem.title }}</h2>
+  <p>{{ P.zachem.text }}</p>
+</section>
+
+<section id="kak-delaem" class="scroll-mt-28">
+  <h2>{{ P.kakDelaem.title }}</h2>
+  <ol>
+    {% for step in P.kakDelaem.steps %}
+      <li><strong>{{ step.title }}.</strong> {{ step.text }}</li>
+    {% endfor %}
+  </ol>
+</section>
+
+<section id="chto-poluchaete" class="scroll-mt-28">
+  <h2>{{ P.chtoPoluchaete.title }}</h2>
+  <p>{{ P.chtoPoluchaete.text }}</p>
+</section>
+
+{# Раздел 5 — FAQ-аккордеон (внутри колонки, чтобы попасть в оглавление) +
+   микроразметка FAQPage. Аккордеон — общий (data-accordion-*, см. header.ts). #}
+<section id="faq" class="scroll-mt-28">
+  <h2>{{ P.faqTitle }}</h2>
+  <div class="mt-6 rounded-xl border border-slate-200 bg-white px-5 sm:px-6">
+    {% for item in P.faq %}
+      <div class="border-b border-slate-200 last:border-b-0">
+        <button
+          type="button"
+          data-accordion-toggle
+          class="flex w-full items-center justify-between gap-4 py-4 text-left text-base font-medium text-ink"
+          aria-expanded="false"
+          aria-controls="faq-panel-{{ loop.index }}"
+        >
+          <span>{{ item.q }}</span>
+          {% from "partials/icon.njk" import icon %}
+          {{ icon("chevron-down", "accordion-caret h-5 w-5 shrink-0 text-cyan transition-transform duration-200") }}
+        </button>
+        <div id="faq-panel-{{ loop.index }}" data-accordion-panel class="hidden pb-4" hidden>
+          <p class="text-sm leading-relaxed text-muted">{{ item.a }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# JSON-LD: FAQPage (частые вопросы) + Service (тип услуги для поисковиков). #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for item in P.faq %}
+    {
+      "@type": "Question",
+      "name": {{ item.q | dump | safe }},
+      "acceptedAnswer": { "@type": "Answer", "text": {{ item.a | dump | safe }} }
+    }{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": {{ P.hero.title | dump | safe }},
+  "serviceType": {{ P.hero.title | dump | safe }},
+  "description": {{ P.metaDescription | dump | safe }},
+  "url": {{ (site.url + page.url) | dump | safe }},
+  "areaServed": "RU",
+  "provider": {
+    "@type": "Organization",
+    "name": {{ site.legalName | dump | safe }},
+    "url": {{ site.url | dump | safe }}
+  }
+}
+</script>

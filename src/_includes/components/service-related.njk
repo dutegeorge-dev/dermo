@@ -1,0 +1,37 @@
+{#
+  Перелинковка страницы услуги (читательский шаблон). Опциональный продающий
+  модуль: «Вместе с этим заказывают» (карточки-ссылки на связанные услуги) +
+  «Нужен полный цикл?» (ссылка на витрину направления). Связанная статья и кейс
+  выводятся только если заданы в данных (svc.articleUrl / svc.caseUrl) — ссылок
+  на ненаписанное не ставим. Данные — глобальный `svc` (services.ts).
+#}
+{% from "partials/icon.njk" import icon %}
+{% from "components/link-card.njk" import linkCard %}
+
+<section class="container section">
+  <div class="container-narrow !px-0">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">
+      {{ (svc.i18nBase + ".relatedTitle") | t(locale) }}
+    </h2>
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
+      {% for item in svc.related %}
+        {{ linkCard(item.icon, (item.labelKey | t(locale)), item.url | localizedUrl(locale)) }}
+      {% endfor %}
+    </div>
+
+    {# «Нужен полный цикл?» — переход на витрину направления. #}
+    <a
+      href="{{ svc.fullCycleUrl | localizedUrl(locale) }}"
+      class="group mt-4 flex items-center gap-4 rounded-xl border border-cyan/40 bg-surface-alt p-5 transition-colors hover:border-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+    >
+      <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-cyan/10">
+        {{ icon("handshake", "h-6 w-6 text-cyan") }}
+      </span>
+      <span class="flex-1">
+        <span class="block text-base font-semibold text-ink">{{ (svc.i18nBase + ".fullCycle.label") | t(locale) }}</span>
+        <span class="mt-0.5 block text-sm text-muted">{{ (svc.i18nBase + ".fullCycle.text") | t(locale) }}</span>
+      </span>
+      {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan transition-transform group-hover:translate-x-1") }}
+    </a>
+  </div>
+</section>

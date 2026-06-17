@@ -18,23 +18,30 @@ layout: layouts/base.njk
   с заголовком h2 — этого достаточно, чтобы попасть в оглавление.
 
   Опциональные продающие модули (подключаются данными страницы, всё опц.):
+    service       — слаг услуги (services.ts): hero + перелинковка + финальный
+                    CTA торговой услуги (см. components/service-*.njk);
     heroInclude   — путь include с hero (напр. "components/hero.njk");
     relatedLinks  — [{ label, url, icon }] → блок перелинковки;
     relatedTitle  — заголовок блока перелинковки;
     faqItems      — [{ q, a }] → FAQ-аккордеон + FAQPage;
     faqTitle      — заголовок FAQ;
     ctaFinal      — true → финальная CTA-полоса (components/cta-final.njk).
+
+  FAQ страницы услуги — это раздел контента (section#faq внутри колонки), чтобы
+  попасть в оглавление; обрамление (hero/перелинковка/CTA) в оглавление не входит.
 #}
 {% from "components/faq.njk" import faq %}
 {% from "components/related.njk" import related %}
+{% if service %}{% set svc = services[service] %}{% endif %}
 
 {% include "partials/header.njk" %}
 
 <main class="flex-1">
-  {# Опциональный hero (форма расчёта и т.п.) — над контентом, во всю ширину. #}
-  {% if heroInclude %}{% include heroInclude %}{% endif %}
-
   {% include "partials/breadcrumbs.njk" %}
+
+  {# Hero над контентом, во всю ширину: услуга (по svc) или произвольный include. #}
+  {% if svc %}{% include "components/service-hero.njk" %}
+  {% elif heroInclude %}{% include heroInclude %}{% endif %}
 
   <div class="container section">
     <div data-reading class="lg:flex lg:items-start lg:gap-10 xl:gap-16">
@@ -88,10 +95,14 @@ layout: layouts/base.njk
     </div>
   </div>
 
-  {# ── Опциональные продающие модули ── #}
+  {# ── Опциональные продающие модули (обрамление, во всю ширину) ── #}
   {% if relatedLinks %}{{ related(relatedLinks, relatedTitle or "Читайте также") }}{% endif %}
   {% if faqItems %}{{ faq(faqItems, faqTitle or "Частые вопросы") }}{% endif %}
   {% if ctaFinal %}{% include "components/cta-final.njk" %}{% endif %}
+
+  {# Перелинковка и финальный CTA торговой услуги (по svc). #}
+  {% if svc %}{% include "components/service-related.njk" %}{% endif %}
+  {% if svc %}{% include "components/service-cta.njk" %}{% endif %}
 
   {# JSON-LD Article — для статей блога/кейсов (по флагу страницы). #}
   {% if ogType == "article" %}{% include "partials/schema-article.njk" %}{% endif %}

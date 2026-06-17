@@ -1,0 +1,23 @@
+{#
+  Финальный CTA страницы услуги (читательский шаблон). Контрастная
+  ультрамариновая полоса: заголовок + подстрока + янтарная кнопка «Оставить
+  заявку» (→ svc.requestUrl, /kontakty/). Данные — глобальный `svc`.
+#}
+{% from "partials/icon.njk" import icon %}
+
+<section id="zayavka" class="scroll-mt-28 bg-brand text-white">
+  <div class="container section text-center">
+    <h2 class="mx-auto max-w-2xl text-2xl font-semibold tracking-tight md:text-3xl">
+      {{ (svc.i18nBase + ".cta.title") | t(locale) }}
+    </h2>
+    <p class="mx-auto mt-3 max-w-2xl text-base text-white/85 md:text-lg">
+      {{ (svc.i18nBase + ".cta.subtitle") | t(locale) }}
+    </p>
+    <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+      <a href="{{ svc.requestUrl | localizedUrl(locale) }}" class="btn-accent px-6 py-3 text-base">
+        {{ (svc.i18nBase + ".cta.button") | t(locale) }}
+        {{ icon("arrow-right", "ml-1.5 h-5 w-5") }}
+      </a>
+    </div>
+  </div>
+</section>
