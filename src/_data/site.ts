@@ -8,7 +8,10 @@ import type { SiteConfig } from "./types.js";
  */
 const site: SiteConfig = {
   name: "ТЛК БАРС",
-  legalName: "ООО «ТЛК БАРС»",
+  legalName: "ООО ТЛК «БАРС»",
+  fullLegalName:
+    "Общество с ограниченной ответственностью Торгово-логистическая компания «БАРС»",
+  director: "Фотин Евгений Петрович",
   url: process.env.SITE_URL || "https://tlkbars.ru",
   locale: "ru_RU",
   lang: "ru",
@@ -23,14 +26,17 @@ const site: SiteConfig = {
   calculateUrl: "/kontakty/#raschet",
   telegram: "https://t.me/tlkbars",
   email: "info@tlkbars.ru",
-  address: "Россия, г. Москва (адрес уточняется)",
+  privacyEmail: "barslogistics@yandex.com",
+  address:
+    "143408, Московская область, г.о. Красногорск, г. Красногорск, б-р Космонавтов, д. 7, кв. 189",
   addressCn: "Китай, г. Гуанчжоу (адрес офиса уточняется)",
   workingHours:
     "Отвечаем в течение рабочего дня. Команда работает по китайскому времени (UTC+8) — это +5 часов к Москве.",
   mapEmbedSrc:
     "https://yandex.ru/map-widget/v1/?ll=113.264385%2C23.129163&z=11&mode=search&text=%D0%93%D1%83%D0%B0%D0%BD%D1%87%D0%B6%D0%BE%D1%83",
-  inn: "0000000000",
-  ogrn: "0000000000000",
+  inn: "5024256988",
+  kpp: "502401001",
+  ogrn: "1255000095778",
   analytics: {
     yandexMetrika: process.env.YM_COUNTER_ID || "",
     ga4: process.env.GA4_ID || "",

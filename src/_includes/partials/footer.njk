@@ -36,8 +36,11 @@
   </div>
 
   <div class="border-t border-gray-200">
-    <div class="container py-4 text-center text-xs text-gray-500">
-      © {{ site.legalName }}. Все права защищены.
+    <div class="container flex flex-col items-center justify-between gap-2 py-4 text-center text-xs text-gray-500 sm:flex-row">
+      <span>© {{ site.legalName }}. Все права защищены.</span>
+      <a href="{{ '/politika-konfidencialnosti/' | localizedUrl(locale) }}" class="hover:text-brand">
+        Политика конфиденциальности
+      </a>
     </div>
   </div>
 </footer>

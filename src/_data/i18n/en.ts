@@ -209,6 +209,7 @@ const en: Dictionary = {
     telegram: "[EN] Написать в Telegram",
   },
   forms: stubBranch(ru.forms, "[EN] "),
+  cookie: stubBranch(ru.cookie, "[EN] "),
   // Заглушка: большой контент страницы «Логистика» пока берётся из ru —
   // EN-страница физически не генерируется. Заменим на реальный перевод позже.
   logistika: ru.logistika,
