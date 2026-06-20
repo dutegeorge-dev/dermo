@@ -12,7 +12,7 @@ const TRADE_MENU_SLUGS = [
   "poisk-postavshchika",
   "vykup-tovara",
   "proverka-zavoda",
-  "audit-proizvodstva",
+  "vozvrat-nds",
   "kontrol-proizvodstva",
   "inspekciya",
   "peregovory",
