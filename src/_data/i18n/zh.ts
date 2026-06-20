@@ -52,6 +52,7 @@ const zh: Dictionary = {
     byMethod: "[ZH] По способу",
     byGoods: "[ZH] По товару",
     byCity: "[ZH] По городу",
+    allServices: "[ZH] Посмотреть все услуги",
   },
   method: {
     avto: "[ZH] Авто",

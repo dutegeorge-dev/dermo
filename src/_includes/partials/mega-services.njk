@@ -71,7 +71,9 @@
       </div>
 
       {# ── Правое крыло: ТОРГОВЛЯ ──────────────────────────────────── #}
-      <div>
+      {# flex-col + h-full: крыло растягивается на высоту строки сетки (=высота
+         «Логистики»), кнопка «все услуги» прижимается к низу (mt-auto). #}
+      <div class="flex h-full flex-col">
         <a
           href="{{ megaMenu.trade.gate.url | localizedUrl(locale) }}"
           class="group/gate flex items-start justify-between gap-4 rounded-xl border-l-4 border-l-accent bg-accent/5 p-4 ring-1 ring-transparent transition hover:bg-white hover:ring-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -96,6 +98,18 @@
             </li>
           {% endfor %}
         </ul>
+
+        {# Кнопка на витрину со всеми услугами — прижата к низу крыла (mt-auto),
+           но не ближе pt-6 к списку, когда крыло не растянуто. #}
+        <div class="mt-auto pt-6">
+          <a
+            href="{{ megaMenu.trade.allUrl | localizedUrl(locale) }}"
+            class="group/all flex items-center justify-center gap-1.5 rounded-lg border border-accent/40 bg-accent/5 px-4 py-2.5 text-sm font-medium text-accent-dark transition-colors hover:bg-accent hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {{ "mega.allServices" | t(locale) }}
+            {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover/all:translate-x-1") }}
+          </a>
+        </div>
       </div>
 
     </div>

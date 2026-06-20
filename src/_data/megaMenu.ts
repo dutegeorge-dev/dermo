@@ -1,4 +1,29 @@
-import type { MegaMenu } from "./types.js";
+import type { MegaMenu, MegaLink } from "./types.js";
+import uslugi from "./uslugi.js";
+
+/**
+ * Названия/иконки/URL торговых услуг — единый источник в _data/uslugi.ts
+ * (torgovlyaServices, те же 10, что на витрине /uslugi/torgovlya/). В меню
+ * показываем 7 ключевых услуг в порядке логики процесса; остальные доступны
+ * по кнопке «Посмотреть все услуги». Так названия в меню, на витрине, в
+ * хлебных крошках и перелинковке не расходятся.
+ */
+const TRADE_MENU_SLUGS = [
+  "poisk-postavshchika",
+  "vykup-tovara",
+  "proverka-zavoda",
+  "audit-proizvodstva",
+  "kontrol-proizvodstva",
+  "inspekciya",
+  "peregovory",
+];
+
+const bySlug = new Map(uslugi.torgovlyaServices.map((s) => [s.slug, s]));
+const tradeServices: MegaLink[] = TRADE_MENU_SLUGS.flatMap((slug) => {
+  const s = bySlug.get(slug);
+  return s ? [{ titleKey: s.nameKey, url: s.url, icon: s.icon }] : [];
+});
+
 
 /**
  * Данные мега-меню «Услуги». Рендерится из этой структуры (partials/mega-services.njk),
@@ -57,14 +82,9 @@ const megaMenu: MegaMenu = {
       subtitleKey: "mega.trade.subtitle",
       url: "/torgovlya/",
     },
-    // Ссылки ведут на отдельные страницы услуг под /uslugi/torgovlya/.
-    services: [
-      { titleKey: "trade.search", url: "/uslugi/torgovlya/poisk-postavshchika/", icon: "search" },
-      { titleKey: "trade.purchase", url: "/uslugi/torgovlya/vykup-tovara/", icon: "package" },
-      { titleKey: "trade.inspection", url: "/uslugi/torgovlya/inspekciya/", icon: "badge-check" },
-      { titleKey: "trade.quality", url: "/uslugi/torgovlya/kontrol-proizvodstva/", icon: "factory" },
-      { titleKey: "trade.samples", url: "/uslugi/torgovlya/peregovory/", icon: "clipboard-list" },
-    ],
+    // Список услуг и кнопка «все услуги» — из канонического источника (см. выше).
+    services: tradeServices,
+    allUrl: uslugi.torgovlyaUrl,
   },
 };
 

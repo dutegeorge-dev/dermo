@@ -52,6 +52,7 @@ const en: Dictionary = {
     byMethod: "[EN] По способу",
     byGoods: "[EN] По товару",
     byCity: "[EN] По городу",
+    allServices: "[EN] Посмотреть все услуги",
   },
   method: {
     avto: "[EN] Авто",

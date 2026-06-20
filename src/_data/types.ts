@@ -126,6 +126,8 @@ export interface MegaMenu {
   trade: {
     gate: MegaGate;
     services: MegaLink[];
+    /** URL витрины «все услуги торговли» (кнопка под списком). */
+    allUrl: string;
   };
 }
 
@@ -755,6 +757,7 @@ export interface Dictionary {
     byMethod: string;
     byGoods: string;
     byCity: string;
+    allServices: string;
   };
   method: {
     avto: string;

@@ -198,6 +198,12 @@
                   </a>
                 </li>
               {% endfor %}
+              <li>
+                <a href="{{ megaMenu.trade.allUrl | localizedUrl(locale) }}" class="flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-accent-dark">
+                  {{ "mega.allServices" | t(locale) }}
+                  {{ icon("arrow-right", "h-4 w-4 shrink-0") }}
+                </a>
+              </li>
             </ul>
           </div>
         </li>
