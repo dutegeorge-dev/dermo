@@ -18,6 +18,8 @@
     "watch:js": "npm run build:js -- --watch",
     "watch:11ty": "node --import tsx ./node_modules/@11ty/eleventy/cmd.cjs --config=eleventy.config.ts --serve",
     "dev": "npm run build:css && npm run build:js && concurrently --kill-others-on-fail \"npm:watch:css\" \"npm:watch:js\" \"npm:watch:11ty\"",
+    "preview": "npm run build && npx http-server _site -p 8080 -c-1",
+    "preview:fast": "npm run clean && npm run build:css && npm run build:js && npm run build:11ty && npx http-server _site -p 8080 -c-1",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
