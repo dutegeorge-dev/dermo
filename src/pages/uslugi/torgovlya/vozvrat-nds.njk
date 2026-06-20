@@ -1,1 +1,132 @@
-{# uslugi/torgovlya/vozvrat-nds — шаблон-заглушка услуги. Контент добавляется позже. #}
+---
+layout: layouts/reading.njk
+service: vozvrat-nds
+titleKey: uslugi.torgovlya.vozvrat.metaTitle
+descriptionKey: uslugi.torgovlya.vozvrat.metaDescription
+showTitle: false
+---
+{#
+  Страница торговой услуги «Возврат экспортного НДС»
+  (/uslugi/torgovlya/vozvrat-nds/) на читательском шаблоне. Порядок разделов:
+  что это → в чём отличие → как работает → важные оговорки → что получаете → FAQ.
+  Тексты — i18n (uslugi.torgovlya.vozvrat), структура/ссылки — _data/services.ts.
+#}
+{% from "components/photo-placeholder.njk" import photoPlaceholder %}
+{% set P = dict.uslugi.torgovlya.vozvrat %}
+
+{# Раздел 1 — Что это за услуга. #}
+<section id="chto-eto" class="scroll-mt-28">
+  <h2>{{ P.chtoEto.title }}</h2>
+  {% for para in P.chtoEto.paragraphs %}
+    <p>{{ para }}</p>
+  {% endfor %}
+</section>
+
+{# Раздел 2 — В чём наше отличие (минусы конкурентов + наши плюсы + вывод). #}
+<section id="otlichie" class="scroll-mt-28">
+  <h2>{{ P.otlichie.title }}</h2>
+  <p>{{ P.otlichie.intro }}</p>
+  <ul>
+    {% for p in P.otlichie.theirPains %}
+      <li><strong>{{ p.lead }}</strong> {{ p.text }}</li>
+    {% endfor %}
+  </ul>
+  <p>{{ P.otlichie.oursIntro }}</p>
+  <ul>
+    {% for p in P.otlichie.oursPoints %}
+      <li><strong>{{ p.lead }}</strong> {{ p.text }}</li>
+    {% endfor %}
+  </ul>
+  <p class="reading-takeaway">{{ P.otlichie.closing }}</p>
+</section>
+
+{# Раздел 3 — Как это работает (4 шага + фото). #}
+<section id="kak-delaem" class="scroll-mt-28">
+  <h2>{{ P.kakDelaem.title }}</h2>
+  <ol>
+    {% for step in P.kakDelaem.steps %}
+      <li><strong>{{ step.title }}.</strong> {{ step.text }}</li>
+    {% endfor %}
+  </ol>
+  {% if P.kakDelaem.photoCaption %}{{ photoPlaceholder(P.kakDelaem.photoCaption, "light") }}{% endif %}
+</section>
+
+{# Раздел 4 — Важные оговорки (сроки, возможный отказ + вывод-акцент). #}
+<section id="ogovorki" class="scroll-mt-28">
+  <h2>{{ P.ogovorki.title }}</h2>
+  <p>{{ P.ogovorki.intro }}</p>
+  <ul>
+    {% for p in P.ogovorki.points %}
+      <li><strong>{{ p.lead }}</strong> {{ p.text }}</li>
+    {% endfor %}
+  </ul>
+  <p class="reading-takeaway">{{ P.ogovorki.closing }}</p>
+</section>
+
+{# Раздел 5 — Что вы получаете. #}
+<section id="chto-poluchaete" class="scroll-mt-28">
+  <h2>{{ P.chtoPoluchaete.title }}</h2>
+  <ul>
+    {% for item in P.chtoPoluchaete.items %}
+      <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+</section>
+
+{# Раздел 6 — FAQ-аккордеон (внутри колонки, в оглавление) + FAQPage. #}
+<section id="faq" class="scroll-mt-28">
+  <h2>{{ P.faqTitle }}</h2>
+  <div class="mt-6 rounded-xl border border-slate-200 bg-white px-5 sm:px-6">
+    {% for item in P.faq %}
+      <div class="border-b border-slate-200 last:border-b-0">
+        <button
+          type="button"
+          data-accordion-toggle
+          class="flex w-full items-center justify-between gap-4 py-4 text-left text-base font-medium text-ink"
+          aria-expanded="false"
+          aria-controls="faq-panel-{{ loop.index }}"
+        >
+          <span>{{ item.q }}</span>
+          {% from "partials/icon.njk" import icon %}
+          {{ icon("chevron-down", "accordion-caret h-5 w-5 shrink-0 text-cyan transition-transform duration-200") }}
+        </button>
+        <div id="faq-panel-{{ loop.index }}" data-accordion-panel class="hidden pb-4" hidden>
+          <p class="text-sm leading-relaxed text-muted">{{ item.a }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# JSON-LD: FAQPage + Service. #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for item in P.faq %}
+    {
+      "@type": "Question",
+      "name": {{ item.q | dump | safe }},
+      "acceptedAnswer": { "@type": "Answer", "text": {{ item.a | dump | safe }} }
+    }{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": {{ P.hero.title | dump | safe }},
+  "serviceType": {{ P.hero.title | dump | safe }},
+  "description": {{ P.metaDescription | dump | safe }},
+  "url": {{ (site.url + page.url) | dump | safe }},
+  "areaServed": "RU",
+  "provider": {
+    "@type": "Organization",
+    "name": {{ site.legalName | dump | safe }},
+    "url": {{ site.url | dump | safe }}
+  }
+}
+</script>

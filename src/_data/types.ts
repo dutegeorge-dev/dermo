@@ -635,11 +635,23 @@ export interface ServicePageText {
   hero: { title: string; subtitle: string; photoCaption: string };
   /** Раздел 1 «Что это за услуга»: абзацы. */
   chtoEto: { title: string; paragraphs: string[] };
-  /** Раздел 2 «Зачем это нужно»: интро + боли + вывод. */
-  zachem: {
+  /** Раздел «Зачем это нужно»: интро + боли + вывод (опц. — есть не у всех). */
+  zachem?: {
     title: string;
     intro: string;
     pains: ServicePainPoint[];
+    closing: string;
+  };
+  /** Раздел «В чём наше отличие»: боли конкурентов + наши преимущества + вывод. */
+  otlichie?: {
+    title: string;
+    intro: string;
+    /** Что делают конкуренты (минусы). */
+    theirPains: ServicePainPoint[];
+    /** Подводка к нашим преимуществам («Мы делаем наоборот:»). */
+    oursIntro: string;
+    /** Наши преимущества. */
+    oursPoints: ServicePainPoint[];
     closing: string;
   };
   /** Раздел «Кому подходит» — опционален (есть не у каждой услуги). */
@@ -656,6 +668,13 @@ export interface ServicePageText {
   };
   /** Раздел-сравнение «Сам/Агент/БАРС» — опционален. */
   sravnenie?: ServiceComparison;
+  /** Раздел «Важные оговорки»: интро + пункты + вывод (опц.). */
+  ogovorki?: {
+    title: string;
+    intro: string;
+    points: ServicePainPoint[];
+    closing: string;
+  };
   /** Раздел «Что вы получаете»: пункты + вывод. */
   chtoPoluchaete: {
     title: string;
@@ -714,6 +733,8 @@ export interface UslugiDict {
     vykup: ServicePageText;
     /** Страница торговой услуги «Проверка завода». */
     proverka: ServicePageText;
+    /** Страница торговой услуги «Возврат экспортного НДС». */
+    vozvrat: ServicePageText;
   };
 }
 

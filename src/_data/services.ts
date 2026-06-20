@@ -41,6 +41,18 @@ const services: ServicesData = {
     fullCycleUrl: "/torgovlya/",
     // Кейса/статьи пока нет → соответствующие блоки скрыты.
   },
+  "vozvrat-nds": {
+    slug: "vozvrat-nds",
+    i18nBase: "uslugi.torgovlya.vozvrat",
+    heroIcon: "receipt",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "landmark", labelKey: "uslugi.torgovlya.services.buyout", url: `${BASE}/vykup-tovara/` },
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+    // Кейса/статьи пока нет → соответствующие блоки скрыты.
+  },
   "proverka-zavoda": {
     slug: "proverka-zavoda",
     i18nBase: "uslugi.torgovlya.proverka",
