@@ -10,7 +10,9 @@
     <div class="grid gap-8 p-8 lg:grid-cols-[1.7fr_minmax(0,1fr)]">
 
       {# ── Левое крыло: ЛОГИСТИКА ─────────────────────────────────── #}
-      <div class="lg:border-r lg:border-slate-200 lg:pr-8">
+      {# flex-col + h-full: крыло на высоту строки сетки, кнопка «все услуги» —
+         к низу (mt-auto), как у «Торговли». #}
+      <div class="flex h-full flex-col lg:border-r lg:border-slate-200 lg:pr-8">
         {# Кликабельные «ворота» — вход на экспертную страницу. #}
         <a
           href="{{ megaMenu.logistics.gate.url | localizedUrl(locale) }}"
@@ -23,12 +25,12 @@
           {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan transition-transform group-hover/gate:translate-x-1") }}
         </a>
 
-        {# Три подгруппы с кликабельными подзаголовками-хабами.
-           Колонка 1 — «По способу»; колонка 2 — «По товару», под ним «По городу».
-           Распределение по колонкам — через loop.first (рендер группы идентичен). #}
+        {# Подгруппы в двух колонках. Колонка 1 — «По способу» + «Услуги
+           логистики»; колонка 2 — «По товару» + «По городу». Распределение —
+           по полю group.column (рендер группы идентичен). #}
         <div class="mt-6 grid gap-x-8 gap-y-6 sm:grid-cols-2">
-          <div>
-            {% for group in megaMenu.logistics.groups %}{% if loop.first %}
+          <div class="space-y-6">
+            {% for group in megaMenu.logistics.groups %}{% if group.column == 1 %}
               <div>
                 <a href="{{ group.url | localizedUrl(locale) }}" class="inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-cyan focus-visible:outline-none focus-visible:text-cyan">
                   {{ group.titleKey | t(locale) }}
@@ -48,7 +50,7 @@
             {% endif %}{% endfor %}
           </div>
           <div class="space-y-6">
-            {% for group in megaMenu.logistics.groups %}{% if not loop.first %}
+            {% for group in megaMenu.logistics.groups %}{% if group.column != 1 %}
               <div>
                 <a href="{{ group.url | localizedUrl(locale) }}" class="inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-cyan focus-visible:outline-none focus-visible:text-cyan">
                   {{ group.titleKey | t(locale) }}
@@ -67,6 +69,17 @@
               </div>
             {% endif %}{% endfor %}
           </div>
+        </div>
+
+        {# Кнопка на витрину со всеми услугами доставки — внизу крыла. #}
+        <div class="mt-auto pt-6">
+          <a
+            href="{{ megaMenu.logistics.allUrl | localizedUrl(locale) }}"
+            class="group/all flex items-center justify-center gap-1.5 rounded-lg border border-cyan/40 bg-cyan/5 px-4 py-2.5 text-sm font-medium text-cyan-dark transition-colors hover:bg-cyan hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+          >
+            {{ "mega.allServices" | t(locale) }}
+            {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover/all:translate-x-1") }}
+          </a>
         </div>
       </div>
 

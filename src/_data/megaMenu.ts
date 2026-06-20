@@ -43,6 +43,7 @@ const megaMenu: MegaMenu = {
       {
         titleKey: "mega.byMethod",
         url: "/uslugi/dostavka/sposoby/",
+        column: 1,
         items: [
           { titleKey: "method.avto", url: "/uslugi/dostavka/sposoby/avto/", icon: "truck" },
           { titleKey: "method.zhd", url: "/uslugi/dostavka/sposoby/zhd/", icon: "train-front" },
@@ -51,8 +52,22 @@ const megaMenu: MegaMenu = {
         ],
       },
       {
+        // Доп. услуги логистики — под «По способу» (та же колонка 1), заполняют
+        // пустоту слева и усиливают перелинковку/SEO. Сертификация — общая
+        // страница (ведёт в раздел торговли, без дубля).
+        titleKey: "logiExtra.groupTitle",
+        url: "/uslugi/dostavka/",
+        column: 1,
+        items: [
+          { titleKey: "logiExtra.customs", url: "/uslugi/dostavka/tamozhennoe-oformlenie/", icon: "file-text" },
+          { titleKey: "logiExtra.certification", url: "/uslugi/torgovlya/sertifikaciya/", icon: "badge-check" },
+          { titleKey: "logiExtra.consolidation", url: "/uslugi/dostavka/sbornye-gruzy/", icon: "package" },
+        ],
+      },
+      {
         titleKey: "mega.byGoods",
         url: "/uslugi/dostavka/tovary/",
+        column: 2,
         items: [
           { titleKey: "goods.flooring", url: "/uslugi/dostavka/tovary/napolnye-pokrytiya/" },
           { titleKey: "goods.building", url: "/uslugi/dostavka/tovary/stroymaterialy/" },
@@ -66,6 +81,7 @@ const megaMenu: MegaMenu = {
       {
         titleKey: "mega.byCity",
         url: "/uslugi/dostavka/goroda/",
+        column: 2,
         items: [
           { titleKey: "city.moscow", url: "/uslugi/dostavka/goroda/moskva/" },
           { titleKey: "city.spb", url: "/uslugi/dostavka/goroda/sankt-peterburg/" },
@@ -75,6 +91,7 @@ const megaMenu: MegaMenu = {
         ],
       },
     ],
+    allUrl: uslugi.dostavkaUrl,
   },
   trade: {
     gate: {

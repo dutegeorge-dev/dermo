@@ -38,6 +38,12 @@ const ru: Dictionary = {
     more: "Море",
     avia: "Авиа",
   },
+  logiExtra: {
+    groupTitle: "Услуги логистики",
+    customs: "Таможенное оформление",
+    certification: "Сертификация ТР ЕАЭС",
+    consolidation: "Сборные грузы",
+  },
   goods: {
     flooring: "Напольные покрытия",
     building: "Стройматериалы",

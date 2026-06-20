@@ -103,6 +103,8 @@ export interface MegaGroup {
   url: string;
   /** Ссылки внутри группы. */
   items: MegaLink[];
+  /** Колонка раскладки левого крыла (1 — левая, 2 — правая). По умолчанию 2. */
+  column?: number;
 }
 
 /** Кликабельные «ворота» крыла — вход на экспертную страницу. */
@@ -121,6 +123,8 @@ export interface MegaMenu {
   logistics: {
     gate: MegaGate;
     groups: MegaGroup[];
+    /** URL витрины «все услуги доставки» (кнопка под группами). */
+    allUrl: string;
   };
   /** Правое крыло — Торговля (список услуг). */
   trade: {
@@ -764,6 +768,13 @@ export interface Dictionary {
     zhd: string;
     more: string;
     avia: string;
+  };
+  /** Доп. услуги логистики (группа мега-меню под «По способу»). */
+  logiExtra: {
+    groupTitle: string;
+    customs: string;
+    certification: string;
+    consolidation: string;
   };
   goods: {
     flooring: string;

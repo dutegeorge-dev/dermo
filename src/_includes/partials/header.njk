@@ -180,6 +180,10 @@
                   </div>
                 </div>
               {% endfor %}
+              <a href="{{ megaMenu.logistics.allUrl | localizedUrl(locale) }}" class="flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-cyan-dark">
+                {{ "mega.allServices" | t(locale) }}
+                {{ icon("arrow-right", "h-4 w-4 shrink-0") }}
+              </a>
             </div>
             {# Крыло: Торговля — цветовой код «оранжевый». #}
             <a href="{{ megaMenu.trade.gate.url | localizedUrl(locale) }}" class="mt-2 flex min-h-[44px] items-center justify-between gap-3 rounded-lg border-l-4 border-l-accent bg-accent/5 px-3 py-2">

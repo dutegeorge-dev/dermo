@@ -65,6 +65,8 @@ const LABELS: Record<string, string> = {
   spasibo: "Заявка принята",
   dostavka: "Доставка",
   sposoby: "Способы",
+  "tamozhennoe-oformlenie": "Таможенное оформление",
+  "sbornye-gruzy": "Сборные грузы",
   avto: "Доставка автотранспортом",
   zhd: "Доставка ЖД",
   more: "Доставка морем",

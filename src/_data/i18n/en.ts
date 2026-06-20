@@ -60,6 +60,7 @@ const en: Dictionary = {
     more: "[EN] Море",
     avia: "[EN] Авиа",
   },
+  logiExtra: stubBranch(ru.logiExtra, "[EN] "),
   goods: {
     flooring: "[EN] Напольные покрытия",
     building: "[EN] Стройматериалы",
