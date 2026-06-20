@@ -72,9 +72,7 @@ showTitle: false
       </li>
     {% endfor %}
   </ol>
-  {% if P.kakDelaem.photoCaption %}{{ photoPlaceholder(P.kakDelaem.photoCaption, "light") }}{% endif %}
-
-  {# Связанный кейс — ссылкой по смыслу в конце раздела (живой пример поиска). #}
+  {# Связанный кейс — ссылкой по смыслу (живой пример поиска), перед фото. #}
   {% if svc.caseUrl and P.caseLink %}
     <p class="mt-6">
       <a
@@ -86,6 +84,8 @@ showTitle: false
       </a>
     </p>
   {% endif %}
+
+  {% if P.kakDelaem.photoCaption %}{{ photoPlaceholder(P.kakDelaem.photoCaption, "light") }}{% endif %}
 </section>
 
 {# Раздел 5 — Сравнение «Сам / Агент / БАРС» (опц., визуальная таблица). #}

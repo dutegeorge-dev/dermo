@@ -243,10 +243,10 @@
     @apply max-w-prose;
   }
   /* Завершающий вывод после списка/болей: отделён увеличенным отступом сверху и
-     выделен (бирюзовая полоса + насыщенный текст) — читается как самостоятельный
-     вывод, а не хвост списка. Паттерн читательского шаблона: .reading-takeaway. */
+     выделен как самостоятельный вывод (а не хвост списка). Паттерн читательского
+     шаблона: .reading-takeaway — заметный отступ + бирюзовый акцент-врезка. */
   .prose-reading .reading-takeaway {
-    @apply mt-6 border-l-2 border-cyan pl-4 font-medium text-ink;
+    @apply mt-8 rounded-r-lg border-l-4 border-cyan bg-surface-alt px-5 py-4 font-medium text-ink;
   }
 
   /* --- Хедер: utility-полоса (ярус 1) сворачивается при скролле вниз --- */
