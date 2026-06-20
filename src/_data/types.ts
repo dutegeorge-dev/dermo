@@ -735,6 +735,8 @@ export interface UslugiDict {
     proverka: ServicePageText;
     /** Страница торговой услуги «Возврат экспортного НДС». */
     vozvrat: ServicePageText;
+    /** Страница торговой услуги «Контроль производства». */
+    kontrol: ServicePageText;
   };
 }
 

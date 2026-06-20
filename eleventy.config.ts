@@ -99,6 +99,7 @@ const LABELS: Record<string, string> = {
   kazan: "Казань",
   kejsy: "Кейсы",
   "poisk-postavshchika-gazon": "Поиск поставщика искусственного газона",
+  "kontrol-proizvodstva-7000": "Контроль производства: предотвращённый убыток $7000",
   blog: "Блог",
   r: "Акция",
   "belaya-dostavka": "Белая доставка",

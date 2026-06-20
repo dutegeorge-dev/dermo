@@ -53,6 +53,19 @@ const services: ServicesData = {
     fullCycleUrl: "/torgovlya/",
     // Кейса/статьи пока нет → соответствующие блоки скрыты.
   },
+  "kontrol-proizvodstva": {
+    slug: "kontrol-proizvodstva",
+    i18nBase: "uslugi.torgovlya.kontrol",
+    heroIcon: "camera",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
+      { icon: "scan-search", labelKey: "uslugi.torgovlya.services.inspection", url: `${BASE}/inspekciya/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+    // Кейс −$7000 — ссылкой внутри раздела «Как контролируем» (см. страницу).
+    caseUrl: "/kejsy/kontrol-proizvodstva-7000/",
+  },
   "proverka-zavoda": {
     slug: "proverka-zavoda",
     i18nBase: "uslugi.torgovlya.proverka",
