@@ -20,6 +20,7 @@ const uslugi: UslugiData = {
   sposobyUrl: `${DELIVERY}/sposoby/`,
   tovaryUrl: `${DELIVERY}/tovary/`,
   gorodaUrl: `${DELIVERY}/goroda/`,
+  dopUslugiUrl: `${DELIVERY}/dop-uslugi/`,
   torgovlyaUrl: `${BASE}/torgovlya/`,
 
   // По способу — простые карточки (иконка + название).
@@ -48,6 +49,14 @@ const uslugi: UslugiData = {
     { slug: "ekaterinburg", nameKey: "city.ekb", icon: "map-pin", url: `${DELIVERY}/goroda/ekaterinburg/` },
     { slug: "novosibirsk", nameKey: "city.nsk", icon: "map-pin", url: `${DELIVERY}/goroda/novosibirsk/` },
     { slug: "kazan", nameKey: "city.kazan", icon: "map-pin", url: `${DELIVERY}/goroda/kazan/` },
+  ],
+
+  // Дополнительные услуги логистики — отдельный хаб /uslugi/dostavka/dop-uslugi/.
+  // Сертификация ведёт на существующую страницу торговли (без дубля).
+  dopUslugi: [
+    { slug: "tamozhennoe-oformlenie", icon: "file-text", nameKey: "logiExtra.customs", url: `${DELIVERY}/tamozhennoe-oformlenie/` },
+    { slug: "sertifikaciya", icon: "badge-check", nameKey: "logiExtra.certification", url: `${BASE}/torgovlya/sertifikaciya/` },
+    { slug: "sbornye-gruzy", icon: "package", nameKey: "logiExtra.consolidation", url: `${DELIVERY}/sbornye-gruzy/` },
   ],
 
   // Торговые услуги (10) — простые карточки витрины /uslugi/torgovlya/.

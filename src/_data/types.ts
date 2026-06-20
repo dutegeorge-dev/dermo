@@ -107,6 +107,8 @@ export interface MegaGroup {
   column?: number;
   /** Выводить пункты группы в одну колонку (по умолчанию — в две). */
   singleCol?: boolean;
+  /** Прижать группу к низу колонки (выравнивание нижнего края крыла). */
+  pinBottom?: boolean;
 }
 
 /** Кликабельные «ворота» крыла — вход на экспертную страницу. */
@@ -330,6 +332,8 @@ export interface UslugiData {
   tovaryUrl: string;
   /** URL списка городов. */
   gorodaUrl: string;
+  /** URL хаба дополнительных услуг логистики. */
+  dopUslugiUrl: string;
   /** URL витрины торговли. */
   torgovlyaUrl: string;
   /** Способы доставки (4). */
@@ -338,6 +342,8 @@ export interface UslugiData {
   tovary: UslugiEntry[];
   /** Города. */
   goroda: UslugiEntry[];
+  /** Дополнительные услуги логистики (хаб dop-uslugi). */
+  dopUslugi: UslugiEntry[];
   /** Торговые услуги (10). */
   torgovlyaServices: UslugiEntry[];
 }
@@ -682,6 +688,8 @@ export interface UslugiDict {
   tovaryList: UslugiPageText;
   /** Список городов /uslugi/dostavka/goroda/. */
   gorodaList: UslugiPageText;
+  /** Хаб дополнительных услуг /uslugi/dostavka/dop-uslugi/. */
+  dopUslugiList: UslugiPageText;
   /** Витрина торговли /uslugi/torgovlya/ + названия 10 услуг. */
   torgovlya: UslugiPageText & {
     services: {

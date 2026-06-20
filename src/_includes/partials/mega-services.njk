@@ -29,9 +29,12 @@
            услуги» (в одну колонку, singleCol); колонка 2 — «По товару» + «По
            городу». Распределение — по полю group.column (рендер групп идентичен). #}
         <div class="mt-6 grid gap-x-8 gap-y-6 sm:grid-cols-2">
-          <div class="space-y-6">
+          {# Колонка 1 — flex-col на всю высоту: «По способу» сверху,
+             «Дополнительные услуги» (pinBottom) прижаты к низу, чтобы их линия
+             совпала с «По городу» в колонке 2. #}
+          <div class="flex h-full flex-col">
             {% for group in megaMenu.logistics.groups %}{% if group.column == 1 %}
-              <div>
+              <div{% if group.pinBottom %} class="mt-auto pt-6"{% endif %}>
                 <a href="{{ group.url | localizedUrl(locale) }}" class="inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-cyan focus-visible:outline-none focus-visible:text-cyan">
                   {{ group.titleKey | t(locale) }}
                   {{ icon("chevron-right", "h-4 w-4 text-cyan") }}

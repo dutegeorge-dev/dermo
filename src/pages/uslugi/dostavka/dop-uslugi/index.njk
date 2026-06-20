@@ -1,0 +1,15 @@
+---
+permalink: /uslugi/dostavka/dop-uslugi/
+titleKey: uslugi.dopUslugiList.title
+descriptionKey: uslugi.dopUslugiList.description
+---
+{# Хаб «Дополнительные услуги» (шаблонный список). Карточки — из _data/uslugi.ts. #}
+{% from "components/link-card.njk" import linkCard %}
+
+<p class="mt-2 max-w-2xl text-base leading-relaxed text-muted">{{ "uslugi.dopUslugiList.subtitle" | t(locale) }}</p>
+
+<div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% for u in uslugi.dopUslugi %}
+    {{ linkCard(u.icon, (u.nameKey | t(locale)), u.url | localizedUrl(locale)) }}
+  {% endfor %}
+</div>

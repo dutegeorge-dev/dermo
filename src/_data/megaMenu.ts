@@ -24,6 +24,13 @@ const tradeServices: MegaLink[] = TRADE_MENU_SLUGS.flatMap((slug) => {
   return s ? [{ titleKey: s.nameKey, url: s.url, icon: s.icon }] : [];
 });
 
+// Доп. услуги логистики — из того же канонического источника (uslugi.dopUslugi).
+const dopUslugiLinks: MegaLink[] = uslugi.dopUslugi.map((s) => ({
+  titleKey: s.nameKey,
+  url: s.url,
+  icon: s.icon,
+}));
+
 
 /**
  * Данные мега-меню «Услуги». Рендерится из этой структуры (partials/mega-services.njk),
@@ -52,18 +59,15 @@ const megaMenu: MegaMenu = {
         ],
       },
       {
-        // Доп. услуги логистики — под «По способу» (та же колонка 1), заполняют
-        // пустоту слева и усиливают перелинковку/SEO. Сертификация — общая
-        // страница (ведёт в раздел торговли, без дубля).
+        // Доп. услуги логистики — закреплены внизу колонки 1 (pinBottom), в одну
+        // колонку (singleCol). Источник пунктов — uslugi.dopUslugi, заголовок
+        // ведёт на хаб /uslugi/dostavka/dop-uslugi/.
         titleKey: "logiExtra.groupTitle",
-        url: "/uslugi/dostavka/",
+        url: uslugi.dopUslugiUrl,
         column: 1,
         singleCol: true,
-        items: [
-          { titleKey: "logiExtra.customs", url: "/uslugi/dostavka/tamozhennoe-oformlenie/", icon: "file-text" },
-          { titleKey: "logiExtra.certification", url: "/uslugi/torgovlya/sertifikaciya/", icon: "badge-check" },
-          { titleKey: "logiExtra.consolidation", url: "/uslugi/dostavka/sbornye-gruzy/", icon: "package" },
-        ],
+        pinBottom: true,
+        items: dopUslugiLinks,
       },
       {
         titleKey: "mega.byGoods",
