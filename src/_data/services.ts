@@ -29,6 +29,18 @@ const services: ServicesData = {
     // (articleUrl не задан) → блок статьи скрыт.
     caseUrl: "/kejsy/poisk-postavshchika-gazon/",
   },
+  "vykup-tovara": {
+    slug: "vykup-tovara",
+    i18nBase: "uslugi.torgovlya.vykup",
+    heroIcon: "landmark",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+      { icon: "file-text", labelKey: "logiExtra.customs", url: "/uslugi/dostavka/tamozhennoe-oformlenie/" },
+    ],
+    fullCycleUrl: "/torgovlya/",
+    // Кейса/статьи пока нет → соответствующие блоки скрыты.
+  },
 };
 
 export default services;
