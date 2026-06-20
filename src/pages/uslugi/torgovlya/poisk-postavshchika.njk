@@ -18,12 +18,13 @@ showTitle: false
   По образцу этой страницы делаются остальные торговые услуги.
 #}
 {% from "components/photo-placeholder.njk" import photoPlaceholder %}
+{% from "partials/icon.njk" import icon %}
 {% set P = dict.uslugi.torgovlya.poisk %}
+{% set svc = services[service] %}
 
 {# Раздел 1 — Что это за услуга. #}
 <section id="chto-eto" class="scroll-mt-28">
   <h2>{{ P.chtoEto.title }}</h2>
-  {% if P.chtoEto.subtitle %}<h3>{{ P.chtoEto.subtitle }}</h3>{% endif %}
   {% for para in P.chtoEto.paragraphs %}
     <p>{{ para }}</p>
   {% endfor %}
@@ -32,14 +33,14 @@ showTitle: false
 {# Раздел 2 — Зачем это нужно (боли импортёра). #}
 <section id="zachem" class="scroll-mt-28">
   <h2>{{ P.zachem.title }}</h2>
-  {% if P.zachem.subtitle %}<h3>{{ P.zachem.subtitle }}</h3>{% endif %}
   <p>{{ P.zachem.intro }}</p>
   <ul>
     {% for pain in P.zachem.pains %}
       <li><strong>{{ pain.lead }}</strong> {{ pain.text }}</li>
     {% endfor %}
   </ul>
-  <p>{{ P.zachem.closing }}</p>
+  {# Завершающий вывод после списка болей — отделён и выделен (паттерн шаблона). #}
+  <p class="reading-takeaway">{{ P.zachem.closing }}</p>
 </section>
 
 {# Раздел 3 — Кому подходит (опц., есть не у каждой услуги). #}
@@ -52,14 +53,13 @@ showTitle: false
       <li>{{ cat }}</li>
     {% endfor %}
   </ul>
-  <p>{{ P.komuPodhodit.note }}</p>
+  <p class="reading-takeaway">{{ P.komuPodhodit.note }}</p>
 </section>
 {% endif %}
 
-{# Раздел 4 — Как мы это делаем (этапы + место под фото). #}
+{# Раздел 4 — Как мы это делаем (этапы + место под фото + ссылка на кейс). #}
 <section id="kak-delaem" class="scroll-mt-28">
   <h2>{{ P.kakDelaem.title }}</h2>
-  {% if P.kakDelaem.subtitle %}<h3>{{ P.kakDelaem.subtitle }}</h3>{% endif %}
   <ol>
     {% for step in P.kakDelaem.steps %}
       <li>
@@ -73,6 +73,19 @@ showTitle: false
     {% endfor %}
   </ol>
   {% if P.kakDelaem.photoCaption %}{{ photoPlaceholder(P.kakDelaem.photoCaption, "light") }}{% endif %}
+
+  {# Связанный кейс — ссылкой по смыслу в конце раздела (живой пример поиска). #}
+  {% if svc.caseUrl and P.caseLink %}
+    <p class="mt-6">
+      <a
+        href="{{ svc.caseUrl | localizedUrl(locale) }}"
+        class="group inline-flex items-center gap-1.5 font-medium text-cyan-dark no-underline transition-colors hover:text-cyan"
+      >
+        {{ P.caseLink }}
+        {{ icon("arrow-right", "h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1") }}
+      </a>
+    </p>
+  {% endif %}
 </section>
 
 {# Раздел 5 — Сравнение «Сам / Агент / БАРС» (опц., визуальная таблица). #}
@@ -107,13 +120,12 @@ showTitle: false
 {# Раздел 6 — Что вы получаете (результат). #}
 <section id="chto-poluchaete" class="scroll-mt-28">
   <h2>{{ P.chtoPoluchaete.title }}</h2>
-  {% if P.chtoPoluchaete.subtitle %}<h3>{{ P.chtoPoluchaete.subtitle }}</h3>{% endif %}
   <ul>
     {% for item in P.chtoPoluchaete.items %}
       <li>{{ item }}</li>
     {% endfor %}
   </ul>
-  {% if P.chtoPoluchaete.closing %}<p>{{ P.chtoPoluchaete.closing }}</p>{% endif %}
+  {% if P.chtoPoluchaete.closing %}<p class="reading-takeaway">{{ P.chtoPoluchaete.closing }}</p>{% endif %}
 </section>
 
 {# Раздел 7 — FAQ-аккордеон (внутри колонки, чтобы попасть в оглавление) +

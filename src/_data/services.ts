@@ -23,7 +23,6 @@ const services: ServicesData = {
     related: [
       { icon: "landmark", labelKey: "uslugi.torgovlya.services.buyout", url: `${BASE}/vykup-tovara/` },
       { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
-      { icon: "factory", labelKey: "uslugi.torgovlya.services.audit", url: `${BASE}/audit-proizvodstva/` },
     ],
     fullCycleUrl: "/torgovlya/",
     // Связанный кейс есть → строка-ссылка в перелинковке. Статья ещё не написана

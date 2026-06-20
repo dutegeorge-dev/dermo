@@ -619,31 +619,28 @@ export interface ServicePageText {
   metaDescription: string;
   /** Hero: H1 под поисковый запрос + подзаголовок + подпись фото. */
   hero: { title: string; subtitle: string; photoCaption: string };
-  /** Раздел 1 «Что это за услуга»: SEO-подзаголовок + абзацы. */
-  chtoEto: { title: string; subtitle?: string; paragraphs: string[] };
-  /** Раздел 2 «Зачем это нужно»: подзаголовок + интро + боли + вывод. */
+  /** Раздел 1 «Что это за услуга»: абзацы. */
+  chtoEto: { title: string; paragraphs: string[] };
+  /** Раздел 2 «Зачем это нужно»: интро + боли + вывод. */
   zachem: {
     title: string;
-    subtitle?: string;
     intro: string;
     pains: ServicePainPoint[];
     closing: string;
   };
   /** Раздел «Кому подходит» — опционален (есть не у каждой услуги). */
   komuPodhodit?: ServiceAudience;
-  /** Раздел «Как мы это делаем» — подзаголовок, шаги, подпись фото. */
+  /** Раздел «Как мы это делаем» — шаги + подпись фото. */
   kakDelaem: {
     title: string;
-    subtitle?: string;
     steps: ServiceStep[];
     photoCaption?: string;
   };
   /** Раздел-сравнение «Сам/Агент/БАРС» — опционален. */
   sravnenie?: ServiceComparison;
-  /** Раздел «Что вы получаете»: подзаголовок + пункты + вывод. */
+  /** Раздел «Что вы получаете»: пункты + вывод. */
   chtoPoluchaete: {
     title: string;
-    subtitle?: string;
     items: string[];
     closing?: string;
   };

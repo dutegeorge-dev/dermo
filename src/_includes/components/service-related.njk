@@ -2,11 +2,11 @@
   Перелинковка страницы услуги (читательский шаблон). Опциональный продающий
   модуль ВНУТРИ контентной колонки, сразу под FAQ (ширина — как у контента).
   Состав:
-    - «Вместе с этим заказывают» — карточки-ссылки на связанные услуги;
-    - связанный кейс — живая строка-ссылка (только если svc.caseUrl задан);
+    - «Вместе с этим заказывают» — максимум 2 карточки-ссылки (чтобы сетка
+      2-в-ряд не ломалась; если в related больше — берём первые 2 по приоритету);
     - «Нужен полный цикл?» — ссылка на витрину направления.
-  Связанная статья/кейс выводятся только при наличии URL — ссылок на
-  ненаписанное не ставим. Данные — глобальный `svc` (services.ts).
+  Связанный кейс выводится ссылкой по смыслу внутри релевантного раздела
+  (см. страницу услуги), а не здесь. Данные — глобальный `svc` (services.ts).
 #}
 {% from "partials/icon.njk" import icon %}
 {% from "components/link-card.njk" import linkCard %}
@@ -17,22 +17,11 @@
   </h2>
   <div class="mt-6 grid gap-4 sm:grid-cols-2">
     {% for item in svc.related %}
-      {{ linkCard(item.icon, (item.labelKey | t(locale)), item.url | localizedUrl(locale)) }}
+      {% if loop.index0 < 2 %}
+        {{ linkCard(item.icon, (item.labelKey | t(locale)), item.url | localizedUrl(locale)) }}
+      {% endif %}
     {% endfor %}
   </div>
-
-  {# Связанный кейс — живая строка-ссылка (бирюзовый акцент). #}
-  {% if svc.caseUrl %}
-    <p class="mt-6">
-      <a
-        href="{{ svc.caseUrl | localizedUrl(locale) }}"
-        class="group inline-flex items-center gap-2 text-base font-medium text-cyan-dark transition-colors hover:text-cyan"
-      >
-        {{ (svc.i18nBase + ".caseLink") | t(locale) }}
-        {{ icon("arrow-right", "h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1") }}
-      </a>
-    </p>
-  {% endif %}
 
   {# «Нужен полный цикл?» — переход на витрину направления. #}
   <a
