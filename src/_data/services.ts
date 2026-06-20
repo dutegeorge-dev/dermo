@@ -41,6 +41,18 @@ const services: ServicesData = {
     fullCycleUrl: "/torgovlya/",
     // Кейса/статьи пока нет → соответствующие блоки скрыты.
   },
+  "proverka-zavoda": {
+    slug: "proverka-zavoda",
+    i18nBase: "uslugi.torgovlya.proverka",
+    heroIcon: "shield-check",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+      { icon: "camera", labelKey: "uslugi.torgovlya.services.control", url: `${BASE}/kontrol-proizvodstva/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+    // Кейса/статьи пока нет → соответствующие блоки скрыты.
+  },
 };
 
 export default services;

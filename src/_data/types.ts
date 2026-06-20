@@ -712,6 +712,8 @@ export interface UslugiDict {
     poisk: ServicePageText;
     /** Страница торговой услуги «Выкуп товара». */
     vykup: ServicePageText;
+    /** Страница торговой услуги «Проверка завода». */
+    proverka: ServicePageText;
   };
 }
 
