@@ -25,9 +25,9 @@
           {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan transition-transform group-hover/gate:translate-x-1") }}
         </a>
 
-        {# Подгруппы в двух колонках. Колонка 1 — «По способу» + «Услуги
-           логистики»; колонка 2 — «По товару» + «По городу». Распределение —
-           по полю group.column (рендер группы идентичен). #}
+        {# Подгруппы в двух колонках. Колонка 1 — «По способу» + «Дополнительные
+           услуги» (в одну колонку, singleCol); колонка 2 — «По товару» + «По
+           городу». Распределение — по полю group.column (рендер групп идентичен). #}
         <div class="mt-6 grid gap-x-8 gap-y-6 sm:grid-cols-2">
           <div class="space-y-6">
             {% for group in megaMenu.logistics.groups %}{% if group.column == 1 %}
@@ -36,7 +36,7 @@
                   {{ group.titleKey | t(locale) }}
                   {{ icon("chevron-right", "h-4 w-4 text-cyan") }}
                 </a>
-                <ul class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1">
+                <ul class="mt-3 grid {% if group.singleCol %}grid-cols-1{% else %}grid-cols-2{% endif %} gap-x-4 gap-y-1">
                   {% for item in group.items %}
                     <li>
                       <a href="{{ item.url | localizedUrl(locale) }}" class="flex items-center gap-2 rounded-md py-1 text-sm text-muted transition-colors hover:text-cyan focus-visible:outline-none focus-visible:text-cyan">
@@ -56,7 +56,7 @@
                   {{ group.titleKey | t(locale) }}
                   {{ icon("chevron-right", "h-4 w-4 text-cyan") }}
                 </a>
-                <ul class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1">
+                <ul class="mt-3 grid {% if group.singleCol %}grid-cols-1{% else %}grid-cols-2{% endif %} gap-x-4 gap-y-1">
                   {% for item in group.items %}
                     <li>
                       <a href="{{ item.url | localizedUrl(locale) }}" class="flex items-center gap-2 rounded-md py-1 text-sm text-muted transition-colors hover:text-cyan focus-visible:outline-none focus-visible:text-cyan">

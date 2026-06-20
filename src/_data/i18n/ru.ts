@@ -39,7 +39,7 @@ const ru: Dictionary = {
     avia: "Авиа",
   },
   logiExtra: {
-    groupTitle: "Услуги логистики",
+    groupTitle: "Дополнительные услуги",
     customs: "Таможенное оформление",
     certification: "Сертификация ТР ЕАЭС",
     consolidation: "Сборные грузы",

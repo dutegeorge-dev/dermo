@@ -58,6 +58,7 @@ const megaMenu: MegaMenu = {
         titleKey: "logiExtra.groupTitle",
         url: "/uslugi/dostavka/",
         column: 1,
+        singleCol: true,
         items: [
           { titleKey: "logiExtra.customs", url: "/uslugi/dostavka/tamozhennoe-oformlenie/", icon: "file-text" },
           { titleKey: "logiExtra.certification", url: "/uslugi/torgovlya/sertifikaciya/", icon: "badge-check" },
