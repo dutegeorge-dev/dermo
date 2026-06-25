@@ -630,6 +630,8 @@ export interface ServiceBulletSection {
   title: string;
   intro?: string;
   items: ServicePainPoint[];
+  /** Абзац после списка, перед выводом (опц.). */
+  afterText?: string;
   closing?: string;
 }
 
@@ -681,6 +683,8 @@ export interface ServicePageText {
   sChem?: ServiceBulletSection;
   /** Раздел-список «В чём наше отличие» (интро + пункты + вывод; опц.). */
   otlichieList?: ServiceBulletSection;
+  /** Раздел-список «Виды транспорта» (интро + пункты + абзац + вывод; опц.). */
+  vidy?: ServiceBulletSection;
   /** Раздел «Кому подходит» — опционален (есть не у каждой услуги). */
   komuPodhodit?: ServiceAudience;
   /** Раздел «Как мы это делаем» — опц. интро/вывод вокруг шагов + подпись фото. */
@@ -744,6 +748,13 @@ export interface UslugiDict {
   gorodaList: UslugiPageText;
   /** Хаб дополнительных услуг /uslugi/dostavka/dop-uslugi/. */
   dopUslugiList: UslugiPageText;
+  /** Страницы логистических услуг (доп. услуги доставки). */
+  dostavkaServices: {
+    /** Таможенное оформление /uslugi/dostavka/tamozhennoe-oformlenie/. */
+    tamozhnya: ServicePageText;
+    /** Сборные грузы /uslugi/dostavka/sbornye-gruzy/. */
+    sbornye: ServicePageText;
+  };
   /** Витрина торговли /uslugi/torgovlya/ + названия 10 услуг. */
   torgovlya: UslugiPageText & {
     services: {

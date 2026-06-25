@@ -15,6 +15,28 @@ import type { ServicesData } from "./types.js";
 const BASE = "/uslugi/torgovlya";
 
 const services: ServicesData = {
+  "tamozhennoe-oformlenie": {
+    slug: "tamozhennoe-oformlenie",
+    i18nBase: "uslugi.dostavkaServices.tamozhnya",
+    heroIcon: "file-text",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "package", labelKey: "logiExtra.consolidation", url: "/uslugi/dostavka/sbornye-gruzy/" },
+      { icon: "badge-check", labelKey: "uslugi.torgovlya.services.certification", url: `${BASE}/sertifikaciya/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
+  "sbornye-gruzy": {
+    slug: "sbornye-gruzy",
+    i18nBase: "uslugi.dostavkaServices.sbornye",
+    heroIcon: "package",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "file-text", labelKey: "logiExtra.customs", url: "/uslugi/dostavka/tamozhennoe-oformlenie/" },
+      { icon: "package", labelKey: "uslugi.torgovlya.services.packaging", url: `${BASE}/upakovka-markirovka/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
   "poisk-postavshchika": {
     slug: "poisk-postavshchika",
     i18nBase: "uslugi.torgovlya.poisk",
