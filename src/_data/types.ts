@@ -679,6 +679,8 @@ export interface ServicePageText {
   chtoProveryaem?: ServiceBulletSection;
   /** Раздел-список «С чем помогаем» (опц.). */
   sChem?: ServiceBulletSection;
+  /** Раздел-список «В чём наше отличие» (интро + пункты + вывод; опц.). */
+  otlichieList?: ServiceBulletSection;
   /** Раздел «Кому подходит» — опционален (есть не у каждой услуги). */
   komuPodhodit?: ServiceAudience;
   /** Раздел «Как мы это делаем» — опц. интро/вывод вокруг шагов + подпись фото. */
@@ -702,6 +704,8 @@ export interface ServicePageText {
   };
   /** Раздел-оговорка «Когда метода достаточно, а когда нужен выезд» (опц.). */
   kogda?: ServiceNoteSection;
+  /** Раздел-оговорка «Честный знак» (интро + вывод; опц.). */
+  chestnyyZnak?: ServiceNoteSection;
   /** Раздел «Что вы получаете»: пункты + вывод (опц. — есть не у всех). */
   chtoPoluchaete?: {
     title: string;
@@ -770,6 +774,10 @@ export interface UslugiDict {
     audit: ServicePageText;
     /** Страница торговой услуги «Переговоры». */
     peregovory: ServicePageText;
+    /** Страница торговой услуги «Упаковка и маркировка». */
+    upakovka: ServicePageText;
+    /** Страница торговой услуги «Сертификация». */
+    sertifikaciya: ServicePageText;
   };
 }
 

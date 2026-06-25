@@ -99,6 +99,28 @@ const services: ServicesData = {
     ],
     fullCycleUrl: "/torgovlya/",
   },
+  "upakovka-markirovka": {
+    slug: "upakovka-markirovka",
+    i18nBase: "uslugi.torgovlya.upakovka",
+    heroIcon: "package",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "scan-search", labelKey: "uslugi.torgovlya.services.inspection", url: `${BASE}/inspekciya/` },
+      { icon: "file-text", labelKey: "logiExtra.customs", url: "/uslugi/dostavka/tamozhennoe-oformlenie/" },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
+  sertifikaciya: {
+    slug: "sertifikaciya",
+    i18nBase: "uslugi.torgovlya.sertifikaciya",
+    heroIcon: "badge-check",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "file-text", labelKey: "logiExtra.customs", url: "/uslugi/dostavka/tamozhennoe-oformlenie/" },
+      { icon: "package", labelKey: "uslugi.torgovlya.services.packaging", url: `${BASE}/upakovka-markirovka/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
   "proverka-zavoda": {
     slug: "proverka-zavoda",
     i18nBase: "uslugi.torgovlya.proverka",
