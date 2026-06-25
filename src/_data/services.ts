@@ -14,7 +14,53 @@ import type { ServicesData } from "./types.js";
  */
 const BASE = "/uslugi/torgovlya";
 
+const SPOSOBY = "/uslugi/dostavka/sposoby";
+
 const services: ServicesData = {
+  avto: {
+    slug: "avto",
+    i18nBase: "uslugi.dostavkaServices.avto",
+    heroIcon: "truck",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "train-front", labelKey: "methodFull.zhd", url: `${SPOSOBY}/zhd/` },
+      { icon: "file-text", labelKey: "logiExtra.customs", url: "/uslugi/dostavka/tamozhennoe-oformlenie/" },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
+  zhd: {
+    slug: "zhd",
+    i18nBase: "uslugi.dostavkaServices.zhd",
+    heroIcon: "train-front",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "truck", labelKey: "methodFull.avto", url: `${SPOSOBY}/avto/` },
+      { icon: "ship", labelKey: "methodFull.more", url: `${SPOSOBY}/more/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
+  more: {
+    slug: "more",
+    i18nBase: "uslugi.dostavkaServices.more",
+    heroIcon: "ship",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "train-front", labelKey: "methodFull.zhd", url: `${SPOSOBY}/zhd/` },
+      { icon: "file-text", labelKey: "logiExtra.customs", url: "/uslugi/dostavka/tamozhennoe-oformlenie/" },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
+  avia: {
+    slug: "avia",
+    i18nBase: "uslugi.dostavkaServices.avia",
+    heroIcon: "plane",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "badge-check", labelKey: "uslugi.torgovlya.services.certification", url: `${BASE}/sertifikaciya/` },
+      { icon: "truck", labelKey: "methodFull.avto", url: `${SPOSOBY}/avto/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
   "tamozhennoe-oformlenie": {
     slug: "tamozhennoe-oformlenie",
     i18nBase: "uslugi.dostavkaServices.tamozhnya",

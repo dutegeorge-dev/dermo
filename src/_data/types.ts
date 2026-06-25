@@ -633,6 +633,8 @@ export interface ServiceBulletSection {
   /** Абзац после списка, перед выводом (опц.). */
   afterText?: string;
   closing?: string;
+  /** Подпись фото-плейсхолдера в конце раздела (опц.). */
+  photoCaption?: string;
 }
 
 /**
@@ -754,6 +756,14 @@ export interface UslugiDict {
     tamozhnya: ServicePageText;
     /** Сборные грузы /uslugi/dostavka/sbornye-gruzy/. */
     sbornye: ServicePageText;
+    /** Автодоставка /uslugi/dostavka/sposoby/avto/. */
+    avto: ServicePageText;
+    /** Железнодорожная доставка /uslugi/dostavka/sposoby/zhd/. */
+    zhd: ServicePageText;
+    /** Морская доставка /uslugi/dostavka/sposoby/more/. */
+    more: ServicePageText;
+    /** Авиадоставка /uslugi/dostavka/sposoby/avia/. */
+    avia: ServicePageText;
   };
   /** Витрина торговли /uslugi/torgovlya/ + названия 10 услуг. */
   torgovlya: UslugiPageText & {
@@ -857,6 +867,13 @@ export interface Dictionary {
     allServices: string;
   };
   method: {
+    avto: string;
+    zhd: string;
+    more: string;
+    avia: string;
+  };
+  /** Полные названия способов доставки (карточки перелинковки/крошки). */
+  methodFull: {
     avto: string;
     zhd: string;
     more: string;

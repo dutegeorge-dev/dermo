@@ -1,1 +1,95 @@
-{# uslugi/dostavka/more — шаблон-заглушка способа доставки. Контент добавляется позже. #}
+---
+layout: layouts/reading.njk
+service: more
+titleKey: uslugi.dostavkaServices.more.metaTitle
+descriptionKey: uslugi.dostavkaServices.more.metaDescription
+showTitle: false
+---
+{#
+  Способ доставки «Море» (/uslugi/dostavka/sposoby/more/) на читательском шаблоне.
+  Тексты — i18n (uslugi.dostavkaServices.more), структура — _data/services.ts.
+#}
+{% set P = dict.uslugi.dostavkaServices.more %}
+
+{# Раздел 1 — Что это за услуга. #}
+<section id="chto-eto" class="scroll-mt-28">
+  <h2>{{ P.chtoEto.title }}</h2>
+  {% for para in P.chtoEto.paragraphs %}<p>{{ para }}</p>{% endfor %}
+</section>
+
+{# Раздел 2 — FCL или LCL, 20 или 40 футов (пункты + абзац + вывод). #}
+<section id="fcl-lcl" class="scroll-mt-28">
+  <h2>{{ P.vidy.title }}</h2>
+  {% if P.vidy.intro %}<p>{{ P.vidy.intro }}</p>{% endif %}
+  <ul>
+    {% for it in P.vidy.items %}<li><strong>{{ it.lead }}</strong> {{ it.text }}</li>{% endfor %}
+  </ul>
+  {% if P.vidy.afterText %}<p>{{ P.vidy.afterText }}</p>{% endif %}
+  {% if P.vidy.closing %}<p class="reading-takeaway">{{ P.vidy.closing }}</p>{% endif %}
+</section>
+
+{# Раздел 3 — Как проходит морская доставка (5 шагов). #}
+<section id="kak-delaem" class="scroll-mt-28">
+  <h2>{{ P.kakDelaem.title }}</h2>
+  <ol>
+    {% for step in P.kakDelaem.steps %}<li><strong>{{ step.title }}.</strong> {{ step.text }}</li>{% endfor %}
+  </ol>
+</section>
+
+{# Раздел 4 — Что вы получаете. #}
+<section id="chto-poluchaete" class="scroll-mt-28">
+  <h2>{{ P.chtoPoluchaete.title }}</h2>
+  <ul>
+    {% for item in P.chtoPoluchaete.items %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+</section>
+
+{# Раздел 5 — FAQ-аккордеон (в оглавление) + FAQPage. #}
+<section id="faq" class="scroll-mt-28">
+  <h2>{{ P.faqTitle }}</h2>
+  <div class="mt-6 rounded-xl border border-slate-200 bg-white px-5 sm:px-6">
+    {% for item in P.faq %}
+      <div class="border-b border-slate-200 last:border-b-0">
+        <button
+          type="button"
+          data-accordion-toggle
+          class="flex w-full items-center justify-between gap-4 py-4 text-left text-base font-medium text-ink"
+          aria-expanded="false"
+          aria-controls="faq-panel-{{ loop.index }}"
+        >
+          <span>{{ item.q }}</span>
+          {% from "partials/icon.njk" import icon %}
+          {{ icon("chevron-down", "accordion-caret h-5 w-5 shrink-0 text-cyan transition-transform duration-200") }}
+        </button>
+        <div id="faq-panel-{{ loop.index }}" data-accordion-panel class="hidden pb-4" hidden>
+          <p class="text-sm leading-relaxed text-muted">{{ item.a }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# JSON-LD: FAQPage + Service. #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for item in P.faq %}
+    { "@type": "Question", "name": {{ item.q | dump | safe }}, "acceptedAnswer": { "@type": "Answer", "text": {{ item.a | dump | safe }} } }{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": {{ P.hero.title | dump | safe }},
+  "serviceType": {{ P.hero.title | dump | safe }},
+  "description": {{ P.metaDescription | dump | safe }},
+  "url": {{ (site.url + page.url) | dump | safe }},
+  "areaServed": "RU",
+  "provider": { "@type": "Organization", "name": {{ site.legalName | dump | safe }}, "url": {{ site.url | dump | safe }} }
+}
+</script>
