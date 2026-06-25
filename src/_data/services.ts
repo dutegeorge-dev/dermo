@@ -66,6 +66,39 @@ const services: ServicesData = {
     // Кейс −$7000 — ссылкой внутри раздела «Как контролируем» (см. страницу).
     caseUrl: "/kejsy/kontrol-proizvodstva-7000/",
   },
+  inspekciya: {
+    slug: "inspekciya",
+    i18nBase: "uslugi.torgovlya.inspekciya",
+    heroIcon: "scan-search",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "camera", labelKey: "uslugi.torgovlya.services.control", url: `${BASE}/kontrol-proizvodstva/` },
+      { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
+  "audit-proizvodstva": {
+    slug: "audit-proizvodstva",
+    i18nBase: "uslugi.torgovlya.audit",
+    heroIcon: "factory",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
+  peregovory: {
+    slug: "peregovory",
+    i18nBase: "uslugi.torgovlya.peregovory",
+    heroIcon: "messages-square",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "camera", labelKey: "uslugi.torgovlya.services.control", url: `${BASE}/kontrol-proizvodstva/` },
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
   "proverka-zavoda": {
     slug: "proverka-zavoda",
     i18nBase: "uslugi.torgovlya.proverka",

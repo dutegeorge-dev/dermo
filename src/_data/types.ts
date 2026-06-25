@@ -623,6 +623,27 @@ export interface ServiceComparison {
 }
 
 /**
+ * Универсальный раздел-список с жирными зачинами (напр. «Что мы проверяем»,
+ * «С чем помогаем»): заголовок + опц. интро + пункты (lead+text) + опц. вывод.
+ */
+export interface ServiceBulletSection {
+  title: string;
+  intro?: string;
+  items: ServicePainPoint[];
+  closing?: string;
+}
+
+/**
+ * Раздел-оговорка (напр. «Когда метода достаточно, а когда нужен выезд»):
+ * заголовок + абзац-интро + вывод-акцент. closing может содержать HTML (ссылку).
+ */
+export interface ServiceNoteSection {
+  title: string;
+  intro: string;
+  closing: string;
+}
+
+/**
  * Тексты страницы торговой услуги на читательском шаблоне (эталон —
  * «Поиск поставщика»). Все строки финальные для RU; en/zh — заглушки.
  * Структура страницы (иконки, URL, перелинковка) — в _data/services.ts.
@@ -654,6 +675,10 @@ export interface ServicePageText {
     oursPoints: ServicePainPoint[];
     closing: string;
   };
+  /** Раздел-список «Что мы проверяем» (опц.). */
+  chtoProveryaem?: ServiceBulletSection;
+  /** Раздел-список «С чем помогаем» (опц.). */
+  sChem?: ServiceBulletSection;
   /** Раздел «Кому подходит» — опционален (есть не у каждой услуги). */
   komuPodhodit?: ServiceAudience;
   /** Раздел «Как мы это делаем» — опц. интро/вывод вокруг шагов + подпись фото. */
@@ -675,8 +700,10 @@ export interface ServicePageText {
     points: ServicePainPoint[];
     closing: string;
   };
-  /** Раздел «Что вы получаете»: пункты + вывод. */
-  chtoPoluchaete: {
+  /** Раздел-оговорка «Когда метода достаточно, а когда нужен выезд» (опц.). */
+  kogda?: ServiceNoteSection;
+  /** Раздел «Что вы получаете»: пункты + вывод (опц. — есть не у всех). */
+  chtoPoluchaete?: {
     title: string;
     items: string[];
     closing?: string;
@@ -737,6 +764,12 @@ export interface UslugiDict {
     vozvrat: ServicePageText;
     /** Страница торговой услуги «Контроль производства». */
     kontrol: ServicePageText;
+    /** Страница торговой услуги «Инспекция товара». */
+    inspekciya: ServicePageText;
+    /** Страница торговой услуги «Аудит поставщика». */
+    audit: ServicePageText;
+    /** Страница торговой услуги «Переговоры». */
+    peregovory: ServicePageText;
   };
 }
 
