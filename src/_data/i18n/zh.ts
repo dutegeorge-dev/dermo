@@ -77,6 +77,7 @@ const zh: Dictionary = {
     ekb: "[ZH] Екатеринбург",
     nsk: "[ZH] Новосибирск",
     kazan: "[ZH] Казань",
+    blagoveshchensk: "[ZH] Благовещенск",
   },
   trade: {
     search: "[ZH] Поиск товара / поставщика",

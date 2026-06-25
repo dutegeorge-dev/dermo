@@ -33,14 +33,16 @@ layout: layouts/base.njk
 {% from "components/faq.njk" import faq %}
 {% from "components/related.njk" import related %}
 {% if service %}{% set svc = services[service] %}{% endif %}
+{% if city %}{% set cityData = goroda[city] %}{% endif %}
 
 {% include "partials/header.njk" %}
 
 <main class="flex-1">
   {% include "partials/breadcrumbs.njk" %}
 
-  {# Hero над контентом, во всю ширину: услуга (по svc) или произвольный include. #}
+  {# Hero над контентом, во всю ширину: услуга (svc), город (cityData) или include. #}
   {% if svc %}{% include "components/service-hero.njk" %}
+  {% elif cityData %}{% include "components/city-hero.njk" %}
   {% elif heroInclude %}{% include heroInclude %}{% endif %}
 
   <div class="container section">
@@ -82,6 +84,7 @@ layout: layouts/base.njk
            (та же ширина, что основной контент). Финальный CTA — ниже, во всю
            ширину. #}
         {% if svc %}{% include "components/service-related.njk" %}{% endif %}
+        {% if cityData %}{% include "components/city-related.njk" %}{% endif %}
       </div>
 
       {# ── Правое sticky-оглавление (десктоп). Скрыто, пока TS не наполнит
@@ -105,8 +108,9 @@ layout: layouts/base.njk
   {% if faqItems %}{{ faq(faqItems, faqTitle or "Частые вопросы") }}{% endif %}
   {% if ctaFinal %}{% include "components/cta-final.njk" %}{% endif %}
 
-  {# Финальный CTA торговой услуги (по svc) — полноширинная полоса. #}
+  {# Финальный CTA торговой услуги (svc) или города (cityData) — полная ширина. #}
   {% if svc %}{% include "components/service-cta.njk" %}{% endif %}
+  {% if cityData %}{% include "components/city-cta.njk" %}{% endif %}
 
   {# JSON-LD Article — для статей блога/кейсов (по флагу страницы). #}
   {% if ogType == "article" %}{% include "partials/schema-article.njk" %}{% endif %}

@@ -1,0 +1,101 @@
+{#
+  Контент городской страницы «доставка в город» — общий костяк для всех городов.
+  Уникален только раздел «Маршрут до города» (cityData.route) — защита от дублей.
+  Падежи города берём из cityData (goroda[city]); общий текст — здесь, в одном
+  месте (по ТЗ: общие блоки в шаблоне, уникальные поля — в _data/goroda.ts).
+#}
+{% set cityData = goroda[city] %}
+
+{# Раздел 1 — Что это за услуга (общий; TIR заявлен как универсальная опция). #}
+<section id="chto-eto" class="scroll-mt-28">
+  <h2>Что это за услуга</h2>
+  <p>Доставляем груз из Китая до склада в нужном городе России: подбираем маршрут под географию города и стыкуем доставку с таможенным оформлением, чтобы ввоз был белым и предсказуемым.</p>
+  <p>Во все города доступна отправка автомобилем по TIR — сквозной рейс под единым таможенным документом МДП, без перегрузок и промежуточных досмотров на границах. Это универсальный вариант независимо от направления; помимо него под конкретный город подбираем оптимальный маршрут.</p>
+</section>
+
+{# Раздел 2 — Маршрут до города (УНИКАЛЬНЫЙ блок + вывод-акцент). #}
+<section id="marshrut" class="scroll-mt-28">
+  <h2>Маршрут до {{ cityData.gen }}</h2>
+  <p>{{ cityData.route }}</p>
+  <p class="reading-takeaway">{{ cityData.routeClosing }}</p>
+</section>
+
+{# Раздел 3 — Как проходит доставка (общий). #}
+<section id="kak-delaem" class="scroll-mt-28">
+  <h2>Как проходит доставка</h2>
+  <ol>
+    <li><strong>Забираем груз у поставщика.</strong> Принимаем товар в Китае, при необходимости консолидируем партию.</li>
+    <li><strong>Готовим груз и документы.</strong> Проверяем упаковку под перевозку и сверяем сопроводительные документы.</li>
+    <li><strong>Отправляем выбранным маршрутом.</strong> Подбираем оптимальный путь под город и груз.</li>
+    <li><strong>Таможенное оформление.</strong> Растаможку ведём отдельной услугой и стыкуем с доставкой.</li>
+    <li><strong>Доставка до двери.</strong> Довозим груз до вашего склада в {{ cityData.prep }}.</li>
+  </ol>
+</section>
+
+{# Раздел 4 — Что вы получаете (общий). #}
+<section id="chto-poluchaete" class="scroll-mt-28">
+  <h2>Что вы получаете</h2>
+  <ul>
+    <li>Доставку до склада в {{ cityData.prep }}.</li>
+    <li>Маршрут, подобранный под город, плюс всегда доступную опцию TIR-авто.</li>
+    <li>Состыкованную с доставкой растаможку — без разрывов между этапами.</li>
+    <li>Белый ввоз — оформление, к которому нет вопросов у таможни и налоговой.</li>
+    <li>Один контакт на весь путь от завода в Китае до вашего склада.</li>
+  </ul>
+</section>
+
+{# Раздел 5 — FAQ (3 общих + 1 уникальный про маршрут) + FAQPage. #}
+{% set cityFaq = [
+  { q: "Каким транспортом везёте?", a: "Подбираем маршрут под город: железная дорога, автомобиль (включая сквозной TIR) или море — в зависимости от направления и вашего груза." },
+  { q: "Вы занимаетесь и растаможкой?", a: "Да, но это отдельная услуга — таможенное оформление мы стыкуем с доставкой, чтобы между этапами не было разрывов." },
+  { q: "Довозите до двери?", a: "Да. После выпуска груза с таможни довозим его до вашего склада в нужном городе." },
+  { q: "Как груз доезжает до " + cityData.gen + "?", a: cityData.routeFaqA }
+] %}
+<section id="faq" class="scroll-mt-28">
+  <h2>Частые вопросы</h2>
+  <div class="mt-6 rounded-xl border border-slate-200 bg-white px-5 sm:px-6">
+    {% for item in cityFaq %}
+      <div class="border-b border-slate-200 last:border-b-0">
+        <button
+          type="button"
+          data-accordion-toggle
+          class="flex w-full items-center justify-between gap-4 py-4 text-left text-base font-medium text-ink"
+          aria-expanded="false"
+          aria-controls="faq-panel-{{ loop.index }}"
+        >
+          <span>{{ item.q }}</span>
+          {% from "partials/icon.njk" import icon %}
+          {{ icon("chevron-down", "accordion-caret h-5 w-5 shrink-0 text-cyan transition-transform duration-200") }}
+        </button>
+        <div id="faq-panel-{{ loop.index }}" data-accordion-panel class="hidden pb-4" hidden>
+          <p class="text-sm leading-relaxed text-muted">{{ item.a }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# JSON-LD: FAQPage + Service. #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for item in cityFaq %}
+    { "@type": "Question", "name": {{ item.q | dump | safe }}, "acceptedAnswer": { "@type": "Answer", "text": {{ item.a | dump | safe }} } }{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": {{ ("Доставка из Китая в " + cityData.acc) | dump | safe }},
+  "serviceType": "Доставка грузов из Китая",
+  "description": {{ description | dump | safe }},
+  "url": {{ (site.url + page.url) | dump | safe }},
+  "areaServed": "RU",
+  "provider": { "@type": "Organization", "name": {{ site.legalName | dump | safe }}, "url": {{ site.url | dump | safe }} }
+}
+</script>

@@ -840,6 +840,33 @@ export interface ServicePageConfig {
 export type ServicesData = Record<string, ServicePageConfig>;
 
 /**
+ * Уникальные поля страницы «доставка в город» (общие блоки — в шаблоне
+ * partials/goroda-content.njk). Ядро уникальности — маршрут до города (защита
+ * от дублей). Падежи города хранятся явно (без авто-склонения).
+ */
+export interface CityPage {
+  /** Винительный падеж: «в Москву». */
+  acc: string;
+  /** Предложный падеж: «в Москве». */
+  prep: string;
+  /** Родительный падеж: «до Москвы». */
+  gen: string;
+  /** Уникальный блок «Маршрут до города». */
+  route: string;
+  /** Вывод-акцент в конце блока маршрута. */
+  routeClosing: string;
+  /** Ответ на уникальный FAQ «Как груз доезжает до <города>?». */
+  routeFaqA: string;
+  /** Релевантный способ доставки для перелинковки (вторая карточка). */
+  relatedMethod: { icon: string; labelKey: string; url: string };
+  /** Подпись hero-фото. */
+  photoCaption: string;
+}
+
+/** Карта «слаг города → данные страницы» (глобальные данные `goroda`). */
+export type GorodaData = Record<string, CityPage>;
+
+/**
  * Общий интерфейс словаря переводов.
  * Все три локали (ru/en/zh) реализуют один и тот же интерфейс — пропуск
  * любого ключа в любой локали ловится типчекером (`tsc --noEmit`).
@@ -901,6 +928,7 @@ export interface Dictionary {
     ekb: string;
     nsk: string;
     kazan: string;
+    blagoveshchensk: string;
   };
   trade: {
     search: string;

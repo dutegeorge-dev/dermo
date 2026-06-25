@@ -1,0 +1,22 @@
+{#
+  Финальный CTA городской страницы — контрастная ультрамариновая полоса.
+  Заголовок под город (cityData.acc) + кнопка «Оставить заявку» → /kontakty/.
+#}
+{% from "partials/icon.njk" import icon %}
+
+<section id="zayavka" class="scroll-mt-28 bg-brand text-white">
+  <div class="container section text-center">
+    <h2 class="mx-auto max-w-2xl text-2xl font-semibold tracking-tight md:text-3xl">
+      Привезём груз из Китая в {{ cityData.acc }}
+    </h2>
+    <p class="mx-auto mt-3 max-w-2xl text-base text-white/85 md:text-lg">
+      Расскажите про груз и пункт назначения — подберём маршрут до {{ cityData.gen }} и довезём до двери.
+    </p>
+    <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+      <a href="{{ '/kontakty/' | localizedUrl(locale) }}" class="btn-accent px-6 py-3 text-base">
+        {{ "cta.request" | t(locale) }}
+        {{ icon("arrow-right", "ml-1.5 h-5 w-5") }}
+      </a>
+    </div>
+  </div>
+</section>

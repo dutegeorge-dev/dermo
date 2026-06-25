@@ -77,6 +77,7 @@ const en: Dictionary = {
     ekb: "[EN] Екатеринбург",
     nsk: "[EN] Новосибирск",
     kazan: "[EN] Казань",
+    blagoveshchensk: "[EN] Благовещенск",
   },
   trade: {
     search: "[EN] Поиск товара / поставщика",

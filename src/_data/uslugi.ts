@@ -49,6 +49,7 @@ const uslugi: UslugiData = {
     { slug: "ekaterinburg", nameKey: "city.ekb", icon: "map-pin", url: `${DELIVERY}/goroda/ekaterinburg/` },
     { slug: "novosibirsk", nameKey: "city.nsk", icon: "map-pin", url: `${DELIVERY}/goroda/novosibirsk/` },
     { slug: "kazan", nameKey: "city.kazan", icon: "map-pin", url: `${DELIVERY}/goroda/kazan/` },
+    { slug: "blagoveshchensk", nameKey: "city.blagoveshchensk", icon: "map-pin", url: `${DELIVERY}/goroda/blagoveshchensk/` },
   ],
 
   // Дополнительные услуги логистики — отдельный хаб /uslugi/dostavka/dop-uslugi/.

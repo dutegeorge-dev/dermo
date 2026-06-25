@@ -1,0 +1,30 @@
+{#
+  Перелинковка городской страницы — внутри контентной колонки, под FAQ.
+  Две карточки: «Таможенное оформление» (общая) + релевантный способ доставки
+  для этого города (cityData.relatedMethod) + «Нужен полный цикл?».
+#}
+{% from "partials/icon.njk" import icon %}
+{% from "components/link-card.njk" import linkCard %}
+
+<div class="mt-12 border-t border-slate-200 pt-8">
+  <h2 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">Вместе с этим заказывают</h2>
+  <div class="mt-6 grid gap-4 sm:grid-cols-2">
+    {{ linkCard("file-text", "Таможенное оформление", "/uslugi/dostavka/tamozhennoe-oformlenie/" | localizedUrl(locale)) }}
+    {{ linkCard(cityData.relatedMethod.icon, (cityData.relatedMethod.labelKey | t(locale)), cityData.relatedMethod.url | localizedUrl(locale)) }}
+  </div>
+
+  {# «Нужен полный цикл?» — переход на витрину направления. #}
+  <a
+    href="{{ '/torgovlya/' | localizedUrl(locale) }}"
+    class="group mt-6 flex items-center gap-4 rounded-xl border border-cyan/40 bg-surface-alt p-5 transition-colors hover:border-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+  >
+    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-cyan/10">
+      {{ icon("handshake", "h-6 w-6 text-cyan") }}
+    </span>
+    <span class="flex-1">
+      <span class="block text-base font-semibold text-ink">Нужен полный цикл?</span>
+      <span class="mt-0.5 block text-sm text-muted">Закупка под ключ: от поиска завода до отгрузки и доставки в Россию.</span>
+    </span>
+    {{ icon("arrow-right", "h-5 w-5 shrink-0 text-cyan transition-transform group-hover:translate-x-1") }}
+  </a>
+</div>
