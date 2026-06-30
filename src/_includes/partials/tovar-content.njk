@@ -10,7 +10,7 @@
 {% set svc = services[service] %}
 
 {# Раздел 1 — Что мы поставляем. Карточки видов с фото ИЛИ бренды + категории. #}
-<section id="chto-postavlyaem" class="scroll-mt-28">
+<section id="{{ P.chtoPostavlyaem.id or 'chto-postavlyaem' }}" class="scroll-mt-28">
   <h2>{{ P.chtoPostavlyaem.title }}</h2>
   <p>{{ P.chtoPostavlyaem.intro }}</p>
 
@@ -33,6 +33,7 @@
         </div>
       {% endfor %}
     </div>
+    {% if P.chtoPostavlyaem.outro %}<p class="mt-6">{{ P.chtoPostavlyaem.outro }}</p>{% endif %}
   {% else %}
     {% if P.chtoPostavlyaem.brands %}<p><strong>Бренды:</strong> {{ P.chtoPostavlyaem.brands }}</p>{% endif %}
     {% if P.chtoPostavlyaem.detailCategories %}
@@ -130,7 +131,7 @@
     </ul>
   {% endif %}
   {% if P.kakDostavlyaem.intro2 %}<p>{{ P.kakDostavlyaem.intro2 }}</p>{% endif %}
-  <p class="reading-takeaway">{{ P.kakDostavlyaem.closing }}</p>
+  {% if P.kakDostavlyaem.closing %}<p class="reading-takeaway">{{ P.kakDostavlyaem.closing }}</p>{% endif %}
 </section>
 
 {# Раздел — Что вы получаете. #}

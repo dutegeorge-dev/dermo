@@ -96,6 +96,17 @@ const services: ServicesData = {
     ],
     fullCycleUrl: "/torgovlya/",
   },
+  tekstil: {
+    slug: "tekstil",
+    i18nBase: "uslugi.tovary.tekstil",
+    heroIcon: "store",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "badge-check", labelKey: "uslugi.torgovlya.services.certification", url: `${BASE}/sertifikaciya/` },
+      { icon: "package", labelKey: "uslugi.torgovlya.services.packaging", url: `${BASE}/upakovka-markirovka/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
   "tamozhennoe-oformlenie": {
     slug: "tamozhennoe-oformlenie",
     i18nBase: "uslugi.dostavkaServices.tamozhnya",

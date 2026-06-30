@@ -648,7 +648,8 @@ export interface ServiceNoteSection {
   items?: ServicePainPoint[];
   /** Второй абзац-интро / после списка (опц.). */
   intro2?: string;
-  closing: string;
+  /** Вывод-акцент (опц.). */
+  closing?: string;
 }
 
 /**
@@ -716,6 +717,8 @@ export interface ServicePageText {
    * (brands/detailCategories/outro). Кейс-ссылка — через svc.caseUrl + caseLink.
    */
   chtoPostavlyaem?: {
+    /** id-якорь раздела (по умолчанию chto-postavlyaem). */
+    id?: string;
     title: string;
     intro: string;
     products?: ProductCard[];
@@ -844,6 +847,8 @@ export interface UslugiDict {
     zapchasti: ServicePageText;
     /** Электроника из Китая. */
     elektronika: ServicePageText;
+    /** Текстиль и пошив одежды в Китае. */
+    tekstil: ServicePageText;
   };
   /** Витрина торговли /uslugi/torgovlya/ + названия 10 услуг. */
   torgovlya: UslugiPageText & {

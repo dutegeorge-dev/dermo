@@ -1,1 +1,16 @@
-{# uslugi/dostavka/tovary/tekstil — шаблон-заглушка категории. Контент добавляется позже. #}
+---
+layout: layouts/reading.njk
+service: tekstil
+tovarKey: tekstil
+titleKey: uslugi.tovary.tekstil.metaTitle
+descriptionKey: uslugi.tovary.tekstil.metaDescription
+showTitle: false
+---
+{#
+  Товарная страница «Текстиль и пошив одежды» (/uslugi/dostavka/tovary/tekstil/)
+  на читательском шаблоне. Hero/перелинковка/CTA — service-механизм
+  (services["tekstil"]); контент — общий партиал tovar-content.njk по данным
+  dict.uslugi.tovary.tekstil (доп. разделы «пошив под бренд», «сертификация и
+  маркировка» через extraSections; первый раздел — #chto-shyem).
+#}
+{% include "partials/tovar-content.njk" %}
