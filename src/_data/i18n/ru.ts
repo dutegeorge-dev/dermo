@@ -715,7 +715,7 @@ const ru: Dictionary = {
         {
           icon: "layers",
           title: "Коммерческие категории.",
-          desc: '<a href="/uslugi/dostavka/tovary/stroymaterialy/" class="link-inline">Стройматериалы</a> и <a href="/uslugi/dostavka/tovary/napolnye-pokrytiya/" class="link-inline">напольные покрытия</a>, <a href="/uslugi/dostavka/tovary/keramika-plitka/" class="link-inline">керамика и плитка</a>, <a href="/uslugi/dostavka/tovary/zapchasti/" class="link-inline">запчасти</a> и <a href="/uslugi/dostavka/tovary/oborudovanie/" class="link-inline">оборудование</a>, <a href="/uslugi/dostavka/tovary/elektronika/" class="link-inline">электроника</a>, <a href="/uslugi/dostavka/tovary/tekstil/" class="link-inline">текстиль</a> и другие товары, которые можно ввезти и оформить законно.',
+          desc: '<a href="/uslugi/dostavka/tovary/napolnye-pokrytiya/" class="link-inline">Напольные покрытия</a>, <a href="/uslugi/dostavka/tovary/zapchasti/" class="link-inline">запчасти</a> и <a href="/uslugi/dostavka/tovary/oborudovanie/" class="link-inline">оборудование</a>, <a href="/uslugi/dostavka/tovary/elektronika/" class="link-inline">электроника</a>, <a href="/uslugi/dostavka/tovary/tekstil/" class="link-inline">текстиль</a> и другие товары, которые можно ввезти и оформить законно.',
         },
       ],
     },
@@ -768,8 +768,8 @@ const ru: Dictionary = {
           url: "/uslugi/dostavka/goroda/moskva/",
         },
         {
-          text: "Доставка строительной плитки из Фошаня: расчёт с таможней",
-          url: "/uslugi/dostavka/tovary/keramika-plitka/",
+          text: "Доставка напольных покрытий из Фошаня: расчёт с таможней",
+          url: "/uslugi/dostavka/tovary/napolnye-pokrytiya/",
         },
         {
           text: "Сборный груз из Иу в Екатеринбург: что входит в стоимость",

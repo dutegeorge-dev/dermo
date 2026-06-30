@@ -89,7 +89,6 @@ const LABELS: Record<string, string> = {
   sertifikaciya: "Сертификация",
   "napolnye-pokrytiya": "Напольные покрытия",
   stroymaterialy: "Стройматериалы",
-  "keramika-plitka": "Керамика и плитка",
   elektronika: "Электроника",
   zapchasti: "Запчасти для грузовиков",
   tekstil: "Текстиль",

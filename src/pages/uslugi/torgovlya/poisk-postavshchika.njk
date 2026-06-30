@@ -17,7 +17,6 @@ showTitle: false
 
   По образцу этой страницы делаются остальные торговые услуги.
 #}
-{% from "components/photo-placeholder.njk" import photoPlaceholder %}
 {% from "partials/icon.njk" import icon %}
 {% set P = dict.uslugi.torgovlya.poisk %}
 {% set svc = services[service] %}
@@ -85,7 +84,7 @@ showTitle: false
     </p>
   {% endif %}
 
-  {% if P.kakDelaem.photoCaption %}{{ photoPlaceholder(P.kakDelaem.photoCaption, "light") }}{% endif %}
+  {% if P.kakDelaem.photoCaption %}<figure class="my-2 overflow-hidden rounded-xl border border-slate-200">{% image "/assets/img/uploads/usluga-" + service + "-process-16x9.jpg", P.kakDelaem.photoCaption, "(min-width: 1024px) 45rem, 90vw", "w-full" %}</figure>{% endif %}
 </section>
 
 {# Раздел 5 — Сравнение «Сам / Агент / БАРС» (опц., визуальная таблица). #}

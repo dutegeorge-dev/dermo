@@ -18,9 +18,9 @@
     <div class="mt-6 grid gap-5 sm:grid-cols-2">
       {% for p in P.chtoPostavlyaem.products %}
         <div class="overflow-hidden rounded-xl border border-slate-200">
-          <div class="flex aspect-[4/3] items-center justify-center bg-surface-alt text-slate-400" role="img" aria-label="{{ p.photoCaption }}">
-            {{ icon("camera", "h-8 w-8") }}
-          </div>
+          {# Фото вида товара — заглушка 4:3 (заменяется через Decap:
+             tovar-<ключ>-<N>-4x3.jpg). #}
+          {% image "/assets/img/uploads/tovar-" + tovarKey + "-" + loop.index + "-4x3.jpg", p.photoCaption, "(min-width: 640px) 22rem, 90vw", "aspect-[4/3] w-full object-cover" %}
           <div class="p-4">
             <span class="block text-base font-semibold text-ink">{{ p.name }}</span>
             {% if p.linkUrl and p.linkLabel %}

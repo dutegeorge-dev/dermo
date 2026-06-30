@@ -23,16 +23,14 @@
         </a>
       </div>
 
-      {# Акцентный блок-плейсхолдер (изображение подключается позже). #}
-      <div class="relative hidden aspect-[4/3] overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-brand-dark lg:block" aria-hidden="true">
-        <div class="absolute inset-0 flex items-center justify-center">
-          {{ icon("globe", "h-24 w-24 text-white/15") }}
-        </div>
-        <div class="absolute bottom-5 left-5 right-5 flex items-center gap-2 text-white/70">
+      {# Фото компании — заглушка 4:3 (заменяется через Decap: glavnaya-kompaniya-4x3.jpg). #}
+      <figure class="relative hidden aspect-[4/3] overflow-hidden rounded-2xl lg:block">
+        {% image "/assets/img/uploads/glavnaya-kompaniya-4x3.jpg", "Команда ТЛК БАРС в Гуанчжоу", "(min-width: 1024px) 28rem, 90vw", "absolute inset-0 h-full w-full object-cover" %}
+        <figcaption class="absolute bottom-5 left-5 right-5 flex items-center gap-2 rounded-lg bg-black/30 px-3 py-1.5 text-white">
           {{ icon("map-pin", "h-5 w-5 text-cyan") }}
           <span class="text-sm">Гуанчжоу · Китай</span>
-        </div>
-      </div>
+        </figcaption>
+      </figure>
     </div>
   </div>
 </section>

@@ -165,10 +165,11 @@ sitemap: true
           </ul>
         </div>
 
-        {# Плейсхолдер под фото офиса/команды в Китае (правка 7) — заменяется позже. #}
-        <div class="flex aspect-[4/3] w-full items-center justify-center rounded-2xl border border-slate-200 bg-surface shadow-sm" aria-hidden="true">
-          {{ icon("map-pin", "h-12 w-12 text-slate-300") }}
-        </div>
+        {# Фото офиса/команды в Китае — заглушка 4:3 (заменяется через Decap:
+           torgovlya-komanda-4x3.jpg). #}
+        <figure class="w-full overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+          {% image "/assets/img/uploads/torgovlya-komanda-4x3.jpg", "Офис и команда ТЛК БАРС в Китае", "(min-width: 1024px) 30rem, 90vw", "aspect-[4/3] w-full object-cover" %}
+        </figure>
       </div>
 
       {# «Что даёт выезд на завод» — отдельные светлые карточки под основным рядом. #}
@@ -287,11 +288,11 @@ sitemap: true
         {% for dir in torgovlya.specDirections %}
           <article class="overflow-hidden rounded-2xl border border-slate-200 bg-surface shadow-sm transition hover:shadow-md">
             <div class="grid md:grid-cols-2">
-              {# Фото — плейсхолдер 16:10 (мобайл сверху), на десктопе чередует
-                 сторону и тянется на всю высоту карточки. Заменяется на
-                 <img loading="lazy"> позже. #}
-              <div class="flex aspect-[16/10] items-center justify-center bg-surface-alt md:aspect-auto md:h-full md:min-h-[19rem]{% if dir.photoRight %} md:order-2{% endif %}" aria-hidden="true">
-                {{ icon(dir.photoIcon, "h-14 w-14 text-slate-300") }}
+              {# Фото направления — заглушка 16:10 (мобайл сверху), на десктопе
+                 чередует сторону и тянется на всю высоту карточки. Заменяется
+                 через Decap: torgovlya-napravlenie-<N>-16x10.jpg. #}
+              <div class="overflow-hidden bg-surface-alt aspect-[16/10] md:aspect-auto md:h-full md:min-h-[19rem]{% if dir.photoRight %} md:order-2{% endif %}">
+                {% image "/assets/img/uploads/torgovlya-napravlenie-" + loop.index + "-16x10.jpg", dir.titleKey | t(locale), "(min-width: 768px) 28rem, 100vw", "h-full w-full object-cover" %}
               </div>
 
               {# Контент — заголовок + бейдж, строка сути, буллеты, ссылка. #}

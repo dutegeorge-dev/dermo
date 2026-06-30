@@ -10,7 +10,6 @@ showTitle: false
   на читательском шаблоне. Порядок: что это → с чем помогаем → как ведём →
   что получаете → FAQ. Тексты — i18n (uslugi.torgovlya.peregovory).
 #}
-{% from "components/photo-placeholder.njk" import photoPlaceholder %}
 {% set P = dict.uslugi.torgovlya.peregovory %}
 
 {# Раздел 1 — Что это за услуга. #}
@@ -35,7 +34,7 @@ showTitle: false
   <ol>
     {% for step in P.kakDelaem.steps %}<li><strong>{{ step.title }}.</strong> {{ step.text }}</li>{% endfor %}
   </ol>
-  {% if P.kakDelaem.photoCaption %}{{ photoPlaceholder(P.kakDelaem.photoCaption, "light") }}{% endif %}
+  {% if P.kakDelaem.photoCaption %}<figure class="my-2 overflow-hidden rounded-xl border border-slate-200">{% image "/assets/img/uploads/usluga-" + service + "-process-16x9.jpg", P.kakDelaem.photoCaption, "(min-width: 1024px) 45rem, 90vw", "w-full" %}</figure>{% endif %}
 </section>
 
 {# Раздел 4 — Что вы получаете. #}

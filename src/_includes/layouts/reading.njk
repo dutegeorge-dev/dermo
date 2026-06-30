@@ -40,9 +40,85 @@ layout: layouts/base.njk
 <main class="flex-1">
   {% include "partials/breadcrumbs.njk" %}
 
-  {# Hero над контентом, во всю ширину: услуга (svc), город (cityData) или include. #}
-  {% if svc %}{% include "components/service-hero.njk" %}
-  {% elif cityData %}{% include "components/city-hero.njk" %}
+  {# Hero над контентом, во всю ширину: услуга (svc), город (cityData) или include.
+     Hero услуги/города заинлайнен (не include): внутри — async-шорткод `image`,
+     который НЕ исполняется в include, вызванном из layout (рендерится пустым),
+     но корректно работает в самом layout. Фото — заглушки 4:3 в uploads. #}
+  {% from "partials/icon.njk" import icon %}
+  {% if svc %}
+  <section class="bg-brand text-white">
+    <div class="container grid items-center gap-10 py-14 md:py-16 lg:grid-cols-2 lg:gap-16">
+      <div>
+        <h1 class="max-w-2xl text-4xl font-light leading-tight tracking-tight md:text-5xl">
+          {{ (svc.i18nBase + ".hero.title") | t(locale) }}
+        </h1>
+        <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85">
+          {{ (svc.i18nBase + ".hero.subtitle") | t(locale) }}
+        </p>
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <a
+            href="{{ svc.requestUrl | localizedUrl(locale) }}"
+            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+          >
+            {{ "cta.request" | t(locale) }}
+          </a>
+          <a
+            href="{{ site.telegram }}"
+            rel="nofollow noopener"
+            target="_blank"
+            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+          >
+            {{ icon("send", "h-5 w-5") }}
+            {{ "cta.telegramWrite" | t(locale) }}
+          </a>
+        </div>
+      </div>
+
+      {# Фото услуги — заглушка 4:3 (заменяется через Decap: usluga-<слаг>-hero-4x3.jpg). #}
+      <div class="hidden lg:block">
+        <figure class="overflow-hidden rounded-2xl ring-1 ring-inset ring-white/15">
+          {% image "/assets/img/uploads/usluga-" + service + "-hero-4x3.jpg", (svc.i18nBase + ".hero.photoCaption") | t(locale), "(min-width: 1024px) 33rem, 90vw", "w-full" %}
+        </figure>
+      </div>
+    </div>
+  </section>
+  {% elif cityData %}
+  <section class="bg-brand text-white">
+    <div class="container grid items-center gap-10 py-14 md:py-16 lg:grid-cols-2 lg:gap-16">
+      <div>
+        <h1 class="max-w-2xl text-4xl font-light leading-tight tracking-tight md:text-5xl">
+          Доставка из Китая в {{ cityData.acc }}
+        </h1>
+        <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85">
+          Привезём ваш груз из Китая до склада в {{ cityData.prep }} — в белую, со стыковкой доставки и таможенного оформления.
+        </p>
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <a
+            href="{{ '/kontakty/' | localizedUrl(locale) }}"
+            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+          >
+            {{ "cta.request" | t(locale) }}
+          </a>
+          <a
+            href="{{ site.telegram }}"
+            rel="nofollow noopener"
+            target="_blank"
+            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+          >
+            {{ icon("send", "h-5 w-5") }}
+            {{ "cta.telegramWrite" | t(locale) }}
+          </a>
+        </div>
+      </div>
+
+      {# Фото города — заглушка 4:3 (заменяется через Decap: gorod-<слаг>-hero-4x3.jpg). #}
+      <div class="hidden lg:block">
+        <figure class="overflow-hidden rounded-2xl ring-1 ring-inset ring-white/15">
+          {% image "/assets/img/uploads/gorod-" + city + "-hero-4x3.jpg", cityData.photoCaption, "(min-width: 1024px) 33rem, 90vw", "w-full" %}
+        </figure>
+      </div>
+    </div>
+  </section>
   {% elif heroInclude %}{% include heroInclude %}{% endif %}
 
   <div class="container section">

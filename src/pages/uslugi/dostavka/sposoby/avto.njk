@@ -9,7 +9,6 @@ showTitle: false
   Способ доставки «Авто» (/uslugi/dostavka/sposoby/avto/) на читательском шаблоне.
   Тексты — i18n (uslugi.dostavkaServices.avto), структура — _data/services.ts.
 #}
-{% from "components/photo-placeholder.njk" import photoPlaceholder %}
 {% set P = dict.uslugi.dostavkaServices.avto %}
 
 {# Раздел 1 — Что это за услуга. #}
@@ -25,7 +24,7 @@ showTitle: false
   {% for it in P.vidy.items %}<p><strong>{{ it.lead }}</strong> {{ it.text }}</p>{% endfor %}
   {% if P.vidy.afterText %}<p>{{ P.vidy.afterText }}</p>{% endif %}
   {% if P.vidy.closing %}<p class="reading-takeaway">{{ P.vidy.closing }}</p>{% endif %}
-  {% if P.vidy.photoCaption %}{{ photoPlaceholder(P.vidy.photoCaption, "light") }}{% endif %}
+  {% if P.vidy.photoCaption %}<figure class="my-2 overflow-hidden rounded-xl border border-slate-200">{% image "/assets/img/uploads/usluga-" + service + "-process-16x9.jpg", P.vidy.photoCaption, "(min-width: 1024px) 45rem, 90vw", "w-full" %}</figure>{% endif %}
 </section>
 
 {# Раздел 3 — Как проходит автодоставка (5 шагов). #}

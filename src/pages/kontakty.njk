@@ -50,10 +50,10 @@
       ></iframe>
     </div>
 
-    {# Фото офиса — плейсхолдер (заменяется реальным <img loading="lazy">). #}
-    <div class="flex aspect-[4/3] w-full items-center justify-center rounded-lg border border-gray-200 bg-surface-alt shadow-sm" aria-hidden="true">
-      {{ icon("camera", "h-12 w-12 text-slate-300") }}
-    </div>
+    {# Фото офиса — заглушка 4:3 (заменяется через Decap: kontakty-ofis-4x3.jpg). #}
+    <figure class="w-full overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      {% image "/assets/img/uploads/kontakty-ofis-4x3.jpg", "Офис ООО ТЛК БАРС в Гуанчжоу", "(min-width: 1024px) 30rem, 90vw", "aspect-[4/3] w-full object-cover" %}
+    </figure>
   </div>
 
   <p class="mt-4 max-w-3xl text-gray-700">
