@@ -90,7 +90,26 @@
 </section>
 {% endif %}
 
-{# Раздел — Почему мы по этой категории (преимущества + вывод-акцент). #}
+{# Доп. смысловые разделы (опц., произвольный порядок): напр. без параллельного
+   импорта, производство под бренд, сертификация. #}
+{% if P.extraSections %}
+  {% for sec in P.extraSections %}
+    <section id="{{ sec.id }}" class="scroll-mt-28">
+      <h2>{{ sec.title }}</h2>
+      <p>{{ sec.intro }}</p>
+      {% if sec.items %}
+        <ul>
+          {% for it in sec.items %}<li><strong>{{ it.lead }}</strong> {{ it.text }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+      {% if sec.intro2 %}<p>{{ sec.intro2 }}</p>{% endif %}
+      {% if sec.closing %}<p class="reading-takeaway">{{ sec.closing }}</p>{% endif %}
+    </section>
+  {% endfor %}
+{% endif %}
+
+{# Раздел (опц.) — Почему мы по этой категории (преимущества + вывод-акцент). #}
+{% if P.otlichieList %}
 <section id="pochemu-my" class="scroll-mt-28">
   <h2>{{ P.otlichieList.title }}</h2>
   {% if P.otlichieList.intro %}<p>{{ P.otlichieList.intro }}</p>{% endif %}
@@ -99,6 +118,7 @@
   </ul>
   {% if P.otlichieList.closing %}<p class="reading-takeaway">{{ P.otlichieList.closing }}</p>{% endif %}
 </section>
+{% endif %}
 
 {# Раздел — Как мы доставляем (прозой или со списком способов + вывод). #}
 <section id="kak-dostavlyaem" class="scroll-mt-28">

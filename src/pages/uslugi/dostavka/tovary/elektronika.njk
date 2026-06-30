@@ -1,1 +1,16 @@
-{# uslugi/dostavka/tovary/elektronika — шаблон-заглушка категории. Контент добавляется позже. #}
+---
+layout: layouts/reading.njk
+service: elektronika
+tovarKey: elektronika
+titleKey: uslugi.tovary.elektronika.metaTitle
+descriptionKey: uslugi.tovary.elektronika.metaDescription
+showTitle: false
+---
+{#
+  Товарная страница «Электроника из Китая» (/uslugi/dostavka/tovary/elektronika/)
+  на читательском шаблоне. Hero/перелинковка/CTA — service-механизм
+  (services["elektronika"]); контент — общий партиал tovar-content.njk по данным
+  dict.uslugi.tovary.elektronika (доп. разделы: без параллельного импорта, OEM,
+  сертификация — через extraSections).
+#}
+{% include "partials/tovar-content.njk" %}

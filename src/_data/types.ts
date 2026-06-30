@@ -651,6 +651,25 @@ export interface ServiceNoteSection {
   closing: string;
 }
 
+/**
+ * Произвольный смысловой раздел товарной страницы (с якорем) между «Что мы
+ * поставляем» и «Как доставляем»: заголовок + абзацы/список + опц. вывод-акцент.
+ * Порядок задаётся массивом extraSections. Пример: «без параллельного импорта»,
+ * «производство под бренд», «сертификация».
+ */
+export interface ServiceSection {
+  /** id-якорь раздела (для оглавления). */
+  id: string;
+  title: string;
+  intro: string;
+  /** Второй абзац (опц.). */
+  intro2?: string;
+  /** Маркированный список с жирными зачинами (опц.). */
+  items?: ServicePainPoint[];
+  /** Вывод-акцент (опц.). */
+  closing?: string;
+}
+
 /** Строка таблицы «категории качества»: категория + что это + когда брать. */
 export interface QualityRow {
   category: string;
@@ -708,6 +727,8 @@ export interface ServicePageText {
   kategorii?: QualityTable;
   /** Раздел «Двигатели в сборе» и подобные пояснения прозой (опц.). */
   dvigateli?: ServiceNoteSection;
+  /** Доп. смысловые разделы товарной страницы (произвольный порядок, опц.). */
+  extraSections?: ServiceSection[];
   /** Раздел «Зачем это нужно»: интро + боли + вывод (опц. — есть не у всех). */
   zachem?: {
     title: string;
@@ -821,6 +842,8 @@ export interface UslugiDict {
     napolnye: ServicePageText;
     /** Запчасти для китайских грузовиков и спецтехники. */
     zapchasti: ServicePageText;
+    /** Электроника из Китая. */
+    elektronika: ServicePageText;
   };
   /** Витрина торговли /uslugi/torgovlya/ + названия 10 услуг. */
   torgovlya: UslugiPageText & {

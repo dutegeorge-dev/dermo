@@ -85,6 +85,17 @@ const services: ServicesData = {
     // Кейс по запчастям — ссылкой в разделе «Что мы поставляем».
     caseUrl: "/kejsy/zapchasti-gruzoviki/",
   },
+  elektronika: {
+    slug: "elektronika",
+    i18nBase: "uslugi.tovary.elektronika",
+    heroIcon: "scan-barcode",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "badge-check", labelKey: "uslugi.torgovlya.services.certification", url: `${BASE}/sertifikaciya/` },
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
   "tamozhennoe-oformlenie": {
     slug: "tamozhennoe-oformlenie",
     i18nBase: "uslugi.dostavkaServices.tamozhnya",
