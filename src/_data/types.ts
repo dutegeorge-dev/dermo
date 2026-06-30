@@ -644,7 +644,21 @@ export interface ServiceBulletSection {
 export interface ServiceNoteSection {
   title: string;
   intro: string;
+  /** Второй абзац-интро (опц.). */
+  intro2?: string;
   closing: string;
+}
+
+/** Карточка вида товара в разделе «Что мы поставляем» (фото + опц. ссылка). */
+export interface ProductCard {
+  /** Название вида товара. */
+  name: string;
+  /** Подпись фото-плейсхолдера. */
+  photoCaption: string;
+  /** Подпись живой ссылки (кейс/статья); без неё ссылка не выводится. */
+  linkLabel?: string;
+  /** URL живой ссылки. */
+  linkUrl?: string;
 }
 
 /**
@@ -658,8 +672,10 @@ export interface ServicePageText {
   metaDescription: string;
   /** Hero: H1 под поисковый запрос + подзаголовок + подпись фото. */
   hero: { title: string; subtitle: string; photoCaption: string };
-  /** Раздел 1 «Что это за услуга»: абзацы. */
-  chtoEto: { title: string; paragraphs: string[] };
+  /** Раздел 1 «Что это за услуга»: абзацы (опц. — есть не у всех страниц). */
+  chtoEto?: { title: string; paragraphs: string[] };
+  /** Раздел «Что мы поставляем» (товарная страница): интро + карточки видов. */
+  chtoPostavlyaem?: { title: string; intro: string; products: ProductCard[] };
   /** Раздел «Зачем это нужно»: интро + боли + вывод (опц. — есть не у всех). */
   zachem?: {
     title: string;
@@ -690,7 +706,7 @@ export interface ServicePageText {
   /** Раздел «Кому подходит» — опционален (есть не у каждой услуги). */
   komuPodhodit?: ServiceAudience;
   /** Раздел «Как мы это делаем» — опц. интро/вывод вокруг шагов + подпись фото. */
-  kakDelaem: {
+  kakDelaem?: {
     title: string;
     /** Вводный абзац перед шагами (опц., может содержать HTML). */
     intro?: string;
@@ -710,6 +726,8 @@ export interface ServicePageText {
   };
   /** Раздел-оговорка «Когда метода достаточно, а когда нужен выезд» (опц.). */
   kogda?: ServiceNoteSection;
+  /** Раздел «Как мы доставляем» (товарная страница): прозой + вывод (опц.). */
+  kakDostavlyaem?: ServiceNoteSection;
   /** Раздел-оговорка «Честный знак» (интро + вывод; опц.). */
   chestnyyZnak?: ServiceNoteSection;
   /** Раздел «Что вы получаете»: пункты + вывод (опц. — есть не у всех). */
@@ -764,6 +782,11 @@ export interface UslugiDict {
     more: ServicePageText;
     /** Авиадоставка /uslugi/dostavka/sposoby/avia/. */
     avia: ServicePageText;
+  };
+  /** Товарные страницы /uslugi/dostavka/tovary/<категория>/. */
+  tovary: {
+    /** Напольные покрытия (эталон товарного шаблона). */
+    napolnye: ServicePageText;
   };
   /** Витрина торговли /uslugi/torgovlya/ + названия 10 услуг. */
   torgovlya: UslugiPageText & {

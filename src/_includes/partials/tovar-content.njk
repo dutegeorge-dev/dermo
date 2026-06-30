@@ -1,0 +1,107 @@
+{#
+  Контент товарной страницы (эталон — напольные покрытия). Общий костяк для
+  всех товарных категорий; уникальность (защита от дублей) = виды товара,
+  специфика «почему мы» и оптимальный способ доставки под категорию.
+  Данные — dict.uslugi.tovary[tovarKey] (tovarKey из front matter страницы).
+#}
+{% from "partials/icon.njk" import icon %}
+{% set P = dict.uslugi.tovary[tovarKey] %}
+
+{# Раздел 1 — Что мы поставляем (карточки видов с фото; живая ссылка — опц.). #}
+<section id="chto-postavlyaem" class="scroll-mt-28">
+  <h2>{{ P.chtoPostavlyaem.title }}</h2>
+  <p>{{ P.chtoPostavlyaem.intro }}</p>
+  <div class="mt-6 grid gap-5 sm:grid-cols-2">
+    {% for p in P.chtoPostavlyaem.products %}
+      <div class="overflow-hidden rounded-xl border border-slate-200">
+        <div class="flex aspect-[4/3] items-center justify-center bg-surface-alt text-slate-400" role="img" aria-label="{{ p.photoCaption }}">
+          {{ icon("camera", "h-8 w-8") }}
+        </div>
+        <div class="p-4">
+          <span class="block text-base font-semibold text-ink">{{ p.name }}</span>
+          {% if p.linkUrl and p.linkLabel %}
+            <a href="{{ p.linkUrl | localizedUrl(locale) }}" class="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-cyan-dark no-underline transition-colors hover:text-cyan">
+              {{ p.linkLabel }}
+              {{ icon("arrow-right", "h-4 w-4 shrink-0") }}
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# Раздел 2 — Почему мы по этой категории (преимущества + вывод-акцент). #}
+<section id="pochemu-my" class="scroll-mt-28">
+  <h2>{{ P.otlichieList.title }}</h2>
+  {% if P.otlichieList.intro %}<p>{{ P.otlichieList.intro }}</p>{% endif %}
+  <ul>
+    {% for it in P.otlichieList.items %}<li><strong>{{ it.lead }}</strong> {{ it.text }}</li>{% endfor %}
+  </ul>
+  {% if P.otlichieList.closing %}<p class="reading-takeaway">{{ P.otlichieList.closing }}</p>{% endif %}
+</section>
+
+{# Раздел 3 — Как мы доставляем (оптимальный способ под категорию + вывод). #}
+<section id="kak-dostavlyaem" class="scroll-mt-28">
+  <h2>{{ P.kakDostavlyaem.title }}</h2>
+  <p>{{ P.kakDostavlyaem.intro }}</p>
+  {% if P.kakDostavlyaem.intro2 %}<p>{{ P.kakDostavlyaem.intro2 }}</p>{% endif %}
+  <p class="reading-takeaway">{{ P.kakDostavlyaem.closing }}</p>
+</section>
+
+{# Раздел 4 — Что вы получаете. #}
+<section id="chto-poluchaete" class="scroll-mt-28">
+  <h2>{{ P.chtoPoluchaete.title }}</h2>
+  <ul>
+    {% for item in P.chtoPoluchaete.items %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+</section>
+
+{# Раздел 5 — FAQ-аккордеон (в оглавление) + FAQPage. #}
+<section id="faq" class="scroll-mt-28">
+  <h2>{{ P.faqTitle }}</h2>
+  <div class="mt-6 rounded-xl border border-slate-200 bg-white px-5 sm:px-6">
+    {% for item in P.faq %}
+      <div class="border-b border-slate-200 last:border-b-0">
+        <button
+          type="button"
+          data-accordion-toggle
+          class="flex w-full items-center justify-between gap-4 py-4 text-left text-base font-medium text-ink"
+          aria-expanded="false"
+          aria-controls="faq-panel-{{ loop.index }}"
+        >
+          <span>{{ item.q }}</span>
+          {{ icon("chevron-down", "accordion-caret h-5 w-5 shrink-0 text-cyan transition-transform duration-200") }}
+        </button>
+        <div id="faq-panel-{{ loop.index }}" data-accordion-panel class="hidden pb-4" hidden>
+          <p class="text-sm leading-relaxed text-muted">{{ item.a }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# JSON-LD: FAQPage + Service. #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for item in P.faq %}
+    { "@type": "Question", "name": {{ item.q | dump | safe }}, "acceptedAnswer": { "@type": "Answer", "text": {{ item.a | dump | safe }} } }{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": {{ P.hero.title | dump | safe }},
+  "serviceType": "Поставка товаров из Китая",
+  "description": {{ P.metaDescription | dump | safe }},
+  "url": {{ (site.url + page.url) | dump | safe }},
+  "areaServed": "RU",
+  "provider": { "@type": "Organization", "name": {{ site.legalName | dump | safe }}, "url": {{ site.url | dump | safe }} }
+}
+</script>

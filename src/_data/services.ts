@@ -61,6 +61,17 @@ const services: ServicesData = {
     ],
     fullCycleUrl: "/torgovlya/",
   },
+  "napolnye-pokrytiya": {
+    slug: "napolnye-pokrytiya",
+    i18nBase: "uslugi.tovary.napolnye",
+    heroIcon: "layers",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+      { icon: "train-front", labelKey: "methodFull.zhd", url: `${SPOSOBY}/zhd/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
   "tamozhennoe-oformlenie": {
     slug: "tamozhennoe-oformlenie",
     i18nBase: "uslugi.dostavkaServices.tamozhnya",

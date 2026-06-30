@@ -1,1 +1,15 @@
-{# uslugi/dostavka/tovary/napolnye-pokrytiya — шаблон-заглушка категории. Контент добавляется позже. #}
+---
+layout: layouts/reading.njk
+service: napolnye-pokrytiya
+tovarKey: napolnye
+titleKey: uslugi.tovary.napolnye.metaTitle
+descriptionKey: uslugi.tovary.napolnye.metaDescription
+showTitle: false
+---
+{#
+  Товарная страница «Напольные покрытия» (/uslugi/dostavka/tovary/napolnye-pokrytiya/)
+  на читательском шаблоне — эталон товарного шаблона. Hero/перелинковка/CTA —
+  service-механизм (services["napolnye-pokrytiya"]); контент — общий партиал
+  tovar-content.njk по данным dict.uslugi.tovary[tovarKey].
+#}
+{% include "partials/tovar-content.njk" %}
