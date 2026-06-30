@@ -28,7 +28,6 @@
   ],
   "exclude": [
     "node_modules",
-    "_site",
-    "main.ts"
+    "_site"
   ]
 }
