@@ -1,1 +1,17 @@
-{# uslugi/dostavka/tovary/oborudovanie — шаблон-заглушка категории. Контент добавляется позже. #}
+---
+layout: layouts/reading.njk
+service: oborudovanie
+tovarKey: oborudovanie
+titleKey: uslugi.tovary.oborudovanie.metaTitle
+descriptionKey: uslugi.tovary.oborudovanie.metaDescription
+showTitle: false
+---
+{#
+  Товарная страница «Оборудование и станки из Китая»
+  (/uslugi/dostavka/tovary/oborudovanie/) на читательском шаблоне. Hero/
+  перелинковка/CTA — service-механизм (services["oborudovanie"]); контент —
+  общий партиал tovar-content.njk по данным dict.uslugi.tovary.oborudovanie
+  (доп. разделы «аналоги станков», «поставка под ключ» через extraSections).
+  Только поставка — пусконаладку/обслуживание не заявляем.
+#}
+{% include "partials/tovar-content.njk" %}

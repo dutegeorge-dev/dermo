@@ -849,6 +849,8 @@ export interface UslugiDict {
     elektronika: ServicePageText;
     /** Текстиль и пошив одежды в Китае. */
     tekstil: ServicePageText;
+    /** Оборудование и станки из Китая. */
+    oborudovanie: ServicePageText;
   };
   /** Витрина торговли /uslugi/torgovlya/ + названия 10 услуг. */
   torgovlya: UslugiPageText & {

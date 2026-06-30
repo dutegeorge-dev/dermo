@@ -107,6 +107,17 @@ const services: ServicesData = {
     ],
     fullCycleUrl: "/torgovlya/",
   },
+  oborudovanie: {
+    slug: "oborudovanie",
+    i18nBase: "uslugi.tovary.oborudovanie",
+    heroIcon: "factory",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+  },
   "tamozhennoe-oformlenie": {
     slug: "tamozhennoe-oformlenie",
     i18nBase: "uslugi.dostavkaServices.tamozhnya",
