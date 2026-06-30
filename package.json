@@ -20,6 +20,7 @@
     "dev": "npm run build:css && npm run build:js && concurrently --kill-others-on-fail \"npm:watch:css\" \"npm:watch:js\" \"npm:watch:11ty\"",
     "preview": "npm run build && npx http-server _site -p 8080 -c-1",
     "preview:fast": "npm run clean && npm run build:css && npm run build:js && npm run build:11ty && npx http-server _site -p 8080 -c-1",
+    "cms": "decap-server",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -33,12 +34,17 @@
   "license": "UNLICENSED",
   "devDependencies": {
     "@11ty/eleventy": "^3.1.2",
+    "@11ty/eleventy-img": "^6.0.4",
     "@types/node": "^22.10.0",
     "autoprefixer": "^10.4.20",
-    "cross-env": "^7.0.3",
     "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
     "cssnano": "^7.0.6",
+    "decap-server": "^3.9.1",
     "esbuild": "^0.24.2",
+    "gray-matter": "^4.0.3",
+    "markdown-it": "^14.2.0",
+    "markdown-it-anchor": "^9.2.0",
     "postcss": "^8.4.49",
     "postcss-cli": "^11.0.0",
     "rimraf": "^6.0.1",

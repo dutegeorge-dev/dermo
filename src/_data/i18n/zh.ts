@@ -92,6 +92,19 @@ const zh: Dictionary = {
     zh: "中文",
     switch: "[ZH] Выбрать язык",
   },
+  content: {
+    toc: "目录",
+    orderText: "不想自己处理？",
+    orderCta: "交给我们",
+    relatedArticleTitle: "相关文章",
+    blogTitle: "博客",
+    blogLead: "关于物流、采购和从中国发货的文章。",
+    casesTitle: "案例",
+    casesLead: "真实项目：任务、方案与结果。",
+    emptyBlog: "文章即将上线。",
+    emptyCases: "案例即将上线。",
+    readMore: "阅读",
+  },
   home: {
     hero: {
       title: "[ZH] ООО ТЛК БАРС — торгово-логистическая компания",

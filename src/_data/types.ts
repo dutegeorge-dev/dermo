@@ -1030,6 +1030,28 @@ export interface Dictionary {
     zh: string;
     switch: string;
   };
+  /** Контент: блог и кейсы (витрины, оглавление, перелинковка). */
+  content: {
+    /** Заголовок оглавления (sticky-TOC читательского шаблона). */
+    toc: string;
+    /** Подпись над ссылкой «Закажите у нас» (статья/кейс → услуга). */
+    orderText: string;
+    /** Призыв в блоке перелинковки на услугу. */
+    orderCta: string;
+    /** Подпись над ссылкой на статью (услуга → статья). */
+    relatedArticleTitle: string;
+    /** Витрина блога. */
+    blogTitle: string;
+    blogLead: string;
+    /** Витрина кейсов. */
+    casesTitle: string;
+    casesLead: string;
+    /** Заглушки пустых витрин. */
+    emptyBlog: string;
+    emptyCases: string;
+    /** CTA карточки в витринах. */
+    readMore: string;
+  };
   home: {
     hero: {
       title: string;

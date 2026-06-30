@@ -237,6 +237,11 @@
   .prose-reading h3 {
     @apply mb-4;
   }
+  /* Якорный отступ под липким хедером: переход по оглавлению (в т.ч. к
+     заголовкам Markdown с автоякорями) не прячет заголовок под шапку. */
+  .prose-reading :is(h2, h3) {
+    scroll-margin-top: 7rem;
+  }
   .prose-reading p,
   .prose-reading ul,
   .prose-reading ol {

@@ -1,19 +1,21 @@
 ---
-permalink: /blog/
-title: Блог
-description: Блог ООО ТЛК БАРС — статьи о логистике и доставке грузов.
+# Витрина блога — по одной локализованной странице на язык: /blog/, /en/blog/,
+# /zh/blog/. Карточки берутся из контентной библиотеки (новые сверху, без
+# черновиков); фолбэк-версии (без перевода) показываются на русском.
+pagination:
+  data: locales
+  size: 1
+  alias: listLang
+  addAllPagesToCollections: true
+permalink: "{{ '/blog/' | localizedUrl(listLang) }}"
+sitemap: true
+eleventyComputed:
+  title: "{{ 'content.blogTitle' | t(listLang) }}"
+  description: "{{ 'content.blogLead' | t(listLang) }}"
 ---
-{% from "components/card.njk" import card %}
-{% from "components/empty-state.njk" import emptyState %}
-{% set items = collections.blog %}
-<div class="mt-6">
-  {% if items and items.length %}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {% for item in items %}
-        {{ card(item.data.title, item.url, item.data.description) }}
-      {% endfor %}
-    </div>
-  {% else %}
-    {{ emptyState("Статьи появятся позже.") }}
-  {% endif %}
-</div>
+{% set items = library.blog[listLang] %}
+{% set listKind = "blog" %}
+{% set placeholderIcon = "file-text" %}
+{% set emptyText = "content.emptyBlog" | t(listLang) %}
+<p class="mt-2 max-w-2xl text-muted">{{ "content.blogLead" | t(listLang) }}</p>
+{% include "components/content-list.njk" %}

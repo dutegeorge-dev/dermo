@@ -92,6 +92,19 @@ const en: Dictionary = {
     zh: "中文",
     switch: "[EN] Выбрать язык",
   },
+  content: {
+    toc: "Contents",
+    orderText: "Don't want to handle it yourself?",
+    orderCta: "order it from us",
+    relatedArticleTitle: "Related article",
+    blogTitle: "Blog",
+    blogLead: "Articles on logistics, sourcing and shipping goods from China.",
+    casesTitle: "Cases",
+    casesLead: "Real projects: the task, the solution and the result.",
+    emptyBlog: "Articles coming soon.",
+    emptyCases: "Cases coming soon.",
+    readMore: "Read",
+  },
   home: {
     hero: {
       title: "[EN] ООО ТЛК БАРС — торгово-логистическая компания",

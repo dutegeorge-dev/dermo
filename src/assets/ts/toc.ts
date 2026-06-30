@@ -21,16 +21,32 @@ interface TocSection {
   text: string;
 }
 
-/** Собирает разделы контента: section[id] + текст его первого заголовка. */
+/**
+ * Собирает разделы контента для оглавления:
+ *  - страницы услуг/городов размечены как section[id] с заголовком внутри;
+ *  - статьи блога и кейсы рендерятся из Markdown — плоские заголовки h2/h3 с
+ *    автоякорями (id проставляет markdown-it-anchor на сборке).
+ * Берём section[id], если они есть, иначе — заголовки h2/h3 с id.
+ */
 function collectSections(content: HTMLElement): TocSection[] {
-  return Array.from(content.querySelectorAll<HTMLElement>("section[id]"))
-    .map((section) => {
-      const heading = section.querySelector("h2, h3");
-      return {
-        id: section.id,
-        text: (heading?.textContent ?? "").trim(),
-      };
-    })
+  const sections = Array.from(content.querySelectorAll<HTMLElement>("section[id]"));
+  if (sections.length > 0) {
+    return sections
+      .map((section) => {
+        const heading = section.querySelector("h2, h3");
+        return {
+          id: section.id,
+          text: (heading?.textContent ?? "").trim(),
+        };
+      })
+      .filter((item) => item.id !== "" && item.text !== "");
+  }
+
+  return Array.from(content.querySelectorAll<HTMLElement>("h2[id], h3[id]"))
+    .map((heading) => ({
+      id: heading.id,
+      text: (heading.textContent ?? "").trim(),
+    }))
     .filter((item) => item.id !== "" && item.text !== "");
 }
 

@@ -1,19 +1,21 @@
 ---
-permalink: /kejsy/
-title: Кейсы
-description: Кейсы выполненных проектов ООО ТЛК БАРС.
+# Витрина кейсов — по одной локализованной странице на язык: /kejsy/, /en/kejsy/,
+# /zh/kejsy/. Карточки из контентной библиотеки (новые сверху, без черновиков),
+# показывают итог-result, если он задан; фолбэк-версии — на русском.
+pagination:
+  data: locales
+  size: 1
+  alias: listLang
+  addAllPagesToCollections: true
+permalink: "{{ '/kejsy/' | localizedUrl(listLang) }}"
+sitemap: true
+eleventyComputed:
+  title: "{{ 'content.casesTitle' | t(listLang) }}"
+  description: "{{ 'content.casesLead' | t(listLang) }}"
 ---
-{% from "components/card.njk" import card %}
-{% from "components/empty-state.njk" import emptyState %}
-{% set items = collections.kejsy %}
-<div class="mt-6">
-  {% if items and items.length %}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {% for item in items %}
-        {{ card(item.data.title, item.url, item.data.description) }}
-      {% endfor %}
-    </div>
-  {% else %}
-    {{ emptyState("Кейсы появятся позже.") }}
-  {% endif %}
-</div>
+{% set items = library.kejsy[listLang] %}
+{% set listKind = "kejsy" %}
+{% set placeholderIcon = "package" %}
+{% set emptyText = "content.emptyCases" | t(listLang) %}
+<p class="mt-2 max-w-2xl text-muted">{{ "content.casesLead" | t(listLang) }}</p>
+{% include "components/content-list.njk" %}

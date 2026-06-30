@@ -1,4 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
+import Image from "@11ty/eleventy-img";
 import type { Breadcrumb, Dictionary } from "./src/_data/types.js";
 import ruDict from "./src/_data/i18n/ru.js";
 import enDict from "./src/_data/i18n/en.js";
@@ -111,19 +114,58 @@ const LABELS: Record<string, string> = {
  * Строит список хлебных крошек из URL страницы.
  * Всегда начинается с «Главная». Последняя крошка помечается last (без ссылки).
  */
-function buildBreadcrumbs(url: string): Breadcrumb[] {
+function buildBreadcrumbs(url: string, title?: string): Breadcrumb[] {
   const parts = url.split("/").filter(Boolean);
   const crumbs: Breadcrumb[] = [{ name: "Главная", url: "/" }];
   let acc = "";
   parts.forEach((part, index) => {
     acc += `/${part}`;
+    const last = index === parts.length - 1;
+    // Последняя крошка для контента (блог/кейсы) — заголовок страницы, если
+    // слаг не описан в LABELS (статьи/кейсы создаются динамически).
     crumbs.push({
-      name: LABELS[part] || part,
+      name: LABELS[part] || (last && title) || part,
       url: `${acc}/`,
-      last: index === parts.length - 1,
+      last,
     });
   });
   return crumbs;
+}
+
+/**
+ * eleventy-img: оптимизированная картинка (AVIF + WebP + исходный формат),
+ * srcset, lazy-loading и width/height (защита от сдвига layout — CLS).
+ * Источник — путь от корня сайта (например /assets/img/uploads/foo.jpg),
+ * который резолвится в файл внутри src/. Если файла нет — возвращаем пустую
+ * строку (без падения сборки: ссылки на несуществующее не выводятся).
+ */
+async function imageShortcode(
+  src: string,
+  alt = "",
+  sizes = "100vw",
+  className = "",
+): Promise<string> {
+  if (!src) return "";
+  const inputPath = src.startsWith("/")
+    ? path.join("src", src.replace(/^\//, ""))
+    : src;
+  if (!fs.existsSync(inputPath)) return "";
+
+  const metadata = await Image(inputPath, {
+    widths: [400, 800, 1200],
+    // null — исходный формат как фолбэк (jpg/png), сохраняет прозрачность PNG.
+    formats: ["avif", "webp", null],
+    outputDir: "./_site/assets/img/optimized/",
+    urlPath: "/assets/img/optimized/",
+  });
+
+  return Image.generateHTML(metadata, {
+    alt,
+    sizes,
+    loading: "lazy",
+    decoding: "async",
+    ...(className ? { class: className } : {}),
+  });
 }
 
 // Тип конфигуратора 11ty намеренно ослаблен: пакет не экспортирует строгий
@@ -135,6 +177,11 @@ type EleventyConfig = {
   setTemplateFormats: (formats: string[] | string) => void;
   addFilter: (name: string, fn: (...args: any[]) => unknown) => void;
   addGlobalData: (name: string, value: unknown) => void;
+  addNunjucksAsyncShortcode: (
+    name: string,
+    fn: (...args: any[]) => Promise<string>,
+  ) => void;
+  ignores: Set<string>;
 };
 
 export default function (eleventyConfig: EleventyConfig) {
@@ -155,6 +202,16 @@ export default function (eleventyConfig: EleventyConfig) {
   eleventyConfig.addPassthroughCopy({ "src/assets/fonts": "assets/fonts" });
   eleventyConfig.addPassthroughCopy({ admin: "admin" });
 
+  // Сырые Markdown-файлы блога и кейсов НЕ обрабатываются как шаблоны 11ty:
+  // их читает и рендерит контентная библиотека (src/_data/library.ts), а
+  // страницы генерируются пагинацией (src/blog-pages.njk, src/kejsy-pages.njk).
+  eleventyConfig.ignores.add("src/blog/**/*.md");
+  eleventyConfig.ignores.add("src/kejsy/**/*.md");
+
+  // eleventy-img: единый шорткод вставки оптимизированных фото по всему сайту.
+  // {% image "путь", "alt", "sizes", "css-классы" %}
+  eleventyConfig.addNunjucksAsyncShortcode("image", imageShortcode);
+
   // CSS и JS собираются вне 11ty (postcss/esbuild) прямо в _site —
   // следим за изменениями, чтобы browsersync перезагружал страницу.
   eleventyConfig.addWatchTarget("./_site/assets/css/styles.css");
@@ -163,8 +220,9 @@ export default function (eleventyConfig: EleventyConfig) {
   eleventyConfig.setTemplateFormats(["njk", "md"]);
 
   // Фильтр хлебных крошек (для партиалов навигации и JSON-LD BreadcrumbList).
-  eleventyConfig.addFilter("breadcrumbs", (url: string) =>
-    buildBreadcrumbs(url),
+  // Опциональный title — подпись последней крошки для контента (блог/кейсы).
+  eleventyConfig.addFilter("breadcrumbs", (url: string, title?: string) =>
+    buildBreadcrumbs(url, title),
   );
 
   // Абсолютный URL из относительного пути.

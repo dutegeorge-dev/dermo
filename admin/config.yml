@@ -1,18 +1,32 @@
-# Конфигурация Decap CMS.
-# Бэкенд — git-gateway (ЗАГЛУШКА). Выбор провайдера авторизации отложен:
-# для работы потребуется включить Netlify Identity + Git Gateway
-# (или заменить backend на github/gitlab с настройкой OAuth).
+# Конфигурация Decap CMS — админка для блога и кейсов.
+#
+# Локальный режим (без хостинга): запустить `npx decap-server` параллельно с
+# dev-сервером (`npm run dev`) и открыть /admin/. local_backend включает запись
+# файлов прямо в проект без логина. Боевой бэкенд (git-gateway) остаётся
+# заглушкой — после деплоя включить Netlify Identity + Git Gateway или заменить
+# backend на github с OAuth; структура коллекций при этом не меняется.
 backend:
   name: git-gateway
   branch: main
 
-# Папка для загружаемых через CMS медиафайлов.
+# Локальный бэкенд для работы без хостинга (декап-сервер на localhost).
+local_backend: true
+
+# Мультиязычность: один контент в нескольких языковых файлах. structure
+# multiple_files → отдельные файлы `<slug>.<lang>.md` в той же папке (ru/en/zh).
+# Русский — язык по умолчанию (обязателен); en/zh добавляются по готовности.
+i18n:
+  structure: multiple_files
+  locales: [ru, en, zh]
+  default_locale: ru
+
+# Папка для загружаемых через редактор фото. Совпадает с источником системы
+# оптимизации (eleventy-img подхватывает src/assets/img/**, в т.ч. uploads).
 media_folder: "src/assets/img/uploads"
 public_folder: "/assets/img/uploads"
 
 locale: "ru"
 
-# Структура коллекций под будущий контент. На старте коллекции могут быть пустыми.
 collections:
   - name: "blog"
     label: "Блог"
@@ -22,12 +36,40 @@ collections:
     slug: "{{slug}}"
     extension: "md"
     format: "frontmatter"
+    # Переводы хранятся как <slug>.ru.md / <slug>.en.md / <slug>.zh.md.
+    i18n: true
     fields:
-      - { label: "Заголовок", name: "title", widget: "string" }
-      - { label: "Описание", name: "description", widget: "text", required: false }
-      - { label: "Дата", name: "date", widget: "datetime" }
-      - { label: "OG-изображение", name: "ogImage", widget: "image", required: false }
-      - { label: "Текст", name: "body", widget: "markdown" }
+      - { label: "Заголовок", name: "title", widget: "string", i18n: true }
+      - { label: "Дата", name: "date", widget: "datetime", i18n: duplicate }
+      - { label: "Описание", name: "description", widget: "text", required: false, i18n: true }
+      - { label: "Обложка", name: "cover", widget: "image", required: false, i18n: true }
+      - { label: "Alt обложки", name: "alt", widget: "string", required: false, i18n: true }
+      - label: "Связанная услуга"
+        name: "related_service"
+        widget: "select"
+        required: false
+        i18n: duplicate
+        options: &service_options
+          - { label: "— нет —", value: "" }
+          - { label: "Поиск поставщика", value: "poisk-postavshchika" }
+          - { label: "Аудит производства", value: "audit-proizvodstva" }
+          - { label: "Переговоры", value: "peregovory" }
+          - { label: "Контроль производства", value: "kontrol-proizvodstva" }
+          - { label: "Инспекция", value: "inspekciya" }
+          - { label: "Упаковка и маркировка", value: "upakovka-markirovka" }
+          - { label: "Сертификация", value: "sertifikaciya" }
+          - { label: "Выкуп товара", value: "vykup-tovara" }
+          - { label: "Возврат НДС", value: "vozvrat-nds" }
+          - { label: "Проверка завода", value: "proverka-zavoda" }
+          - { label: "Напольные покрытия", value: "napolnye-pokrytiya" }
+          - { label: "Запчасти", value: "zapchasti" }
+          - { label: "Электроника", value: "elektronika" }
+          - { label: "Текстиль", value: "tekstil" }
+          - { label: "Оборудование", value: "oborudovanie" }
+          - { label: "Таможенное оформление", value: "tamozhennoe-oformlenie" }
+          - { label: "Сборные грузы", value: "sbornye-gruzy" }
+      - { label: "Черновик", name: "draft", widget: "boolean", default: false, required: false, i18n: duplicate }
+      - { label: "Текст", name: "body", widget: "markdown", i18n: true }
 
   - name: "kejsy"
     label: "Кейсы"
@@ -37,12 +79,22 @@ collections:
     slug: "{{slug}}"
     extension: "md"
     format: "frontmatter"
+    i18n: true
     fields:
-      - { label: "Заголовок", name: "title", widget: "string" }
-      - { label: "Описание", name: "description", widget: "text", required: false }
-      - { label: "Дата", name: "date", widget: "datetime" }
-      - { label: "OG-изображение", name: "ogImage", widget: "image", required: false }
-      - { label: "Текст", name: "body", widget: "markdown" }
+      - { label: "Заголовок", name: "title", widget: "string", i18n: true }
+      - { label: "Дата", name: "date", widget: "datetime", i18n: duplicate }
+      - { label: "Описание", name: "description", widget: "text", required: false, i18n: true }
+      - { label: "Обложка", name: "cover", widget: "image", required: false, i18n: true }
+      - { label: "Alt обложки", name: "alt", widget: "string", required: false, i18n: true }
+      - { label: "Итог (результат)", name: "result", widget: "string", required: false, i18n: true }
+      - label: "Связанная услуга"
+        name: "related_service"
+        widget: "select"
+        required: false
+        i18n: duplicate
+        options: *service_options
+      - { label: "Черновик", name: "draft", widget: "boolean", default: false, required: false, i18n: duplicate }
+      - { label: "Текст", name: "body", widget: "markdown", i18n: true }
 
   - name: "tovary"
     label: "Товарные страницы"

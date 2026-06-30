@@ -1,0 +1,25 @@
+---
+# Генератор страниц кейсов из контентной библиотеки (src/_data/library.ts).
+# По одной странице на каждую языковую версию (ru + en/zh с фолбэком на ru):
+# /kejsy/<slug>/, /en/kejsy/<slug>/, /zh/kejsy/<slug>/. Читательский шаблон.
+pagination:
+  data: library.renderKejsy
+  size: 1
+  alias: doc
+  addAllPagesToCollections: true
+permalink: "{{ doc.url }}"
+layout: layouts/reading.njk
+tags: kejsy
+ogType: article
+sitemap: true
+eleventyComputed:
+  title: "{{ doc.title }}"
+  description: "{{ doc.description }}"
+  date: "{{ doc.date }}"
+  cover: "{{ doc.cover }}"
+  alt: "{{ doc.alt }}"
+  ogImage: "{{ doc.cover }}"
+  relatedService: "{{ doc.relatedService }}"
+  result: "{{ doc.result }}"
+---
+{{ doc.html | safe }}

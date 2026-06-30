@@ -1,4 +1,4 @@
-{%- set crumbs = page.url | breadcrumbs -%}
+{%- set crumbs = page.url | breadcrumbs(title) -%}
 {% if crumbs.length > 1 %}
   {# Хлебные крошки на ультрамариновом фоне — продолжение синей зоны хедера/hero
      (без отдельной серой плашки). Светлый полупрозрачный текст, активный — ярче. #}

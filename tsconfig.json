@@ -22,6 +22,7 @@
   "include": [
     "eleventy.config.ts",
     "tailwind.config.ts",
+    "types/**/*.d.ts",
     "src/_data/**/*.ts",
     "src/assets/ts/**/*.ts"
   ],
