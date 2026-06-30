@@ -242,6 +242,11 @@
   .prose-reading :is(h2, h3) {
     scroll-margin-top: 7rem;
   }
+  /* Картинки, вставленные в тело статьи/кейса (Markdown → eleventy-img):
+     блочные, с вертикальным ритмом. Ширина/скругление — на самом <img>. */
+  .prose-reading picture {
+    @apply my-6 block;
+  }
   .prose-reading p,
   .prose-reading ul,
   .prose-reading ol {

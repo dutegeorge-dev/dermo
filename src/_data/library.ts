@@ -3,6 +3,7 @@ import path from "node:path";
 import matter from "gray-matter";
 import MarkdownIt from "markdown-it";
 import anchor from "markdown-it-anchor";
+import Image from "@11ty/eleventy-img";
 
 /**
  * Контентная библиотека блога и кейсов из Markdown (мультиязычная).
@@ -105,6 +106,52 @@ function urlFor(collection: string, slug: string, lang: Lang): string {
     : `/${lang}/${collection}/${slug}/`;
 }
 
+/**
+ * Прогоняет одну картинку (из Markdown-тела) через eleventy-img: AVIF/WebP +
+ * исходный формат, srcset, lazy, width/height (без CLS). Логика та же, что у
+ * шорткода {% image %} в eleventy.config.ts — так фото, вставленные в тело
+ * статьи/кейса (в т.ч. через Decap), тоже оптимизируются. Если файла нет —
+ * возвращаем простой lazy-<img> (без падения сборки).
+ */
+async function optimizeContentImage(src: string, alt: string): Promise<string> {
+  if (!src.startsWith("/")) {
+    return `<img src="${src}" alt="${alt}" loading="lazy" decoding="async">`;
+  }
+  const inputPath = path.join(process.cwd(), "src", src.replace(/^\//, ""));
+  if (!fs.existsSync(inputPath)) {
+    return `<img src="${src}" alt="${alt}" loading="lazy" decoding="async">`;
+  }
+  const metadata = await Image(inputPath, {
+    widths: [400, 800, 1200],
+    formats: ["avif", "webp", null],
+    outputDir: "./_site/assets/img/optimized/",
+    urlPath: "/assets/img/optimized/",
+  });
+  return Image.generateHTML(metadata, {
+    alt,
+    sizes: "(min-width: 1024px) 45rem, 90vw",
+    loading: "lazy",
+    decoding: "async",
+    class: "h-auto w-full rounded-xl border border-slate-200",
+  });
+}
+
+/** Заменяет все <img> в отрендеренном HTML на оптимизированные <picture>. */
+async function optimizeContentImages(html: string): Promise<string> {
+  const matches = [...html.matchAll(/<img\b[^>]*>/g)];
+  if (matches.length === 0) return html;
+  let result = "";
+  let last = 0;
+  for (const m of matches) {
+    const tag = m[0];
+    const src = /src="([^"]*)"/.exec(tag)?.[1] ?? "";
+    const alt = /alt="([^"]*)"/.exec(tag)?.[1] ?? "";
+    result += html.slice(last, m.index) + (await optimizeContentImage(src, alt));
+    last = (m.index ?? 0) + tag.length;
+  }
+  return result + html.slice(last);
+}
+
 interface ParsedDoc {
   data: Record<string, unknown>;
   html: string;
@@ -124,7 +171,11 @@ for (const collection of COLLECTIONS) {
     const raw = fs.readFileSync(path.join(dir, file), "utf8");
     const parsed = matter(raw);
     const byLang = (docs[collection.name][slug] ??= {});
-    byLang[lang] = { data: parsed.data, html: md.render(parsed.content) };
+    byLang[lang] = {
+      data: parsed.data,
+      // top-level await: оптимизируем вставленные в тело картинки на этапе данных.
+      html: await optimizeContentImages(md.render(parsed.content)),
+    };
   }
 }
 
