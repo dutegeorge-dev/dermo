@@ -1,1 +1,16 @@
-{# uslugi/dostavka/tovary/zapchasti — шаблон-заглушка категории. Контент добавляется позже. #}
+---
+layout: layouts/reading.njk
+service: zapchasti
+tovarKey: zapchasti
+titleKey: uslugi.tovary.zapchasti.metaTitle
+descriptionKey: uslugi.tovary.zapchasti.metaDescription
+showTitle: false
+---
+{#
+  Товарная страница «Запчасти для китайских грузовиков и спецтехники»
+  (/uslugi/dostavka/tovary/zapchasti/) на читательском шаблоне. Hero/перелинковка/
+  CTA — service-механизм (services["zapchasti"]); контент — общий партиал
+  tovar-content.njk по данным dict.uslugi.tovary.zapchasti (с разделами «три
+  категории качества» и «двигатели в сборе»).
+#}
+{% include "partials/tovar-content.njk" %}

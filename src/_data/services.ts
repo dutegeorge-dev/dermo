@@ -72,6 +72,19 @@ const services: ServicesData = {
     ],
     fullCycleUrl: "/torgovlya/",
   },
+  zapchasti: {
+    slug: "zapchasti",
+    i18nBase: "uslugi.tovary.zapchasti",
+    heroIcon: "package-check",
+    requestUrl: "/kontakty/",
+    related: [
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+      { icon: "landmark", labelKey: "uslugi.torgovlya.services.buyout", url: `${BASE}/vykup-tovara/` },
+    ],
+    fullCycleUrl: "/torgovlya/",
+    // Кейс по запчастям — ссылкой в разделе «Что мы поставляем».
+    caseUrl: "/kejsy/zapchasti-gruzoviki/",
+  },
   "tamozhennoe-oformlenie": {
     slug: "tamozhennoe-oformlenie",
     i18nBase: "uslugi.dostavkaServices.tamozhnya",

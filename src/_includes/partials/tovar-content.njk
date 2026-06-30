@@ -1,37 +1,96 @@
 {#
-  Контент товарной страницы (эталон — напольные покрытия). Общий костяк для
-  всех товарных категорий; уникальность (защита от дублей) = виды товара,
-  специфика «почему мы» и оптимальный способ доставки под категорию.
+  Контент товарной страницы (эталон — напольные покрытия; расширен под запчасти).
+  Общий костяк для всех товарных категорий; разделы рендерятся только если есть
+  в данных. Уникальность (защита от дублей) = виды товара, специфика «почему мы»
+  и оптимальный способ доставки под категорию.
   Данные — dict.uslugi.tovary[tovarKey] (tovarKey из front matter страницы).
 #}
 {% from "partials/icon.njk" import icon %}
 {% set P = dict.uslugi.tovary[tovarKey] %}
+{% set svc = services[service] %}
 
-{# Раздел 1 — Что мы поставляем (карточки видов с фото; живая ссылка — опц.). #}
+{# Раздел 1 — Что мы поставляем. Карточки видов с фото ИЛИ бренды + категории. #}
 <section id="chto-postavlyaem" class="scroll-mt-28">
   <h2>{{ P.chtoPostavlyaem.title }}</h2>
   <p>{{ P.chtoPostavlyaem.intro }}</p>
-  <div class="mt-6 grid gap-5 sm:grid-cols-2">
-    {% for p in P.chtoPostavlyaem.products %}
-      <div class="overflow-hidden rounded-xl border border-slate-200">
-        <div class="flex aspect-[4/3] items-center justify-center bg-surface-alt text-slate-400" role="img" aria-label="{{ p.photoCaption }}">
-          {{ icon("camera", "h-8 w-8") }}
+
+  {% if P.chtoPostavlyaem.products %}
+    <div class="mt-6 grid gap-5 sm:grid-cols-2">
+      {% for p in P.chtoPostavlyaem.products %}
+        <div class="overflow-hidden rounded-xl border border-slate-200">
+          <div class="flex aspect-[4/3] items-center justify-center bg-surface-alt text-slate-400" role="img" aria-label="{{ p.photoCaption }}">
+            {{ icon("camera", "h-8 w-8") }}
+          </div>
+          <div class="p-4">
+            <span class="block text-base font-semibold text-ink">{{ p.name }}</span>
+            {% if p.linkUrl and p.linkLabel %}
+              <a href="{{ p.linkUrl | localizedUrl(locale) }}" class="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-cyan-dark no-underline transition-colors hover:text-cyan">
+                {{ p.linkLabel }}
+                {{ icon("arrow-right", "h-4 w-4 shrink-0") }}
+              </a>
+            {% endif %}
+          </div>
         </div>
-        <div class="p-4">
-          <span class="block text-base font-semibold text-ink">{{ p.name }}</span>
-          {% if p.linkUrl and p.linkLabel %}
-            <a href="{{ p.linkUrl | localizedUrl(locale) }}" class="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-cyan-dark no-underline transition-colors hover:text-cyan">
-              {{ p.linkLabel }}
-              {{ icon("arrow-right", "h-4 w-4 shrink-0") }}
-            </a>
-          {% endif %}
-        </div>
-      </div>
-    {% endfor %}
-  </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    {% if P.chtoPostavlyaem.brands %}<p><strong>Бренды:</strong> {{ P.chtoPostavlyaem.brands }}</p>{% endif %}
+    {% if P.chtoPostavlyaem.detailCategories %}
+      <p><strong>{{ P.chtoPostavlyaem.detailCategories.label }}:</strong></p>
+      <ul>
+        {% for d in P.chtoPostavlyaem.detailCategories.items %}<li>{{ d }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+    {% if P.chtoPostavlyaem.outro %}<p>{{ P.chtoPostavlyaem.outro }}</p>{% endif %}
+    {% if svc.caseUrl and P.caseLink %}
+      <p>
+        <a href="{{ svc.caseUrl | localizedUrl(locale) }}" class="group inline-flex items-center gap-1.5 font-medium text-cyan-dark no-underline transition-colors hover:text-cyan">
+          {{ P.caseLink }}
+          {{ icon("arrow-right", "h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1") }}
+        </a>
+      </p>
+    {% endif %}
+  {% endif %}
 </section>
 
-{# Раздел 2 — Почему мы по этой категории (преимущества + вывод-акцент). #}
+{# Раздел (опц.) — Категории качества (таблица + вывод). #}
+{% if P.kategorii %}
+<section id="kategorii" class="scroll-mt-28">
+  <h2>{{ P.kategorii.title }}</h2>
+  <div class="mt-5 overflow-x-auto">
+    <table class="w-full min-w-[34rem] border-collapse text-left text-sm">
+      <thead>
+        <tr class="border-b border-slate-200">
+          <th class="py-3 pr-4 font-semibold text-ink">{{ P.kategorii.columns.category }}</th>
+          <th class="px-4 py-3 font-medium text-muted">{{ P.kategorii.columns.what }}</th>
+          <th class="px-4 py-3 font-medium text-muted">{{ P.kategorii.columns.when }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in P.kategorii.rows %}
+        <tr class="border-b border-slate-200 align-top last:border-b-0">
+          <td class="py-3 pr-4 font-semibold text-ink">{{ r.category }}</td>
+          <td class="px-4 py-3 text-muted">{{ r.what }}</td>
+          <td class="px-4 py-3 text-muted">{{ r.when }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if P.kategorii.closing %}<p class="reading-takeaway">{{ P.kategorii.closing }}</p>{% endif %}
+</section>
+{% endif %}
+
+{# Раздел (опц.) — Двигатели в сборе / пояснение прозой + вывод. #}
+{% if P.dvigateli %}
+<section id="dvigateli" class="scroll-mt-28">
+  <h2>{{ P.dvigateli.title }}</h2>
+  <p>{{ P.dvigateli.intro }}</p>
+  {% if P.dvigateli.closing %}<p class="reading-takeaway">{{ P.dvigateli.closing }}</p>{% endif %}
+</section>
+{% endif %}
+
+{# Раздел — Почему мы по этой категории (преимущества + вывод-акцент). #}
 <section id="pochemu-my" class="scroll-mt-28">
   <h2>{{ P.otlichieList.title }}</h2>
   {% if P.otlichieList.intro %}<p>{{ P.otlichieList.intro }}</p>{% endif %}
@@ -41,15 +100,20 @@
   {% if P.otlichieList.closing %}<p class="reading-takeaway">{{ P.otlichieList.closing }}</p>{% endif %}
 </section>
 
-{# Раздел 3 — Как мы доставляем (оптимальный способ под категорию + вывод). #}
+{# Раздел — Как мы доставляем (прозой или со списком способов + вывод). #}
 <section id="kak-dostavlyaem" class="scroll-mt-28">
   <h2>{{ P.kakDostavlyaem.title }}</h2>
   <p>{{ P.kakDostavlyaem.intro }}</p>
+  {% if P.kakDostavlyaem.items %}
+    <ul>
+      {% for it in P.kakDostavlyaem.items %}<li><strong>{{ it.lead }}</strong> {{ it.text }}</li>{% endfor %}
+    </ul>
+  {% endif %}
   {% if P.kakDostavlyaem.intro2 %}<p>{{ P.kakDostavlyaem.intro2 }}</p>{% endif %}
   <p class="reading-takeaway">{{ P.kakDostavlyaem.closing }}</p>
 </section>
 
-{# Раздел 4 — Что вы получаете. #}
+{# Раздел — Что вы получаете. #}
 <section id="chto-poluchaete" class="scroll-mt-28">
   <h2>{{ P.chtoPoluchaete.title }}</h2>
   <ul>
@@ -57,7 +121,7 @@
   </ul>
 </section>
 
-{# Раздел 5 — FAQ-аккордеон (в оглавление) + FAQPage. #}
+{# Раздел — FAQ-аккордеон (в оглавление) + FAQPage. #}
 <section id="faq" class="scroll-mt-28">
   <h2>{{ P.faqTitle }}</h2>
   <div class="mt-6 rounded-xl border border-slate-200 bg-white px-5 sm:px-6">

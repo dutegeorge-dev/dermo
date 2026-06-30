@@ -644,9 +644,26 @@ export interface ServiceBulletSection {
 export interface ServiceNoteSection {
   title: string;
   intro: string;
-  /** Второй абзац-интро (опц.). */
+  /** Маркированный список внутри раздела (опц.). */
+  items?: ServicePainPoint[];
+  /** Второй абзац-интро / после списка (опц.). */
   intro2?: string;
   closing: string;
+}
+
+/** Строка таблицы «категории качества»: категория + что это + когда брать. */
+export interface QualityRow {
+  category: string;
+  what: string;
+  when: string;
+}
+
+/** Раздел-таблица «Категории качества» (опц. у товарной категории). */
+export interface QualityTable {
+  title: string;
+  columns: { category: string; what: string; when: string };
+  rows: QualityRow[];
+  closing?: string;
 }
 
 /** Карточка вида товара в разделе «Что мы поставляем» (фото + опц. ссылка). */
@@ -674,8 +691,23 @@ export interface ServicePageText {
   hero: { title: string; subtitle: string; photoCaption: string };
   /** Раздел 1 «Что это за услуга»: абзацы (опц. — есть не у всех страниц). */
   chtoEto?: { title: string; paragraphs: string[] };
-  /** Раздел «Что мы поставляем» (товарная страница): интро + карточки видов. */
-  chtoPostavlyaem?: { title: string; intro: string; products: ProductCard[] };
+  /**
+   * Раздел «Что мы поставляем» (товарная страница). Либо карточки видов с фото
+   * (products), либо текстовый формат: бренды + категории деталей + абзац-вывод
+   * (brands/detailCategories/outro). Кейс-ссылка — через svc.caseUrl + caseLink.
+   */
+  chtoPostavlyaem?: {
+    title: string;
+    intro: string;
+    products?: ProductCard[];
+    brands?: string;
+    detailCategories?: { label: string; items: string[] };
+    outro?: string;
+  };
+  /** Раздел-таблица «Категории качества» (опц. у товарной категории). */
+  kategorii?: QualityTable;
+  /** Раздел «Двигатели в сборе» и подобные пояснения прозой (опц.). */
+  dvigateli?: ServiceNoteSection;
   /** Раздел «Зачем это нужно»: интро + боли + вывод (опц. — есть не у всех). */
   zachem?: {
     title: string;
@@ -787,6 +819,8 @@ export interface UslugiDict {
   tovary: {
     /** Напольные покрытия (эталон товарного шаблона). */
     napolnye: ServicePageText;
+    /** Запчасти для китайских грузовиков и спецтехники. */
+    zapchasti: ServicePageText;
   };
   /** Витрина торговли /uslugi/torgovlya/ + названия 10 услуг. */
   torgovlya: UslugiPageText & {
