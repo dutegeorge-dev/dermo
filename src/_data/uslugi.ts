@@ -35,11 +35,9 @@ const uslugi: UslugiData = {
   tovary: [
     { slug: "napolnye-pokrytiya", nameKey: "goods.flooring", icon: "layers", url: `${DELIVERY}/tovary/napolnye-pokrytiya/` },
     { slug: "zapchasti", nameKey: "goods.parts", icon: "package-check", url: `${DELIVERY}/tovary/zapchasti/` },
-    { slug: "keramika-plitka", nameKey: "goods.ceramics", icon: "package", url: `${DELIVERY}/tovary/keramika-plitka/` },
     { slug: "elektronika", nameKey: "goods.electronics", icon: "scan-barcode", url: `${DELIVERY}/tovary/elektronika/` },
     { slug: "tekstil", nameKey: "goods.textile", icon: "store", url: `${DELIVERY}/tovary/tekstil/` },
     { slug: "oborudovanie", nameKey: "goods.equipment", icon: "factory", url: `${DELIVERY}/tovary/oborudovanie/` },
-    { slug: "stroymaterialy", nameKey: "goods.building", icon: "warehouse", url: `${DELIVERY}/tovary/stroymaterialy/` },
   ],
 
   // По городу — города присутствия (названия из ветки `city`).

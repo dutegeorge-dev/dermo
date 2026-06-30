@@ -75,8 +75,6 @@ const megaMenu: MegaMenu = {
         column: 2,
         items: [
           { titleKey: "goods.flooring", url: "/uslugi/dostavka/tovary/napolnye-pokrytiya/" },
-          { titleKey: "goods.building", url: "/uslugi/dostavka/tovary/stroymaterialy/" },
-          { titleKey: "goods.ceramics", url: "/uslugi/dostavka/tovary/keramika-plitka/" },
           { titleKey: "goods.electronics", url: "/uslugi/dostavka/tovary/elektronika/" },
           { titleKey: "goods.parts", url: "/uslugi/dostavka/tovary/zapchasti/" },
           { titleKey: "goods.textile", url: "/uslugi/dostavka/tovary/tekstil/" },
