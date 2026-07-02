@@ -92,6 +92,9 @@ const ru: Dictionary = {
     emptyBlog: "Статьи появятся позже.",
     emptyCases: "Кейсы появятся позже.",
     readMore: "Читать",
+    prev: "Предыдущий",
+    next: "Следующий",
+    moreReading: "Другие материалы",
   },
   home: {
     hero: {

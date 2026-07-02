@@ -218,6 +218,34 @@ layout: layouts/base.njk
             </a>
           </div>
         {% endif %}
+
+        {# Навигация по витрине: предыдущий / следующий материал (блог и кейсы).
+           Данные — prevUrl/nextUrl из библиотеки (соседи той же коллекции и
+           языка). На страницах услуг/городов не задаются — блок скрыт. #}
+        {% if prevUrl or nextUrl %}
+          <nav class="mt-12 grid gap-4 border-t border-slate-200 pt-8 sm:grid-cols-2" aria-label="{{ 'content.moreReading' | t(locale) }}">
+            {% if prevUrl %}
+              <a href="{{ prevUrl }}" class="group flex flex-col rounded-xl border border-slate-200 p-5 transition-colors hover:border-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan">
+                <span class="inline-flex items-center gap-1.5 text-sm font-medium text-cyan-dark">
+                  {{ icon("chevron-left", "h-4 w-4") }}
+                  {{ "content.prev" | t(locale) }}
+                </span>
+                <span class="mt-1 text-base font-semibold text-ink">{{ prevTitle }}</span>
+              </a>
+            {% else %}
+              <span class="hidden sm:block"></span>
+            {% endif %}
+            {% if nextUrl %}
+              <a href="{{ nextUrl }}" class="group flex flex-col rounded-xl border border-slate-200 p-5 text-right transition-colors hover:border-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan sm:col-start-2">
+                <span class="inline-flex items-center justify-end gap-1.5 text-sm font-medium text-cyan-dark">
+                  {{ "content.next" | t(locale) }}
+                  {{ icon("chevron-right", "h-4 w-4") }}
+                </span>
+                <span class="mt-1 text-base font-semibold text-ink">{{ nextTitle }}</span>
+              </a>
+            {% endif %}
+          </nav>
+        {% endif %}
       </div>
 
       {# ── Правое sticky-оглавление (десктоп). Скрыто, пока TS не наполнит

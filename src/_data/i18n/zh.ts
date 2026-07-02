@@ -104,6 +104,9 @@ const zh: Dictionary = {
     emptyBlog: "文章即将上线。",
     emptyCases: "案例即将上线。",
     readMore: "阅读",
+    prev: "上一篇",
+    next: "下一篇",
+    moreReading: "更多内容",
   },
   home: {
     hero: {

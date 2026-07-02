@@ -21,5 +21,9 @@ eleventyComputed:
   alt: "{{ doc.alt }}"
   ogImage: "{{ doc.cover }}"
   relatedService: "{{ doc.relatedService }}"
+  prevUrl: "{{ doc.prev.url if doc.prev }}"
+  prevTitle: "{{ doc.prev.title if doc.prev }}"
+  nextUrl: "{{ doc.next.url if doc.next }}"
+  nextTitle: "{{ doc.next.title if doc.next }}"
 ---
 {{ doc.html | safe }}

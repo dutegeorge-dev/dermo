@@ -1051,6 +1051,10 @@ export interface Dictionary {
     emptyCases: string;
     /** CTA карточки в витринах. */
     readMore: string;
+    /** Навигация «предыдущий / следующий» в конце статьи/кейса. */
+    prev: string;
+    next: string;
+    moreReading: string;
   };
   home: {
     hero: {

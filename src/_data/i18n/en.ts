@@ -104,6 +104,9 @@ const en: Dictionary = {
     emptyBlog: "Articles coming soon.",
     emptyCases: "Cases coming soon.",
     readMore: "Read",
+    prev: "Previous",
+    next: "Next",
+    moreReading: "More reading",
   },
   home: {
     hero: {

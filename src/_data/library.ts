@@ -59,6 +59,16 @@ export interface RenderUnit {
   html: string;
   /** true — перевода на этот язык нет, показывается русский контент (фолбэк). */
   isFallback: boolean;
+  /** Соседи в витрине (та же коллекция и язык, порядок «новые сверху»):
+   *  prev — предыдущая (более новая) запись, next — следующая (более старая). */
+  prev?: NavLink;
+  next?: NavLink;
+}
+
+/** Ссылка на соседнюю статью/кейс (для навигации в конце страницы). */
+export interface NavLink {
+  url: string;
+  title: string;
 }
 
 /** Карточка для витрин и перелинковки. */
@@ -251,6 +261,24 @@ const byDateDesc = (a: ContentCard, b: ContentCard): number =>
   (b.date || "").localeCompare(a.date || "");
 for (const collection of ["blog", "kejsy"]) {
   for (const lang of LANGS) lists[collection][lang].sort(byDateDesc);
+}
+
+// Навигация «предыдущий / следующий» — соседи в отсортированной витрине той же
+// коллекции и языка. Проставляем на соответствующие единицы рендера по URL.
+const unitByUrl = new Map<string, RenderUnit>();
+for (const unit of [...renderBlog, ...renderKejsy]) unitByUrl.set(unit.url, unit);
+for (const collection of ["blog", "kejsy"]) {
+  for (const lang of LANGS) {
+    const cards = lists[collection][lang];
+    cards.forEach((card, i) => {
+      const unit = unitByUrl.get(card.url);
+      if (!unit) return;
+      const prev = cards[i - 1];
+      const next = cards[i + 1];
+      if (prev) unit.prev = { url: prev.url, title: prev.title };
+      if (next) unit.next = { url: next.url, title: next.title };
+    });
+  }
 }
 
 export default {
