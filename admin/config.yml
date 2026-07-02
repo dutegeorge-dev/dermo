@@ -108,3 +108,110 @@ collections:
       - { label: "Заголовок", name: "title", widget: "string" }
       - { label: "Описание", name: "description", widget: "text", required: false }
       - { label: "Содержимое", name: "body", widget: "markdown", required: false }
+  - name: "sitephotos"
+    label: "Фотографии сайта"
+    label_singular: "Раздел фото"
+    files:
+      - name: "glavnaya"
+        label: "Главная"
+        file: "photos/glavnaya.json"
+        fields:
+          - { label: "Блок «Кто мы» — фото компании (4:3)", name: "glavnaya-kompaniya-4x3", widget: "image", required: false }
+      - name: "uslugi"
+        label: "Услуги"
+        file: "photos/uslugi.json"
+        fields:
+          - { label: "Поиск поставщика — hero (4:3)", name: "usluga-poisk-postavshchika-hero-4x3", widget: "image", required: false }
+          - { label: "Аудит производства — hero (4:3)", name: "usluga-audit-proizvodstva-hero-4x3", widget: "image", required: false }
+          - { label: "Переговоры — hero (4:3)", name: "usluga-peregovory-hero-4x3", widget: "image", required: false }
+          - { label: "Контроль производства — hero (4:3)", name: "usluga-kontrol-proizvodstva-hero-4x3", widget: "image", required: false }
+          - { label: "Инспекция — hero (4:3)", name: "usluga-inspekciya-hero-4x3", widget: "image", required: false }
+          - { label: "Упаковка и маркировка — hero (4:3)", name: "usluga-upakovka-markirovka-hero-4x3", widget: "image", required: false }
+          - { label: "Сертификация — hero (4:3)", name: "usluga-sertifikaciya-hero-4x3", widget: "image", required: false }
+          - { label: "Выкуп товара — hero (4:3)", name: "usluga-vykup-tovara-hero-4x3", widget: "image", required: false }
+          - { label: "Возврат НДС — hero (4:3)", name: "usluga-vozvrat-nds-hero-4x3", widget: "image", required: false }
+          - { label: "Проверка завода — hero (4:3)", name: "usluga-proverka-zavoda-hero-4x3", widget: "image", required: false }
+          - { label: "Автодоставка — hero (4:3)", name: "usluga-avto-hero-4x3", widget: "image", required: false }
+          - { label: "ЖД-доставка — hero (4:3)", name: "usluga-zhd-hero-4x3", widget: "image", required: false }
+          - { label: "Морская доставка — hero (4:3)", name: "usluga-more-hero-4x3", widget: "image", required: false }
+          - { label: "Авиадоставка — hero (4:3)", name: "usluga-avia-hero-4x3", widget: "image", required: false }
+          - { label: "Таможенное оформление — hero (4:3)", name: "usluga-tamozhennoe-oformlenie-hero-4x3", widget: "image", required: false }
+          - { label: "Сборные грузы — hero (4:3)", name: "usluga-sbornye-gruzy-hero-4x3", widget: "image", required: false }
+          - { label: "Проверка завода — фото процесса (16:9)", name: "usluga-proverka-zavoda-process-16x9", widget: "image", required: false }
+          - { label: "Поиск поставщика — фото процесса (16:9)", name: "usluga-poisk-postavshchika-process-16x9", widget: "image", required: false }
+          - { label: "Переговоры — фото процесса (16:9)", name: "usluga-peregovory-process-16x9", widget: "image", required: false }
+          - { label: "Возврат НДС — фото процесса (16:9)", name: "usluga-vozvrat-nds-process-16x9", widget: "image", required: false }
+          - { label: "Контроль производства — фото процесса (16:9)", name: "usluga-kontrol-proizvodstva-process-16x9", widget: "image", required: false }
+          - { label: "Выкуп товара — фото процесса (16:9)", name: "usluga-vykup-tovara-process-16x9", widget: "image", required: false }
+          - { label: "Сертификация — фото процесса (16:9)", name: "usluga-sertifikaciya-process-16x9", widget: "image", required: false }
+          - { label: "Инспекция — фото процесса (16:9)", name: "usluga-inspekciya-process-16x9", widget: "image", required: false }
+          - { label: "Упаковка и маркировка — фото процесса (16:9)", name: "usluga-upakovka-markirovka-process-16x9", widget: "image", required: false }
+          - { label: "Автодоставка — фото процесса (16:9)", name: "usluga-avto-process-16x9", widget: "image", required: false }
+          - { label: "Сборные грузы — фото процесса (16:9)", name: "usluga-sbornye-gruzy-process-16x9", widget: "image", required: false }
+          - { label: "Таможенное оформление — фото процесса (16:9)", name: "usluga-tamozhennoe-oformlenie-process-16x9", widget: "image", required: false }
+      - name: "tovary"
+        label: "Товары"
+        file: "photos/tovary.json"
+        fields:
+          - { label: "Напольные покрытия — hero (4:3)", name: "usluga-napolnye-pokrytiya-hero-4x3", widget: "image", required: false }
+          - { label: "Запчасти — hero (4:3)", name: "usluga-zapchasti-hero-4x3", widget: "image", required: false }
+          - { label: "Электроника — hero (4:3)", name: "usluga-elektronika-hero-4x3", widget: "image", required: false }
+          - { label: "Текстиль — hero (4:3)", name: "usluga-tekstil-hero-4x3", widget: "image", required: false }
+          - { label: "Оборудование — hero (4:3)", name: "usluga-oborudovanie-hero-4x3", widget: "image", required: false }
+          - { label: "Напольные покрытия — вид 1 (4:3)", name: "tovar-napolnye-1-4x3", widget: "image", required: false }
+          - { label: "Напольные покрытия — вид 2 (4:3)", name: "tovar-napolnye-2-4x3", widget: "image", required: false }
+          - { label: "Напольные покрытия — вид 3 (4:3)", name: "tovar-napolnye-3-4x3", widget: "image", required: false }
+          - { label: "Напольные покрытия — вид 4 (4:3)", name: "tovar-napolnye-4-4x3", widget: "image", required: false }
+          - { label: "Напольные покрытия — вид 5 (4:3)", name: "tovar-napolnye-5-4x3", widget: "image", required: false }
+          - { label: "Напольные покрытия — вид 6 (4:3)", name: "tovar-napolnye-6-4x3", widget: "image", required: false }
+          - { label: "Электроника — вид 1 (4:3)", name: "tovar-elektronika-1-4x3", widget: "image", required: false }
+          - { label: "Электроника — вид 2 (4:3)", name: "tovar-elektronika-2-4x3", widget: "image", required: false }
+          - { label: "Электроника — вид 3 (4:3)", name: "tovar-elektronika-3-4x3", widget: "image", required: false }
+          - { label: "Электроника — вид 4 (4:3)", name: "tovar-elektronika-4-4x3", widget: "image", required: false }
+          - { label: "Электроника — вид 5 (4:3)", name: "tovar-elektronika-5-4x3", widget: "image", required: false }
+          - { label: "Электроника — вид 6 (4:3)", name: "tovar-elektronika-6-4x3", widget: "image", required: false }
+          - { label: "Текстиль — вид 1 (4:3)", name: "tovar-tekstil-1-4x3", widget: "image", required: false }
+          - { label: "Текстиль — вид 2 (4:3)", name: "tovar-tekstil-2-4x3", widget: "image", required: false }
+          - { label: "Текстиль — вид 3 (4:3)", name: "tovar-tekstil-3-4x3", widget: "image", required: false }
+          - { label: "Текстиль — вид 4 (4:3)", name: "tovar-tekstil-4-4x3", widget: "image", required: false }
+          - { label: "Текстиль — вид 5 (4:3)", name: "tovar-tekstil-5-4x3", widget: "image", required: false }
+          - { label: "Текстиль — вид 6 (4:3)", name: "tovar-tekstil-6-4x3", widget: "image", required: false }
+          - { label: "Оборудование — вид 1 (4:3)", name: "tovar-oborudovanie-1-4x3", widget: "image", required: false }
+          - { label: "Оборудование — вид 2 (4:3)", name: "tovar-oborudovanie-2-4x3", widget: "image", required: false }
+          - { label: "Оборудование — вид 3 (4:3)", name: "tovar-oborudovanie-3-4x3", widget: "image", required: false }
+          - { label: "Оборудование — вид 4 (4:3)", name: "tovar-oborudovanie-4-4x3", widget: "image", required: false }
+      - name: "goroda"
+        label: "Города"
+        file: "photos/goroda.json"
+        fields:
+          - { label: "Москва — hero (4:3)", name: "gorod-moskva-hero-4x3", widget: "image", required: false }
+          - { label: "Санкт-Петербург — hero (4:3)", name: "gorod-sankt-peterburg-hero-4x3", widget: "image", required: false }
+          - { label: "Екатеринбург — hero (4:3)", name: "gorod-ekaterinburg-hero-4x3", widget: "image", required: false }
+          - { label: "Новосибирск — hero (4:3)", name: "gorod-novosibirsk-hero-4x3", widget: "image", required: false }
+          - { label: "Казань — hero (4:3)", name: "gorod-kazan-hero-4x3", widget: "image", required: false }
+          - { label: "Благовещенск — hero (4:3)", name: "gorod-blagoveshchensk-hero-4x3", widget: "image", required: false }
+      - name: "komanda"
+        label: "О компании и команда"
+        file: "photos/komanda.json"
+        fields:
+          - { label: "Команда — сотрудник 1 (1:1)", name: "o-kompanii-komanda-1-1x1", widget: "image", required: false }
+          - { label: "Команда — сотрудник 2 (1:1)", name: "o-kompanii-komanda-2-1x1", widget: "image", required: false }
+          - { label: "Команда — сотрудник 3 (1:1)", name: "o-kompanii-komanda-3-1x1", widget: "image", required: false }
+          - { label: "Команда — сотрудник 4 (1:1)", name: "o-kompanii-komanda-4-1x1", widget: "image", required: false }
+          - { label: "Команда — сотрудник 5 (1:1)", name: "o-kompanii-komanda-5-1x1", widget: "image", required: false }
+          - { label: "Команда — сотрудник 6 (1:1)", name: "o-kompanii-komanda-6-1x1", widget: "image", required: false }
+          - { label: "Руководитель — «О компании» (1:1)", name: "o-kompanii-rukovoditel-1x1", widget: "image", required: false }
+          - { label: "Руководитель — «Логистика» (1:1)", name: "logistika-rukovoditel-1x1", widget: "image", required: false }
+      - name: "torgovlya"
+        label: "Страница «Торговля»"
+        file: "photos/torgovlya.json"
+        fields:
+          - { label: "Офис/команда в Китае (4:3)", name: "torgovlya-komanda-4x3", widget: "image", required: false }
+          - { label: "Направление 1 (16:10)", name: "torgovlya-napravlenie-1-16x10", widget: "image", required: false }
+          - { label: "Направление 2 (16:10)", name: "torgovlya-napravlenie-2-16x10", widget: "image", required: false }
+          - { label: "Направление 3 (16:10)", name: "torgovlya-napravlenie-3-16x10", widget: "image", required: false }
+      - name: "kontakty"
+        label: "Контакты"
+        file: "photos/kontakty.json"
+        fields:
+          - { label: "Фото офиса (4:3)", name: "kontakty-ofis-4x3", widget: "image", required: false }

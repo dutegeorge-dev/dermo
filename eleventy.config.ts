@@ -132,11 +132,37 @@ function buildBreadcrumbs(url: string, title?: string): Breadcrumb[] {
 }
 
 /**
+ * Замены фото-плейсхолдеров, заданные из админки (Decap-коллекция «Фотографии
+ * сайта»). Файлы photos/<раздел>.json хранят карту «ключ плейсхолдера → путь к
+ * загруженному фото». Ключ = имя файла-плейсхолдера без пути и расширения
+ * (например usluga-poisk-postavshchika-hero-4x3). Читаем на каждом вызове —
+ * чтобы правки из CMS подхватывались при пересборке (в т.ч. в dev).
+ */
+function loadPhotoOverrides(): Record<string, string> {
+  const dir = path.join(process.cwd(), "photos");
+  const map: Record<string, string> = {};
+  if (!fs.existsSync(dir)) return map;
+  for (const file of fs.readdirSync(dir)) {
+    if (!file.endsWith(".json")) continue;
+    try {
+      const obj = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value === "string" && value) map[key] = value;
+      }
+    } catch {
+      // повреждённый JSON игнорируем — используется исходный плейсхолдер.
+    }
+  }
+  return map;
+}
+
+/**
  * eleventy-img: оптимизированная картинка (AVIF + WebP + исходный формат),
  * srcset, lazy-loading и width/height (защита от сдвига layout — CLS).
  * Источник — путь от корня сайта (например /assets/img/uploads/foo.jpg),
- * который резолвится в файл внутри src/. Если файла нет — возвращаем пустую
- * строку (без падения сборки: ссылки на несуществующее не выводятся).
+ * который резолвится в файл внутри src/. Если для плейсхолдера в админке задана
+ * замена (photos/*.json) — берём её вместо исходного файла. Если файла нет —
+ * возвращаем пустую строку (без падения сборки).
  */
 async function imageShortcode(
   src: string,
@@ -145,6 +171,19 @@ async function imageShortcode(
   className = "",
 ): Promise<string> {
   if (!src) return "";
+
+  // Замена плейсхолдера фотографией, загруженной через админку.
+  if (src.startsWith("/assets/img/uploads/")) {
+    const key = path.basename(src).replace(/\.[^.]+$/, "");
+    const override = loadPhotoOverrides()[key];
+    if (override && override !== src) {
+      const overridePath = override.startsWith("/")
+        ? path.join("src", override.replace(/^\//, ""))
+        : override;
+      if (fs.existsSync(overridePath)) src = override;
+    }
+  }
+
   const inputPath = src.startsWith("/")
     ? path.join("src", src.replace(/^\//, ""))
     : src;
@@ -215,6 +254,8 @@ export default function (eleventyConfig: EleventyConfig) {
   // следим за изменениями, чтобы browsersync перезагружал страницу.
   eleventyConfig.addWatchTarget("./_site/assets/css/styles.css");
   eleventyConfig.addWatchTarget("./_site/assets/js/main.js");
+  // Замены фото из админки (Decap) — пересобираемся при их изменении.
+  eleventyConfig.addWatchTarget("./photos");
 
   eleventyConfig.setTemplateFormats(["njk", "md"]);
 
