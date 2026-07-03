@@ -198,10 +198,16 @@ layout: layouts/base.njk
         {% if svc %}{% include "components/service-related.njk" %}{% endif %}
         {% if cityData %}{% include "components/city-related.njk" %}{% endif %}
 
-        {# Обратная связка услуга → статья: на странице услуги ссылка на
-           привязанную статью блога (related_service), если она существует. #}
-        {% if service and library.byService[service] %}
+        {# Обратная связка услуга → полезный материал (статья/кейс). Приоритет —
+           явная ссылка svc.relatedContentUrl (заголовок из library.byUrl), иначе
+           авто-связка со статьёй блога по related_service (library.byService). #}
+        {% set relArt = null %}
+        {% if svc and svc.relatedContentUrl and library.byUrl[svc.relatedContentUrl] %}
+          {% set relArt = library.byUrl[svc.relatedContentUrl] %}
+        {% elif service and library.byService[service] %}
           {% set relArt = library.byService[service] %}
+        {% endif %}
+        {% if relArt %}
           <div class="mt-8">
             <a
               href="{{ relArt.url | localizedUrl(locale) }}"

@@ -39,7 +39,7 @@ sitemap: true
             {{ icon("send", "h-5 w-5") }}
             {{ "cta.telegramWrite" | t(locale) }}
           </a>
-          <a href="{{ '/blog/sposoby-dostavki-iz-kitaya/' | localizedUrl(locale) }}" class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-medium text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
+          <a href="{{ '/uslugi/dostavka/' | localizedUrl(locale) }}" class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-medium text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
             {{ L.hero.ctaSecondary }}
             {{ icon("arrow-right", "h-4 w-4") }}
           </a>
@@ -291,6 +291,10 @@ sitemap: true
   </section>
 
   {# ── 11. Примеры расчётов ─────────────────────────────────────────────── #}
+  {# TODO(owner): блок «Реальные расчёты по реальным товарам» временно скрыт
+     (пусто/нет реальных данных). Чтобы вернуть — заменить `{% if false %}` на
+     `{% if true %}` (или удалить обёртку). Данные — L.examples в i18n. #}
+  {% if false %}
   <section id="primery" class="container section scroll-mt-24">
     <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.examples.title }}</h2>
     <div class="mt-8 grid gap-4 sm:grid-cols-2">
@@ -305,6 +309,7 @@ sitemap: true
       {% endfor %}
     </div>
   </section>
+  {% endif %}
 
   {# ── 12. FAQ (аккордеон + микроразметка FAQPage) ──────────────────────── #}
   <section id="faq" class="scroll-mt-24 bg-surface-alt">

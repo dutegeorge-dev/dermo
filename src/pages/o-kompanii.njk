@@ -126,6 +126,34 @@ sitemap: true
     </div>
   </section>
 
+  {# ── 5b. Бизнес-лицензия и сертификаты (загружаются через админку) ──────── #}
+  {# Изображения берутся из src/_data/company.json (Decap → «Компания»). Пустое
+     значение — карточка не выводится. Фото оптимизируются eleventy-img. #}
+  {% if company.businessLicense or (company.certificates and company.certificates.length) %}
+  <section class="bg-surface-alt">
+    <div class="container section">
+      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">Лицензия и сертификаты</h2>
+      <p class="mt-3 max-w-3xl text-base text-muted">Официальные документы компании. Загружаются и обновляются через админку.</p>
+      <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {% if company.businessLicense %}
+          <figure class="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {% image company.businessLicense, "Бизнес-лицензия компании", "(min-width: 1024px) 16rem, (min-width: 640px) 45vw, 90vw", "aspect-[3/4] w-full object-cover" %}
+            <figcaption class="p-4 text-sm font-medium text-ink">Бизнес-лицензия</figcaption>
+          </figure>
+        {% endif %}
+        {% for c in company.certificates %}
+          {% if c.image %}
+            <figure class="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+              {% image c.image, c.title or "Сертификат", "(min-width: 1024px) 16rem, (min-width: 640px) 45vw, 90vw", "aspect-[3/4] w-full object-cover" %}
+              <figcaption class="p-4 text-sm font-medium text-ink">{{ c.title }}</figcaption>
+            </figure>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   {# ── 6. Почему БАРС ───────────────────────────────────────────────────── #}
   <section class="bg-surface-alt">
     <div class="container section">
@@ -148,7 +176,8 @@ sitemap: true
   <section class="bg-surface">
     <div class="container section">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ A.partners.title }}</h2>
-      {{ partners(A.partners) }}
+      {# Логотипы, названия и ссылки партнёров — из company.json (Decap → «Компания»). #}
+      {{ partners({ items: company.partners, linkLabel: A.partners.linkLabel }) }}
     </div>
   </section>
 

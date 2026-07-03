@@ -47,7 +47,8 @@ showTitle: false
       <li><strong>{{ step.title }}.</strong> {{ step.text }}</li>
     {% endfor %}
   </ol>
-  {% if P.kakDelaem.photoCaption %}<figure class="my-2 overflow-hidden rounded-xl border border-slate-200">{% image "/assets/img/uploads/usluga-" + service + "-process-16x9.jpg", P.kakDelaem.photoCaption, "(min-width: 1024px) 45rem, 90vw", "w-full" %}</figure>{% endif %}
+  {# TODO(owner): фото процесса услуги временно скрыто (оставлен только hero). Вернуть — убрать `false and` из условия ниже. #}
+  {% if false and P.kakDelaem.photoCaption %}<figure class="my-2 overflow-hidden rounded-xl border border-slate-200">{% image "/assets/img/uploads/usluga-" + service + "-process-16x9.jpg", P.kakDelaem.photoCaption, "(min-width: 1024px) 45rem, 90vw", "w-full" %}</figure>{% endif %}
 </section>
 
 {# Раздел 4 — Важные оговорки (сроки, возможный отказ + вывод-акцент). #}

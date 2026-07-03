@@ -19,8 +19,11 @@
       {% for p in P.chtoPostavlyaem.products %}
         <div class="overflow-hidden rounded-xl border border-slate-200">
           {# Фото вида товара — заглушка 4:3 (заменяется через Decap:
-             tovar-<ключ>-<N>-4x3.jpg). #}
-          {% image "/assets/img/uploads/tovar-" + tovarKey + "-" + loop.index + "-4x3.jpg", p.photoCaption, "(min-width: 640px) 22rem, 90vw", "aspect-[4/3] w-full object-cover" %}
+             tovar-<ключ>-<N>-4x3.jpg).
+             TODO(owner): фото видов товара временно скрыты (на страницах услуг
+             оставлен только hero). Вернуть — заменить `{% if false %}` на
+             `{% if true %}` ниже. #}
+          {% if false %}{% image "/assets/img/uploads/tovar-" + tovarKey + "-" + loop.index + "-4x3.jpg", p.photoCaption, "(min-width: 640px) 22rem, 90vw", "aspect-[4/3] w-full object-cover" %}{% endif %}
           <div class="p-4">
             <span class="block text-base font-semibold text-ink">{{ p.name }}</span>
             {% if p.linkUrl and p.linkLabel %}

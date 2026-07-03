@@ -150,9 +150,10 @@ const services: ServicesData = {
       { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
     ],
     fullCycleUrl: "/torgovlya/",
-    // Связанный кейс есть → строка-ссылка в перелинковке. Статья ещё не написана
-    // (articleUrl не задан) → блок статьи скрыт.
-    caseUrl: "/kejsy/poisk-postavshchika-gazon/",
+    // Перелинковка на кейс поиска производителя мониторов (в тексте и в блоке
+    // «полезный материал» в конце страницы).
+    caseUrl: "/kejsy/poisk-proizvoditelya-monitorov/",
+    relatedContentUrl: "/kejsy/poisk-proizvoditelya-monitorov/",
   },
   "vykup-tovara": {
     slug: "vykup-tovara",
@@ -188,8 +189,10 @@ const services: ServicesData = {
       { icon: "scan-search", labelKey: "uslugi.torgovlya.services.inspection", url: `${BASE}/inspekciya/` },
     ],
     fullCycleUrl: "/torgovlya/",
-    // Кейс −$7000 — ссылкой внутри раздела «Как контролируем» (см. страницу).
-    caseUrl: "/kejsy/kontrol-proizvodstva-7000/",
+    // Перелинковка на кейс LVT (контроль перед отгрузкой поймал 20% брака) —
+    // в тексте и в блоке «полезный материал» в конце страницы.
+    caseUrl: "/kejsy/postavka-lvt-plitki/",
+    relatedContentUrl: "/kejsy/postavka-lvt-plitki/",
   },
   inspekciya: {
     slug: "inspekciya",

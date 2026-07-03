@@ -50,7 +50,7 @@
     <div class="container relative flex h-16 items-center justify-between gap-6">
       {# Логотип #}
       <a href="{{ '/' | localizedUrl(locale) }}" class="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-brand" aria-label="{{ site.legalName }}">
-        {{ logo("light") }}
+        {{ logo("light", company.logo) }}
       </a>
 
       {# Десктоп-навигация #}
@@ -124,7 +124,7 @@
   >
     {# Шапка панели #}
     <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-      {{ logo("dark") }}
+      {{ logo("dark", company.logo) }}
       <button
         type="button"
         data-menu-close

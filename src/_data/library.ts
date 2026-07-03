@@ -281,10 +281,18 @@ for (const collection of ["blog", "kejsy"]) {
   }
 }
 
+// Карта «ru-канонический URL → карточка» (блог + кейсы) для явной перелинковки
+// из услуг (services.relatedContentUrl → заголовок берётся отсюда).
+const byUrl: Record<string, ContentCard> = {};
+for (const card of [...lists.blog.ru, ...lists.kejsy.ru]) {
+  if (!byUrl[card.url]) byUrl[card.url] = card;
+}
+
 export default {
   renderBlog,
   renderKejsy,
   blog: lists.blog,
   kejsy: lists.kejsy,
   byService,
+  byUrl,
 };

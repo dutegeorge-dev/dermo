@@ -1,0 +1,34 @@
+{
+  "logo": "",
+  "businessLicense": "/assets/img/uploads/dok-biznes-licenziya.jpg",
+  "certificates": [
+    {
+      "title": "Сертификат соответствия",
+      "image": "/assets/img/uploads/dok-sertifikat-1.jpg"
+    },
+    {
+      "title": "Декларация соответствия",
+      "image": "/assets/img/uploads/dok-sertifikat-2.jpg"
+    }
+  ],
+  "partners": [
+    {
+      "name": "ВТБ",
+      "desc": "Банк-партнёр — расчёты и валютный контроль.",
+      "url": "https://www.vtb.ru/",
+      "logo": "/assets/img/partners/placeholder-logo.svg"
+    },
+    {
+      "name": "Россертцентр",
+      "desc": "Партнёр по сертификации товаров.",
+      "url": "#",
+      "logo": "/assets/img/partners/placeholder-logo.svg"
+    },
+    {
+      "name": "Фулфилмент-партнёр",
+      "desc": "Обработка и подготовка товара.",
+      "url": "#",
+      "logo": "/assets/img/partners/placeholder-logo.svg"
+    }
+  ]
+}

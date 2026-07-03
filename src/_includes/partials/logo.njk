@@ -1,10 +1,20 @@
 {#
-  Логотип-плейсхолдер ТЛК БАРС. Один файл — заменить здесь, отразится везде.
+  Логотип ТЛК БАРС.
   variant: "light" — для тёмного фона (хедер), "dark" — для светлого (мобильная панель, подвал).
+  logoSrc — путь к загруженному логотипу (company.logo из Decap → «Компания»).
+  Если задан — рендерим картинку; иначе — текстовый плейсхолдер (буква + название).
+  (Логотип не прогоняем через eleventy-img: шорткод async, а логотип выводится в
+  партиалах внутри layout, где async-шорткод не исполняется; для лого это не нужно.)
 #}
-{% macro logo(variant="light") %}
+{% macro logo(variant="light", logoSrc="") %}
+{% if logoSrc %}
+<span class="inline-flex items-center">
+  <img src="{{ logoSrc }}" alt="ТЛК БАРС" loading="lazy" decoding="async" class="h-9 w-auto max-h-9 max-w-[160px] object-contain object-left" width="160" height="36" />
+</span>
+{% else %}
 <span class="inline-flex items-center gap-2.5">
   <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-lg font-semibold text-brand">Б</span>
   <span class="text-lg font-medium tracking-tight {{ 'text-white' if variant == 'light' else 'text-ink' }}">ТЛК БАРС</span>
 </span>
+{% endif %}
 {% endmacro %}
