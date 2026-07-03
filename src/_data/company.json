@@ -16,13 +16,13 @@
       "name": "ВТБ",
       "desc": "Банк-партнёр — расчёты и валютный контроль.",
       "url": "https://www.vtb.ru/",
-      "logo": "/assets/img/partners/placeholder-logo.svg"
+      "logo": "/assets/img/uploads/vtb_logo_2018.png"
     },
     {
       "name": "Россертцентр",
       "desc": "Партнёр по сертификации товаров.",
-      "url": "#",
-      "logo": "/assets/img/partners/placeholder-logo.svg"
+      "url": "https://rossertcentr.ru/",
+      "logo": "/assets/img/uploads/флаг_россии_-1-.jpg"
     },
     {
       "name": "Фулфилмент-партнёр",
