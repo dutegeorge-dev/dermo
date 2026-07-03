@@ -117,16 +117,52 @@ function urlFor(collection: string, slug: string, lang: Lang): string {
 }
 
 /**
+ * Замены фото-плейсхолдеров из админки (Decap-коллекция «Фотографии сайта»).
+ * Та же карта photos/<раздел>.json, что и у шорткода {% image %}: ключ = имя
+ * файла-плейсхолдера без пути и расширения. Так фото В ТЕЛЕ кейса/статьи тоже
+ * можно заменить через слот. Читаем на каждом вызове (правки из CMS — при
+ * пересборке).
+ */
+function loadPhotoOverrides(): Record<string, string> {
+  const dir = path.join(process.cwd(), "photos");
+  const map: Record<string, string> = {};
+  if (!fs.existsSync(dir)) return map;
+  for (const file of fs.readdirSync(dir)) {
+    if (!file.endsWith(".json")) continue;
+    try {
+      const obj = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value === "string" && value) map[key] = value;
+      }
+    } catch {
+      // повреждённый JSON игнорируем — используется исходный путь.
+    }
+  }
+  return map;
+}
+
+/**
  * Прогоняет одну картинку (из Markdown-тела) через eleventy-img: AVIF/WebP +
  * исходный формат, srcset, lazy, width/height (без CLS). Логика та же, что у
  * шорткода {% image %} в eleventy.config.ts — так фото, вставленные в тело
- * статьи/кейса (в т.ч. через Decap), тоже оптимизируются. Если файла нет —
- * возвращаем простой lazy-<img> (без падения сборки).
+ * статьи/кейса (в т.ч. через Decap), тоже оптимизируются и заменяемы через слот.
+ * Если файла нет — возвращаем простой lazy-<img> (без падения сборки).
  */
 async function optimizeContentImage(src: string, alt: string): Promise<string> {
   if (!src.startsWith("/")) {
     return `<img src="${src}" alt="${alt}" loading="lazy" decoding="async">`;
   }
+
+  // Замена плейсхолдера фотографией, загруженной через админку.
+  if (src.startsWith("/assets/img/uploads/")) {
+    const key = path.basename(src).replace(/\.[^.]+$/, "");
+    const override = loadPhotoOverrides()[key];
+    if (override && override !== src && override.startsWith("/")) {
+      const overridePath = path.join(process.cwd(), "src", override.replace(/^\//, ""));
+      if (fs.existsSync(overridePath)) src = override;
+    }
+  }
+
   const inputPath = path.join(process.cwd(), "src", src.replace(/^\//, ""));
   if (!fs.existsSync(inputPath)) {
     return `<img src="${src}" alt="${alt}" loading="lazy" decoding="async">`;

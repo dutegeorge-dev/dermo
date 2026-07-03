@@ -215,6 +215,20 @@ collections:
         file: "photos/kontakty.json"
         fields:
           - { label: "Фото офиса (4:3)", name: "kontakty-ofis-4x3", widget: "image", required: false }
+      - name: "kejsy"
+        label: "Кейсы (фото в тексте)"
+        file: "photos/kejsy.json"
+        fields:
+          - { label: "LVT — образцы в офисе (16:9)", name: "kejs-lvt-obrazcy-ofis", widget: "image", required: false }
+          - { label: "LVT — каталог цветов (16:9)", name: "kejs-lvt-cveta", widget: "image", required: false }
+          - { label: "LVT — производство (16:9)", name: "kejs-lvt-zavod", widget: "image", required: false }
+          - { label: "LVT — выявленный брак (16:9)", name: "kejs-lvt-brak", widget: "image", required: false }
+          - { label: "LVT — погрузка в контейнер (16:9)", name: "kejs-lvt-pogruzka", widget: "image", required: false }
+          - { label: "LVT — склад в Москве (16:9)", name: "kejs-lvt-sklad-moskva", widget: "image", required: false }
+          - { label: "Мониторы — выставка (16:9)", name: "kejs-monitory-vystavka", widget: "image", required: false }
+          - { label: "Мониторы — производство (16:9)", name: "kejs-monitory-zavod", widget: "image", required: false }
+          - { label: "Модульный дом — общий вид (16:9)", name: "kejs-dom-vid", widget: "image", required: false }
+          - { label: "Модульный дом — на трале (16:9)", name: "kejs-dom-tral", widget: "image", required: false }
 
   - name: "company"
     label: "Компания"
