@@ -37,7 +37,7 @@ const site: SiteConfig = {
   // &output=embed допускает встраивание в iframe (современный www.google.com/maps
   // фреймить запрещает).
   mapEmbedSrc:
-    "https://maps.google.com/maps?q=23.008292748304704,113.34079742431642&z=17&hl=ru&output=embed",
+    "https://maps.google.com/maps?q=23.005932295280612,113.34675192492686&z=17&hl=ru&output=embed",
   inn: "5024256988",
   kpp: "502401001",
   ogrn: "1255000095778",
