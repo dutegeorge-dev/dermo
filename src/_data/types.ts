@@ -503,6 +503,11 @@ export interface AboutDoc {
   scanLabel: string;
   /** true — вместо скана показать реквизиты РФ (ИНН/ОГРН/адрес из site). */
   requisites?: boolean;
+  /**
+   * Ключ загружаемого документа из company.json: "license" → бизнес-лицензия,
+   * "certificates" → список сертификатов. Пусто — показывается плейсхолдер скана.
+   */
+  docKey?: "license" | "certificates";
 }
 
 /** Карточка «иконка + заголовок + описание» (отличия «Почему БАРС»). */

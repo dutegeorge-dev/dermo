@@ -1,0 +1,21 @@
+{
+  "name": "ООО ТЛК БАРС",
+  "short_name": "ТЛК БАРС",
+  "icons": [
+    {
+      "src": "/assets/img/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/img/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "theme_color": "#1E3FD0",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}

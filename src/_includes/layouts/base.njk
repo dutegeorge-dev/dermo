@@ -42,7 +42,12 @@
     {% if site.verification.yandex %}<meta name="yandex-verification" content="{{ site.verification.yandex }}" />{% endif %}
     {% if site.verification.google %}<meta name="google-site-verification" content="{{ site.verification.google }}" />{% endif %}
 
-    <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml" />
+    {# Фавиконки (пакет BARS): svg + ico + png + apple-touch + web-манифест. #}
+    <link rel="icon" type="image/png" href="/assets/img/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg" />
+    <link rel="shortcut icon" href="/assets/img/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/apple-touch-icon.png" />
+    <link rel="manifest" href="/assets/img/site.webmanifest" />
     <link rel="stylesheet" href="/assets/css/styles.css" />
 
     {# JSON-LD Organization — на всех страницах #}

@@ -9,7 +9,8 @@
 {% macro logo(variant="light", logoSrc="") %}
 {% if logoSrc %}
 <span class="inline-flex items-center">
-  <img src="{{ logoSrc }}" alt="ТЛК БАРС" loading="lazy" decoding="async" class="h-9 w-auto max-h-9 max-w-[160px] object-contain object-left" width="160" height="36" />
+  {# На тёмном фоне (light) чёрный логотип инвертируется в белый; на светлом (dark) — как есть. #}
+  <img src="{{ logoSrc }}" alt="ООО ТЛК БАРС" loading="lazy" decoding="async" width="44" height="44" class="h-11 w-11 object-contain {{ 'brightness-0 invert' if variant == 'light' else '' }}" />
 </span>
 {% else %}
 <span class="inline-flex items-center gap-2.5">

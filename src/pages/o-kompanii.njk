@@ -113,8 +113,24 @@ sitemap: true
                   <dd class="font-medium text-ink">{{ site.address }}</dd>
                 </div>
               </dl>
+            {% elif d.docKey == "license" and company.businessLicense %}
+              {# Скан бизнес-лицензии — загружается через админку (Decap → «Компания»). #}
+              <figure class="mt-4 overflow-hidden rounded-lg border border-slate-200">
+                {% image company.businessLicense, "Бизнес-лицензия компании", "(min-width: 768px) 18rem, 90vw", "aspect-[3/4] w-full object-cover" %}
+              </figure>
+            {% elif d.docKey == "certificates" and company.certificates and company.certificates.length %}
+              {# Сканы сертификатов — загружаются через админку (Decap → «Компания»). #}
+              <div class="mt-4 grid grid-cols-2 gap-3">
+                {% for c in company.certificates %}
+                  {% if c.image %}
+                    <figure class="overflow-hidden rounded-lg border border-slate-200">
+                      {% image c.image, c.title or "Сертификат", "(min-width: 768px) 9rem, 40vw", "aspect-[3/4] w-full object-cover" %}
+                    </figure>
+                  {% endif %}
+                {% endfor %}
+              </div>
             {% else %}
-              {# Плейсхолдер скана/фото документа (заменяется реальным сканом). #}
+              {# Плейсхолдер скана/фото документа (пока не загружен через админку). #}
               <div class="mt-4 flex flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-surface-alt px-4 py-8 text-center">
                 {{ icon("file-text", "h-8 w-8 text-slate-300") }}
                 <span class="text-xs text-muted">{{ d.scanLabel }}</span>
@@ -125,34 +141,6 @@ sitemap: true
       </div>
     </div>
   </section>
-
-  {# ── 5b. Бизнес-лицензия и сертификаты (загружаются через админку) ──────── #}
-  {# Изображения берутся из src/_data/company.json (Decap → «Компания»). Пустое
-     значение — карточка не выводится. Фото оптимизируются eleventy-img. #}
-  {% if company.businessLicense or (company.certificates and company.certificates.length) %}
-  <section class="bg-surface-alt">
-    <div class="container section">
-      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">Лицензия и сертификаты</h2>
-      <p class="mt-3 max-w-3xl text-base text-muted">Официальные документы компании. Загружаются и обновляются через админку.</p>
-      <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {% if company.businessLicense %}
-          <figure class="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
-            {% image company.businessLicense, "Бизнес-лицензия компании", "(min-width: 1024px) 16rem, (min-width: 640px) 45vw, 90vw", "aspect-[3/4] w-full object-cover" %}
-            <figcaption class="p-4 text-sm font-medium text-ink">Бизнес-лицензия</figcaption>
-          </figure>
-        {% endif %}
-        {% for c in company.certificates %}
-          {% if c.image %}
-            <figure class="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
-              {% image c.image, c.title or "Сертификат", "(min-width: 1024px) 16rem, (min-width: 640px) 45vw, 90vw", "aspect-[3/4] w-full object-cover" %}
-              <figcaption class="p-4 text-sm font-medium text-ink">{{ c.title }}</figcaption>
-            </figure>
-          {% endif %}
-        {% endfor %}
-      </div>
-    </div>
-  </section>
-  {% endif %}
 
   {# ── 6. Почему БАРС ───────────────────────────────────────────────────── #}
   <section class="bg-surface-alt">

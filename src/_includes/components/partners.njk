@@ -16,15 +16,16 @@
       rel="noopener noreferrer"
       class="group flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2"
     >
-      {# Лого-плейсхолдер: фиксированная высота для ровного ряда, lazy-load. #}
-      <span class="flex h-12 items-center">
+      {# Логотип партнёра — единый квадратный формат (object-cover: заполняет
+         квадрат, обрезая лишнее), одинаковый размер у всех карточек. #}
+      <span class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
         <img
           src="{{ p.logo }}"
           alt="Логотип «{{ p.name }}»"
           loading="lazy"
-          width="160"
-          height="48"
-          class="h-10 w-auto max-w-[160px] object-contain object-left"
+          width="128"
+          height="128"
+          class="h-full w-full object-cover"
         />
       </span>
       <p class="mt-4 text-base font-semibold text-ink">{{ p.name }}</p>
