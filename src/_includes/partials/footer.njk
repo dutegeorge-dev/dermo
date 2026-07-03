@@ -1,8 +1,9 @@
+{% from "partials/logo.njk" import logo %}
 <footer class="mt-auto border-t border-gray-200 bg-gray-50">
   <div class="container grid gap-8 py-12 md:grid-cols-3">
     <div>
       <a href="/" class="flex items-center gap-2" aria-label="{{ site.legalName }}">
-        <img src="/assets/img/logo.svg" alt="{{ site.name }}" width="120" height="32" />
+        {{ logo("dark", company.logo) }}
       </a>
       <p class="mt-4 text-sm text-gray-600">{{ site.legalName }}</p>
       {# Реквизиты-заглушки — заполняются позже через данные. #}

@@ -7,7 +7,8 @@ sitemap: false
 <header class="border-b border-gray-100">
   <div class="container flex items-center justify-between py-4">
     <a href="/" class="flex items-center gap-2" aria-label="{{ site.legalName }}">
-      <img src="/assets/img/logo.svg" alt="{{ site.name }}" width="120" height="32" />
+      {% from "partials/logo.njk" import logo %}
+      {{ logo("dark", company.logo) }}
     </a>
     <div class="flex items-center gap-3">
       <a href="tel:{{ site.phoneHref }}" class="text-sm font-semibold text-brand">{{ site.phone }}</a>
