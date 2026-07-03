@@ -8,10 +8,13 @@
 #}
 {% macro logo(variant="light", logoSrc="") %}
 {% if logoSrc %}
-{# Логотип — как есть (без инверсии), на белой плитке со слегка скруглёнными
-   краями, чтобы он читался и на тёмном хедере, и на светлом фоне. #}
-<span class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-white">
-  <img src="{{ logoSrc }}" alt="ООО ТЛК БАРС" loading="lazy" decoding="async" width="44" height="44" class="h-full w-full object-contain p-0.5" />
+{# Логотип-картинка на белой плитке (со скруглёнными краями) + подпись «ТЛК БАРС»
+   справа. Цвет подписи зависит от фона: белый на тёмном хедере, тёмный на светлом. #}
+<span class="inline-flex items-center gap-2.5">
+  <span class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-white">
+    <img src="{{ logoSrc }}" alt="ООО ТЛК БАРС" loading="lazy" decoding="async" width="44" height="44" class="h-full w-full object-contain p-0.5" />
+  </span>
+  <span class="text-lg font-medium tracking-tight {{ 'text-white' if variant == 'light' else 'text-ink' }}">ТЛК БАРС</span>
 </span>
 {% else %}
 <span class="inline-flex items-center gap-2.5">
