@@ -7,7 +7,7 @@ description: "Полный цикл поставки LVT из Китая под 
   около $7000."
 cover: /assets/img/uploads/cover-kejs-lvt.jpg
 alt: Партия LVT-плитки, подготовленная к отгрузке из Китая
-result: Поймали 20% брака перед отгрузкой, спасли клиенту около $7000
+result: ""
 related_service: kontrol-proizvodstva
 draft: false
 ---
