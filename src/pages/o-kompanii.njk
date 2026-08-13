@@ -1,6 +1,10 @@
 ---
 layout: layouts/base.njk
-permalink: /o-kompanii/
+pagination:
+  data: locales
+  size: 1
+  alias: listLang
+permalink: "{{ '/o-kompanii/' | localizedUrl(listLang) }}"
 titleKey: oKompanii.meta.title
 descriptionKey: oKompanii.meta.description
 sitemap: true

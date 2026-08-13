@@ -1,8 +1,14 @@
 ---
 layout: layouts/base.njk
-permalink: /torgovlya/
-title: "Поиск и закупка товара в Китае — ООО ТЛК БАРС"
-description: "Находим завод, а не посредника: проверяем производство, контролируем качество и закупаем товар в Китае напрямую. Собственная команда в Гуанчжоу, выезды на заводы, полный цикл от поиска до отгрузки."
+pagination:
+  data: locales
+  size: 1
+  alias: listLang
+permalink: "{{ '/torgovlya/' | localizedUrl(listLang) }}"
+# RU-заголовок/описание сохраняются как есть; en/zh берутся из словаря.
+eleventyComputed:
+  title: '{% if listLang == "ru" %}Поиск и закупка товара в Китае — ООО ТЛК БАРС{% else %}{{ "torgovlya.hero.title" | t(listLang) }}{% endif %}'
+  description: '{% if listLang == "ru" %}Находим завод, а не посредника: проверяем производство, контролируем качество и закупаем товар в Китае напрямую. Собственная команда в Гуанчжоу, выезды на заводы, полный цикл от поиска до отгрузки.{% else %}{{ "torgovlya.hero.subtitle" | t(listLang) }}{% endif %}'
 sitemap: true
 ---
 {% from "partials/icon.njk" import icon %}

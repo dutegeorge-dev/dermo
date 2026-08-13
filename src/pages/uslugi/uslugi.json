@@ -1,3 +1,8 @@
 {
-  "permalink": "/uslugi/{{ page.fileSlug }}/"
+  "pagination": {
+    "data": "locales",
+    "size": 1,
+    "alias": "listLang"
+  },
+  "permalink": "{{ ('/uslugi/' + page.fileSlug + '/') | localizedUrl(listLang) }}"
 }

@@ -1,5 +1,10 @@
 ---
 layout: layouts/reading.njk
+pagination:
+  data: locales
+  size: 1
+  alias: listLang
+permalink: "{{ '/politika-konfidencialnosti/' | localizedUrl(listLang) }}"
 title: "Политика конфиденциальности"
 description: "Политика обработки персональных данных ООО ТЛК БАРС в соответствии с Федеральным законом № 152-ФЗ «О персональных данных»."
 policyUpdated: 2026-06-17

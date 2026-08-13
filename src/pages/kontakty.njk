@@ -1,3 +1,13 @@
+---
+# По одной локализованной странице на язык: /kontakty/, /en/kontakty/, /zh/kontakty/.
+pagination:
+  data: locales
+  size: 1
+  alias: listLang
+permalink: "{{ '/kontakty/' | localizedUrl(listLang) }}"
+titleKey: nav.contacts
+sitemap: true
+---
 {# Контакты — реквизиты + форма заявки + офис в Гуанчжоу (карта и фото). #}
 {% from "partials/icon.njk" import icon %}
 
