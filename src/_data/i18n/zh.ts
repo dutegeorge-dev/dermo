@@ -487,6 +487,8 @@ const zh: Dictionary = {
     consentLink: "隐私政策",
     consentSuffix: "。",
     consentError: "请确认您同意处理个人数据。",
+    sending: "正在发送…",
+    sendError: "提交失败。请重试，或通过 Telegram 联系我们。",
   },
   cookie: {
     aria: "Cookie 使用提示",

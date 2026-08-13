@@ -1,11 +1,10 @@
 {#
-  Форма-заявка (ЗАГЛУШКА).
-  Реального сабмита на бэкенд нет — обработка целиком в src/assets/ts/main.ts:
-  клиентская валидация + визуальное подтверждение + событие в аналитику.
-  TODO(integration): подключить реальный обработчик (Netlify Forms / Formspree / эндпоинт).
-  Состав полей — заглушки, легко меняются.
+  Форма-заявка.
+  Отправка — POST на бэкенд-обработчик (server/index.ts), который создаёт лид
+  в Bitrix24. Клиентская валидация, состояния и fetch — src/assets/ts/main.ts.
+  Адрес эндпоинта приходит из data-lead-endpoint на <html> (site.leadApiUrl).
 #}
-<form class="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm" data-lead-form novalidate>
+<form class="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm" data-lead-form="lead" novalidate>
   <h2 class="text-xl font-semibold">Оставить заявку</h2>
   <p class="text-sm text-gray-500">Перезвоним и рассчитаем стоимость доставки.</p>
 
@@ -30,9 +29,18 @@
   {% from "components/form-consent.njk" import formConsent %}
   {{ formConsent(locale, "lead") }}
 
+  {# Ловушка для ботов: поле скрыто от людей, заполнение = спам. #}
+  <div class="hidden" aria-hidden="true">
+    <label for="lead-company">Не заполняйте это поле</label>
+    <input id="lead-company" name="company" type="text" tabindex="-1" autocomplete="off" />
+  </div>
+
   <button type="submit" class="btn-accent w-full disabled:cursor-not-allowed disabled:opacity-60">Отправить заявку</button>
 
   <p class="hidden rounded-md bg-green-50 px-4 py-3 text-sm text-green-700" data-form-success role="status">
     Заявка отправлена! Мы свяжемся с вами в ближайшее время.
+  </p>
+  <p class="hidden rounded-md bg-red-50 px-4 py-3 text-sm text-red-700" data-form-error role="alert">
+    {{ "forms.sendError" | t(locale) }}
   </p>
 </form>

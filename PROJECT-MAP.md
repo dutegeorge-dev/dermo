@@ -27,7 +27,7 @@
 
 ## 1. Обзор проекта
 
-**Что это.** Статический сайт-**каркас** торгово-логистической компании «ООО ТЛК БАРС» (закупка и доставка товаров из Китая «под ключ», офис-команда в Гуанчжоу). По состоянию репозитория это именно каркас: страницы с корректными URL, мета-тегами, разметкой, SEO-слоем, формами-заглушками; контент наполняется отдельно через CMS.
+**Что это.** Статический сайт-**каркас** торгово-логистической компании «ООО ТЛК БАРС» (закупка и доставка товаров из Китая «под ключ», офис-команда в Гуанчжоу). По состоянию репозитория это именно каркас: страницы с корректными URL, мета-тегами, разметкой, SEO-слоем, рабочими формами заявок (лиды уходят в Bitrix24 через бэкенд `server/`); контент наполняется отдельно через CMS.
 
 **Стек:**
 
@@ -59,11 +59,12 @@
 | `preview:fast` | как preview, но без минификации/прод-флагов (быстрее) |
 | `cms` | `decap-server` — локальный бэкенд Decap CMS (правки пишутся прямо в файлы без логина) |
 | `typecheck` | `tsc --noEmit` |
+| `server` / `watch:server` | обработчик заявок `server/index.ts` через `tsx` (порт 3000); `watch:server` входит в `dev` |
 
 **Особенность сборки:** CSS и JS собираются **вне** Eleventy (PostCSS и esbuild пишут напрямую в `_site/`), а `eleventy.config.ts` лишь добавляет `addWatchTarget` на эти выходные файлы, чтобы browsersync перезагружал страницу при их изменении.
 
 **Переменные окружения** (`.env`, пример — `.env.example`; реальные значения в репозиторий не коммитятся):
-`SITE_URL` (база для canonical/OG/sitemap), `YM_COUNTER_ID` (Яндекс.Метрика), `GA4_ID` (Google Analytics 4), `YANDEX_VERIFICATION`, `GOOGLE_VERIFICATION`. Пустое значение → соответствующий счётчик/мета-тег просто не рендерится.
+`SITE_URL` (база для canonical/OG/sitemap), `YM_COUNTER_ID` (Яндекс.Метрика), `GA4_ID` (Google Analytics 4), `YANDEX_VERIFICATION`, `GOOGLE_VERIFICATION`. Пустое значение → соответствующий счётчик/мета-тег просто не рендерится. Отдельная группа — бэкенд заявок: `BITRIX_WEBHOOK_URL` (**секрет**, вебхук Bitrix24), `LEAD_API_URL`, `LEAD_PORT`, `LEAD_PATH`, `LEAD_ALLOWED_ORIGINS`, `LEAD_RATE_LIMIT`, `BITRIX_SOURCE_ID`, `BITRIX_ASSIGNED_BY_ID` (см. раздел 14).
 
 ---
 
@@ -85,6 +86,11 @@
 │   └── index.html          #   загрузчик decap-cms из CDN, noindex
 ├── types/
 │   └── eleventy-img.d.ts   # минимальные типы для @11ty/eleventy-img
+├── server/                 # бэкенд-обработчик заявок → Bitrix24 (без зависимостей)
+│   ├── index.ts            #   HTTP-сервер: маршруты, CORS, антиспам, лимиты
+│   ├── config.ts           #   .env-загрузчик, нормализация вебхука, настройки
+│   ├── lead.ts             #   разбор/валидация заявки, сборка полей лида
+│   └── bitrix.ts           #   вызов crm.lead.add (таймаут, ретраи, ошибки)
 └── src/
     ├── _data/              # глобальные данные на TS (доступны во всех шаблонах)
     │   ├── site.ts           # реквизиты, контакты, аналитика/верификация из env
@@ -263,7 +269,7 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 
 ### Компоненты (`src/_includes/components/`)
 
-**Макросы** (`{% from … import … %}`): `card(title,url,text)`, `emptyState(text)`, `faq(items,title)` (аккордеон + JSON-LD FAQPage), `related(items,title)` (сетка из `linkCard`), `linkCard(icon,label,url)`, `formConsent(locale,id)` (чекбокс согласия 152-ФЗ, блокирует submit), `leadFormMini(locale,id)` (компактная форма-заглушка), `partners(data)`, `photoPlaceholder(caption,tone)` (явное место под фото), `teamSlider(team)` (карусель на `slider.ts`).
+**Макросы** (`{% from … import … %}`): `card(title,url,text)`, `emptyState(text)`, `faq(items,title)` (аккордеон + JSON-LD FAQPage), `related(items,title)` (сетка из `linkCard`), `linkCard(icon,label,url)`, `formConsent(locale,id)` (чекбокс согласия 152-ФЗ, блокирует submit), `leadFormMini(locale,id)` (компактная форма заявки), `partners(data)`, `photoPlaceholder(caption,tone)` (явное место под фото), `teamSlider(team)` (карусель на `slider.ts`).
 
 **Инклюды** (`{% include %}`, читают данные напрямую): `hero.njk` (hero главной + `leadFormMini`), `about-short.njk`, `blog.njk`/`cases.njk` (последние 3 записи; данные `library.*[locale]` с фолбэком на `homeBlog`/`homeCases`), `content-list.njk` (сетка витрины блога/кейсов), `steps.njk` (процесс «как работаем»), `trust-bar.njk` (полоса доверия), `wings.njk` (два крыла «Логистика/Торговля»), `cta-final.njk`/`cta-band.njk` (полосы призыва), `service-hero.njk`/`service-related.njk`/`service-cta.njk` (для страниц услуг, данные из `svc`), `city-hero.njk`/`city-related.njk`/`city-cta.njk` (для городских страниц, ⚠️ текст захардкожен по-русски).
 
@@ -304,7 +310,7 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 
 | Модуль | Что делает | Где |
 |---|---|---|
-| `main.ts` | Точка входа: импортирует `header`, `slider`, `cookie`; на `DOMContentLoaded` запускает `initForms()` и `initToc()`. **`initForms`** — валидация форм-заявок (телефон/Telegram-ник), чекбокс согласия 152-ФЗ блокирует submit, при успехе — визуальное подтверждение + событие `lead_form_submit` в аналитику (`trackEvent` → `ym`/`gtag`). **Реальной отправки нет** — `TODO(integration)`. | формы `[data-lead-form]` |
+| `main.ts` | Точка входа: импортирует `header`, `slider`, `cookie`; на `DOMContentLoaded` запускает `initForms()` и `initToc()`. **`initForms`** — валидация форм-заявок (телефон/Telegram-ник), чекбокс согласия 152-ФЗ блокирует submit, затем `POST` JSON на бэкенд заявок (адрес — `data-lead-endpoint` на `<html>`); на время запроса кнопка блокируется, при успехе — подтверждение, сброс формы и событие `lead_form_submit` в аналитику (`trackEvent` → `ym`/`gtag`), при сбое — блок `[data-form-error]`. UTM-метки берутся из URL и хранятся в `sessionStorage`. | формы `[data-lead-form]` |
 | `header.ts` | `initStickyHeader` (сворачивание utility-полосы с гистерезисом COLLAPSE_AT=64/EXPAND_AT=8 против «дрожания»), `initMegaMenu` (тап/клик + Esc + клик-вне + focusout; hover — на CSS), `initAccordions` (универсальные `[data-accordion-toggle]`), `initMobilePanel` (off-canvas: бургер, оверлей, блокировка скролла, Esc, фокус). | хедер |
 | `toc.ts` | `initToc` — sticky-оглавление читательского шаблона: собирает разделы (`section[id]` или `h2/h3[id]`), показывает **только при 3+ разделах**, десктоп — правое sticky со scroll-spy (`IntersectionObserver`, активный — бирюза), мобайл — аккордеон «Содержание», плавная прокрутка + перевод фокуса для доступности. | `[data-reading]` |
 | `slider.ts` | `initSliders` — карусель без зависимостей (нативный скролл-трек + стрелки на ширину карточки, блокировка на краях). | `[data-slider]` (команда на «О компании») |
@@ -382,7 +388,6 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 
 ## 12. TODO / незавершённое / заглушки
 
-- **Формы-заявки — заглушки без бэкенда.** `partials/lead-form.njk` несёт явный `TODO(integration): подключить реальный обработчик (Netlify Forms / Formspree / эндпоинт)`; вся логика в `src/assets/ts/main.ts` — валидация + визуальное подтверждение + событие в аналитику. Реальной отправки нет.
 - **Плейсхолдеры данных:** телефоны и адрес CN в `site.ts`; реквизиты в футере («Реквизиты-заглушки»); текстовый логотип (`logo.njk` — «Логотип-плейсхолдер»); `photo-placeholder.njk`; логотипы партнёров; фото команды; `homeBlog.ts`/`homeCases.ts` (видимые на старте плейсхолдеры карточек главной).
 - **Пустые посадочные `/r/`:** `belaya-dostavka.njk`, `napolnye-pokrytiya.njk`, `stroymaterialy.njk` содержат только комментарий, без контента.
 - **Переводы en/zh не написаны** — стабы с `[EN]`/`[ZH]`-маркерами на русском тексте; en/zh-страницы вне блога/кейсов не генерируются; `logistika`/`oKompanii` в en/zh — сырой ru.
@@ -422,3 +427,20 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 ---
 
 *Конец карты. Документ отражает состояние репозитория на ветке `claude/codebase-audit-project-map-a8oh9c` на дату аудита.*
+
+---
+
+## 14. Бэкенд заявок → Bitrix24 CRM (`server/`)
+
+Заявки со всех форм сайта уходят в Bitrix24 через собственный обработчик на Node без внешних зависимостей. Запуск — `npm run server` (в `npm run dev` поднимается автоматически вместе с 11ty).
+
+**Поток данных:** форма `[data-lead-form]` → `initForms()` в `src/assets/ts/main.ts` (валидация, согласие 152-ФЗ, honeypot) → `POST` JSON на `data-lead-endpoint` (`site.leadApiUrl` ← `LEAD_API_URL`) → `server/index.ts` (`/api/lead`, порт 3000) → `server/lead.ts` (разбор и валидация) → `server/bitrix.ts` (`crm.lead.add` по входящему вебхуку) → лид в CRM, ID возвращается в браузер.
+
+| Файл | Роль |
+|---|---|
+| `server/config.ts` | Загрузка `.env` (свой мини-парсер), нормализация `BITRIX_WEBHOOK_URL` до `/rest/<user>/<token>/` (принимает и полную ссылку на метод с query), маскирование токена для логов, CORS-allowlist, лимиты. |
+| `server/lead.ts` | Разбор полезной нагрузки, определение типа контакта (телефон / e-mail / Telegram), валидация (контакт, предмет заявки, согласие), сборка полей `crm.lead.add`: `TITLE`, `PHONE`/`EMAIL`/`IM`, `SOURCE_ID`, `SOURCE_DESCRIPTION`, `UTM_*`, `COMMENTS`. |
+| `server/bitrix.ts` | HTTP-вызов метода REST: таймаут (`AbortSignal.timeout`), ретраи только на временных ошибках (сеть, `QUERY_LIMIT_EXCEEDED`, 5xx), повтор без поля `IM`, если портал его не принял. |
+| `server/index.ts` | Маршруты (`POST /api/lead`, `GET /healthz`), CORS, ограничение частоты по IP (тратится только на заявках, уходящих в CRM), honeypot, лимит размера тела, резервный `logs/leads-failed.jsonl` при недоступности CRM. |
+
+**Прод:** `server/` запускается рядом со статикой и проксируется на тот же домен по `/api/lead`; тогда `LEAD_API_URL=/api/lead` и CORS не требуется.

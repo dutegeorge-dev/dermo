@@ -70,6 +70,8 @@ export interface SiteConfig {
   ogrn: string;
   analytics: AnalyticsConfig;
   verification: VerificationConfig;
+  /** URL бэкенд-обработчика заявок (передаётся в вёрстку как data-lead-endpoint). */
+  leadApiUrl: string;
 }
 
 /**
@@ -1329,6 +1331,10 @@ export interface Dictionary {
     consentSuffix: string;
     /** Ошибка, если согласие не отмечено. */
     consentError: string;
+    /** Подпись кнопки во время отправки заявки. */
+    sending: string;
+    /** Сообщение об ошибке отправки (сеть/сервер недоступны). */
+    sendError: string;
   };
   /** Баннер согласия на использование cookies (глобальный). */
   cookie: {

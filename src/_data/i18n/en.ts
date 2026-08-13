@@ -488,6 +488,8 @@ const en: Dictionary = {
     consentLink: "privacy policy",
     consentSuffix: ".",
     consentError: "Please confirm your consent to the processing of personal data.",
+    sending: "Sending…",
+    sendError: "Could not send the request. Please try again or message us on Telegram.",
   },
   cookie: {
     aria: "Cookie usage notice",

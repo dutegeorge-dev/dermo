@@ -49,6 +49,9 @@ const site: SiteConfig = {
     yandex: process.env.YANDEX_VERIFICATION || "",
     google: process.env.GOOGLE_VERIFICATION || "",
   },
+  // Эндпоинт бэкенда заявок (server/index.ts). На проде эндпоинт обычно
+  // проксируется на тот же домен — тогда достаточно LEAD_API_URL=/api/lead.
+  leadApiUrl: process.env.LEAD_API_URL || "http://localhost:3000/api/lead",
 };
 
 export default site;

@@ -24,7 +24,8 @@
     "tailwind.config.ts",
     "types/**/*.d.ts",
     "src/_data/**/*.ts",
-    "src/assets/ts/**/*.ts"
+    "src/assets/ts/**/*.ts",
+    "server/**/*.ts"
   ],
   "exclude": [
     "node_modules",

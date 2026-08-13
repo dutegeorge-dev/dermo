@@ -4,6 +4,7 @@ _site/
 .env.*
 !.env.example
 *.log
+logs/
 .DS_Store
 .cache/
 .eleventy-cache/

@@ -1,9 +1,11 @@
 /**
  * Клиентский скрипт каркаса:
  *  - поведение хедера (мега-меню, мобильная панель, sticky) — модуль ./header;
- *  - заглушка отправки форм заявок (клиентская валидация + событие в аналитику).
+ *  - отправка форм заявок: клиентская валидация → POST на бэкенд-обработчик
+ *    (server/index.ts) → лид в Bitrix24 → событие в аналитику.
  *
- * Реального сабмита на бэкенд здесь НЕТ — это визуальная заглушка.
+ * Адрес эндпоинта приходит из вёрстки: data-lead-endpoint на <html>
+ * (значение — site.leadApiUrl, переменная окружения LEAD_API_URL).
  */
 
 // Хедер: sticky, мега-меню, off-canvas, аккордеоны (см. ./header.ts).
@@ -47,16 +49,101 @@ function isValidContact(value: string): boolean {
   return phone.test(trimmed) || telegram.test(trimmed);
 }
 
+/** UTM-метки, которые передаём в CRM вместе с заявкой. */
+const UTM_KEYS = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
+] as const;
+
+const UTM_STORAGE_KEY = "bars:utm";
+
 /**
- * Инициализация форм-заглушек.
- * TODO(integration): здесь позже подключится реальный обработчик
- * (Netlify Forms / Formspree / собственный эндпоинт). Выбор провайдера отложен.
+ * UTM-метки визита: берём из адреса страницы и запоминаем на сессию —
+ * заявку человек часто отправляет уже с другой страницы, без меток в URL.
  */
+function collectUtm(): Record<string, string> {
+  let stored: Record<string, string> = {};
+  try {
+    stored = JSON.parse(sessionStorage.getItem(UTM_STORAGE_KEY) ?? "{}") as Record<
+      string,
+      string
+    >;
+  } catch {
+    stored = {};
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const fresh: Record<string, string> = {};
+  UTM_KEYS.forEach((key) => {
+    const value = params.get(key);
+    if (value) fresh[key] = value.slice(0, 200);
+  });
+
+  const utm = Object.keys(fresh).length > 0 ? fresh : stored;
+
+  if (Object.keys(fresh).length > 0) {
+    try {
+      sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(fresh));
+    } catch {
+      // Приватный режим браузера — метки просто не сохранятся.
+    }
+  }
+
+  return utm;
+}
+
+/** Ответ бэкенда заявок. */
+interface LeadResponse {
+  ok?: boolean;
+  leadId?: number | null;
+  error?: string;
+  fields?: Record<string, string>;
+}
+
+/** Отправляет заявку на бэкенд. Бросает исключение, если заявка не принята. */
+async function sendLead(form: HTMLFormElement): Promise<LeadResponse> {
+  const endpoint = document.documentElement.dataset.leadEndpoint || "/api/lead";
+  const data = new FormData(form);
+
+  const payload: Record<string, unknown> = {
+    form: form.dataset.leadForm || "lead",
+    page: window.location.href,
+    referrer: document.referrer,
+    locale: document.documentElement.lang || "ru",
+    utm: collectUtm(),
+    consent: form.querySelector<HTMLInputElement>("[data-consent]")?.checked ?? true,
+  };
+
+  // Поля формы (cargo, volume, contact, honeypot company, …) — как есть.
+  data.forEach((value, key) => {
+    if (typeof value === "string" && key !== "consent") payload[key] = value;
+  });
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const result = (await response.json().catch(() => ({}))) as LeadResponse;
+
+  if (!response.ok || result.ok !== true) {
+    throw new Error(result.error || `HTTP ${response.status}`);
+  }
+
+  return result;
+}
+
+/** Инициализация форм заявок: валидация, отправка на бэкенд, состояния. */
 function initForms(): void {
   const forms = document.querySelectorAll<HTMLFormElement>("[data-lead-form]");
 
   forms.forEach((form) => {
     const success = form.querySelector<HTMLElement>("[data-form-success]");
+    const failure = form.querySelector<HTMLElement>("[data-form-error]");
 
     // Согласие на обработку ПДн (152-ФЗ): если чекбокс есть, кнопка отправки
     // блокируется до его отметки. Состояние синхронизируется на старте и по change.
@@ -77,6 +164,9 @@ function initForms(): void {
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+
+      // Повторный сабмит, пока запрос в полёте, создал бы дубль лида.
+      if (form.dataset.sending === "true") return;
 
       let valid = true;
       const fields = form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
@@ -116,15 +206,37 @@ function initForms(): void {
 
       if (!valid) return;
 
-      // Заглушка «отправки»: показываем подтверждение и шлём событие в аналитику.
-      trackEvent("lead_form_submit");
+      // ── Отправка на бэкенд ───────────────────────────────────────────────
+      failure?.classList.add("hidden");
+      success?.classList.add("hidden");
 
-      if (success) {
-        success.classList.remove("hidden");
+      form.dataset.sending = "true";
+      const idleLabel = submitBtn?.textContent ?? "";
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent =
+          document.documentElement.dataset.formSending || "Отправляем…";
       }
-      form.reset();
-      // reset() снимает отметку согласия — снова блокируем кнопку отправки.
-      syncConsent();
+
+      void sendLead(form)
+        .then(() => {
+          trackEvent("lead_form_submit");
+          success?.classList.remove("hidden");
+          form.reset();
+        })
+        .catch((error: unknown) => {
+          console.error("Не удалось отправить заявку:", error);
+          failure?.classList.remove("hidden");
+        })
+        .finally(() => {
+          delete form.dataset.sending;
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = idleLabel;
+          }
+          // reset() снимает отметку согласия — снова блокируем кнопку отправки.
+          syncConsent();
+        });
     });
   });
 }

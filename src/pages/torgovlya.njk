@@ -61,9 +61,9 @@ sitemap: true
         </div>
       </div>
 
-      {# Форма расчёта (заглушка — обработка в assets/ts/main.ts). #}
+      {# Форма расчёта: POST на бэкенд заявок → лид в Bitrix24 (assets/ts/main.ts). #}
       <form
-        data-lead-form
+        data-lead-form="trade"
         novalidate
         class="rounded-2xl bg-surface p-6 text-ink shadow-xl ring-1 ring-black/5 md:p-8"
       >
@@ -84,6 +84,12 @@ sitemap: true
 
           {{ formConsent(locale, "trade") }}
 
+          {# Ловушка для ботов: поле скрыто от людей, заполнение = спам. #}
+          <div class="hidden" aria-hidden="true">
+            <label for="trade-company">Не заполняйте это поле</label>
+            <input id="trade-company" name="company" type="text" tabindex="-1" autocomplete="off" />
+          </div>
+
           <button
             type="submit"
             class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
@@ -93,6 +99,9 @@ sitemap: true
 
           <p class="hidden rounded-md bg-green-50 px-4 py-3 text-sm text-green-700" data-form-success role="status">
             {{ "torgovlya.heroForm.success" | t(locale) }}
+          </p>
+          <p class="hidden rounded-md bg-red-50 px-4 py-3 text-sm text-red-700" data-form-error role="alert">
+            {{ "forms.sendError" | t(locale) }}
           </p>
         </div>
       </form>
