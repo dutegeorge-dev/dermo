@@ -2,10 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import Image from "@11ty/eleventy-img";
+import { loadDotEnv } from "./server/dotenv.ts";
 import type { Breadcrumb, Dictionary } from "./src/_data/types.js";
 import ruDict from "./src/_data/i18n/ru.js";
 import enDict from "./src/_data/i18n/en.js";
 import zhDict from "./src/_data/i18n/zh.js";
+
+// Переменные из .env должны попасть в process.env ДО того, как 11ty
+// вычислит глобальные данные: site.ts читает SITE_URL, LEAD_API_URL и ID
+// счётчиков именно оттуда, и их значения вшиваются в готовый HTML.
+loadDotEnv();
 
 /** Поддерживаемые локали. ru — дефолт (в корне), en/zh — с URL-префиксом. */
 const LOCALES = ["ru", "en", "zh"] as const;

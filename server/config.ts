@@ -5,48 +5,14 @@
  * В репозитории хранится только .env.example с плейсхолдерами.
  */
 
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { loadDotEnv } from "./dotenv.ts";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/**
- * Минималистичный парсер .env (без зависимостей).
- * Понимает `KEY=value`, кавычки, комментарии и префикс `export`.
- * Уже заданные переменные окружения не перезаписываются.
- */
-function loadDotEnv(file: string): void {
-  if (!fs.existsSync(file)) return;
-
-  for (const rawLine of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-
-    const match = /^(?:export\s+)?([\w.-]+)\s*=\s*(.*)$/.exec(line);
-    if (!match) continue;
-
-    const key = match[1];
-    let value = match[2].trim();
-
-    // Снимаем обрамляющие кавычки; в двойных раскрываем \n.
-    if (
-      (value.startsWith('"') && value.endsWith('"') && value.length > 1) ||
-      (value.startsWith("'") && value.endsWith("'") && value.length > 1)
-    ) {
-      const quote = value[0];
-      value = value.slice(1, -1);
-      if (quote === '"') value = value.replace(/\\n/g, "\n");
-    } else {
-      // Без кавычек — обрезаем хвостовой комментарий.
-      value = value.replace(/\s+#.*$/, "").trim();
-    }
-
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
-}
-
-loadDotEnv(path.join(ROOT, ".env"));
+loadDotEnv();
 
 /** Читает число из окружения с фолбэком на значение по умолчанию. */
 function envNumber(key: string, fallback: number): number {
