@@ -5,7 +5,7 @@
  * с JSON-телом `{ fields, params }`; токен живёт в URL вебхука и не логируется.
  */
 
-import { config, maskWebhook } from "./config.js";
+import { config, maskSecrets } from "./config.js";
 import type { LeadFields } from "./lead.js";
 
 /** Ошибка вызова Bitrix24 REST (сеть, HTTP или error в теле ответа). */
@@ -41,7 +41,7 @@ async function callMethod(method: string, params: unknown): Promise<unknown> {
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new BitrixError(
-      `Сеть недоступна при вызове ${maskWebhook(url)}: ${reason}`,
+      `Сеть недоступна при вызове ${maskSecrets(url)}: ${reason}`,
       "NETWORK_ERROR",
       true,
     );

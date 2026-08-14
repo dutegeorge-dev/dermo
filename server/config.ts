@@ -79,9 +79,11 @@ function normalizeWebhookBase(raw: string): string {
   return `${url.origin}${match[0]}`;
 }
 
-/** Скрывает токен вебхука в логах и текстах ошибок. */
-export function maskWebhook(value: string): string {
-  return value.replace(/(\/rest\/[^/]+\/)[^/]+/g, "$1***");
+/** Скрывает секреты (токен вебхука Bitrix24, токен бота) в логах и ошибках. */
+export function maskSecrets(value: string): string {
+  return value
+    .replace(/(\/rest\/[^/]+\/)[^/]+/g, "$1***")
+    .replace(/(\/bot)\d+:[\w-]+/g, "$1***");
 }
 
 const webhookRaw = process.env.BITRIX_WEBHOOK_URL?.trim() ?? "";
@@ -90,6 +92,14 @@ const webhookRaw = process.env.BITRIX_WEBHOOK_URL?.trim() ?? "";
 // у разработчика без доступа к CRM. Заявки в этом режиме не принимаются —
 // эндпоинт честно отвечает 503, а на старте выводится предупреждение.
 const webhookBase = webhookRaw ? normalizeWebhookBase(webhookRaw) : "";
+
+const telegramToken = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
+
+/** Чаты для уведомлений: один ID или несколько через запятую. */
+const telegramChatIds = (process.env.TELEGRAM_CHAT_ID ?? "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
 
 /** Источники, которым разрешён CORS-доступ к обработчику. */
 function parseOrigins(): string[] {
@@ -135,6 +145,17 @@ export const config = {
     assignedById: process.env.BITRIX_ASSIGNED_BY_ID?.trim() || "",
     /** Таймаут запроса к Bitrix24, мс. */
     timeoutMs: envNumber("BITRIX_TIMEOUT_MS", 10_000),
+  },
+
+  telegram: {
+    /** Токен бота (@BotFather). Пусто — уведомления отключены. */
+    token: telegramToken,
+    /** Чаты, куда дублируется заявка (свой ID узнаётся у @userinfobot). */
+    chatIds: telegramChatIds,
+    /** Уведомления включаются, только когда заданы и токен, и чат. */
+    enabled: Boolean(telegramToken) && telegramChatIds.length > 0,
+    /** Таймаут запроса к Bot API, мс. */
+    timeoutMs: envNumber("TELEGRAM_TIMEOUT_MS", 10_000),
   },
 
   cors: {

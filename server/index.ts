@@ -12,9 +12,10 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 
-import { config, maskWebhook } from "./config.js";
+import { config, maskSecrets } from "./config.js";
 import { createLead } from "./bitrix.js";
 import { buildLeadFields, parseLead, type RawPayload } from "./lead.js";
+import { notifyTelegram } from "./telegram.js";
 
 /** Ответ клиенту в JSON. */
 function sendJson(
@@ -214,9 +215,11 @@ async function handleLead(
       `[lead] создан лид #${leadId} (форма ${lead.form}, ${lead.phone || lead.email || lead.telegram})`,
     );
     sendJson(res, 200, { ok: true, leadId }, headers);
+    // Уведомление шлём после ответа клиенту: форма не должна ждать Telegram.
+    void notifyTelegram(lead, { leadId });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[lead] Bitrix24 отклонил заявку: ${maskWebhook(message)}`);
+    console.error(`[lead] Bitrix24 отклонил заявку: ${maskSecrets(message)}`);
     saveFailedLead({ at: new Date().toISOString(), ip, error: message, fields });
     sendJson(
       res,
@@ -224,6 +227,9 @@ async function handleLead(
       { ok: false, error: "Не удалось передать заявку в CRM. Мы сохранили её и свяжемся с вами." },
       headers,
     );
+    // Именно здесь уведомление важнее всего: CRM недоступна, и только
+    // Telegram донесёт контакт клиента до менеджера.
+    void notifyTelegram(lead, { leadId: null, error: maskSecrets(message) });
   }
 }
 
@@ -259,13 +265,18 @@ const server = http.createServer((req, res) => {
 server.listen(config.port, config.host, () => {
   console.log(`[lead] обработчик заявок слушает http://${config.host}:${config.port}${config.path}`);
   if (config.bitrix.configured) {
-    console.log(`[lead] CRM: ${maskWebhook(config.bitrix.base)} (источник ${config.bitrix.sourceId})`);
+    console.log(`[lead] CRM: ${maskSecrets(config.bitrix.base)} (источник ${config.bitrix.sourceId})`);
   } else {
     console.warn(
       "[lead] ВНИМАНИЕ: не задан BITRIX_WEBHOOK_URL — заявки не будут уходить в CRM.\n" +
         "        Скопируйте .env.example в .env и вставьте входящий вебхук Bitrix24.",
     );
   }
+  console.log(
+    config.telegram.enabled
+      ? `[lead] Telegram-уведомления: чаты ${config.telegram.chatIds.join(", ")}`
+      : "[lead] Telegram-уведомления отключены (нет TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)",
+  );
   console.log(`[lead] разрешённые Origin: ${config.cors.allowedOrigins.join(", ") || "—"}`);
 });
 

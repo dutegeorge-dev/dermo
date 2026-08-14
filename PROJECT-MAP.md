@@ -27,7 +27,7 @@
 
 ## 1. Обзор проекта
 
-**Что это.** Статический сайт-**каркас** торгово-логистической компании «ООО ТЛК БАРС» (закупка и доставка товаров из Китая «под ключ», офис-команда в Гуанчжоу). По состоянию репозитория это именно каркас: страницы с корректными URL, мета-тегами, разметкой, SEO-слоем, рабочими формами заявок (лиды уходят в Bitrix24 через бэкенд `server/`); контент наполняется отдельно через CMS.
+**Что это.** Статический сайт-**каркас** торгово-логистической компании «ООО ТЛК БАРС» (закупка и доставка товаров из Китая «под ключ», офис-команда в Гуанчжоу). По состоянию репозитория это именно каркас: страницы с корректными URL, мета-тегами, разметкой, SEO-слоем, рабочими формами заявок (лиды уходят в Bitrix24 и Telegram через бэкенд `server/`); контент наполняется отдельно через CMS.
 
 **Стек:**
 
@@ -59,12 +59,12 @@
 | `preview:fast` | как preview, но без минификации/прод-флагов (быстрее) |
 | `cms` | `decap-server` — локальный бэкенд Decap CMS (правки пишутся прямо в файлы без логина) |
 | `typecheck` | `tsc --noEmit` |
-| `server` / `watch:server` | обработчик заявок `server/index.ts` через `tsx` (порт 3000); `watch:server` входит в `dev` |
+| `server` / `watch:server` | обработчик заявок `server/index.ts` через `tsx` (порт 3000, Bitrix24 + Telegram); `watch:server` входит в `dev` |
 
 **Особенность сборки:** CSS и JS собираются **вне** Eleventy (PostCSS и esbuild пишут напрямую в `_site/`), а `eleventy.config.ts` лишь добавляет `addWatchTarget` на эти выходные файлы, чтобы browsersync перезагружал страницу при их изменении.
 
 **Переменные окружения** (`.env`, пример — `.env.example`; реальные значения в репозиторий не коммитятся):
-`SITE_URL` (база для canonical/OG/sitemap), `YM_COUNTER_ID` (Яндекс.Метрика), `GA4_ID` (Google Analytics 4), `YANDEX_VERIFICATION`, `GOOGLE_VERIFICATION`. Пустое значение → соответствующий счётчик/мета-тег просто не рендерится. Отдельная группа — бэкенд заявок: `BITRIX_WEBHOOK_URL` (**секрет**, вебхук Bitrix24), `LEAD_API_URL`, `LEAD_PORT`, `LEAD_PATH`, `LEAD_ALLOWED_ORIGINS`, `LEAD_RATE_LIMIT`, `BITRIX_SOURCE_ID`, `BITRIX_ASSIGNED_BY_ID` (см. раздел 14).
+`SITE_URL` (база для canonical/OG/sitemap), `YM_COUNTER_ID` (Яндекс.Метрика), `GA4_ID` (Google Analytics 4), `YANDEX_VERIFICATION`, `GOOGLE_VERIFICATION`. Пустое значение → соответствующий счётчик/мета-тег просто не рендерится. Отдельная группа — бэкенд заявок: `BITRIX_WEBHOOK_URL` (**секрет**, вебхук Bitrix24), `LEAD_API_URL`, `LEAD_PORT`, `LEAD_PATH`, `LEAD_ALLOWED_ORIGINS`, `LEAD_RATE_LIMIT`, `BITRIX_SOURCE_ID`, `BITRIX_ASSIGNED_BY_ID`, а также `TELEGRAM_BOT_TOKEN` (**секрет**) и `TELEGRAM_CHAT_ID` для дубля заявок в Telegram (см. раздел 14).
 
 ---
 
@@ -86,11 +86,12 @@
 │   └── index.html          #   загрузчик decap-cms из CDN, noindex
 ├── types/
 │   └── eleventy-img.d.ts   # минимальные типы для @11ty/eleventy-img
-├── server/                 # бэкенд-обработчик заявок → Bitrix24 (без зависимостей)
+├── server/                 # бэкенд заявок → Bitrix24 + Telegram (без зависимостей)
 │   ├── index.ts            #   HTTP-сервер: маршруты, CORS, антиспам, лимиты
 │   ├── config.ts           #   .env-загрузчик, нормализация вебхука, настройки
 │   ├── lead.ts             #   разбор/валидация заявки, сборка полей лида
-│   └── bitrix.ts           #   вызов crm.lead.add (таймаут, ретраи, ошибки)
+│   ├── bitrix.ts           #   вызов crm.lead.add (таймаут, ретраи, ошибки)
+│   └── telegram.ts         #   дубль заявки в чат менеджера (Bot API)
 └── src/
     ├── _data/              # глобальные данные на TS (доступны во всех шаблонах)
     │   ├── site.ts           # реквизиты, контакты, аналитика/верификация из env
@@ -430,11 +431,11 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 
 ---
 
-## 14. Бэкенд заявок → Bitrix24 CRM (`server/`)
+## 14. Бэкенд заявок → Bitrix24 CRM + Telegram (`server/`)
 
 Заявки со всех форм сайта уходят в Bitrix24 через собственный обработчик на Node без внешних зависимостей. Запуск — `npm run server` (в `npm run dev` поднимается автоматически вместе с 11ty).
 
-**Поток данных:** форма `[data-lead-form]` → `initForms()` в `src/assets/ts/main.ts` (валидация, согласие 152-ФЗ, honeypot) → `POST` JSON на `data-lead-endpoint` (`site.leadApiUrl` ← `LEAD_API_URL`) → `server/index.ts` (`/api/lead`, порт 3000) → `server/lead.ts` (разбор и валидация) → `server/bitrix.ts` (`crm.lead.add` по входящему вебхуку) → лид в CRM, ID возвращается в браузер.
+**Поток данных:** форма `[data-lead-form]` → `initForms()` в `src/assets/ts/main.ts` (валидация, согласие 152-ФЗ, honeypot) → `POST` JSON на `data-lead-endpoint` (`site.leadApiUrl` ← `LEAD_API_URL`) → `server/index.ts` (`/api/lead`, порт 3000) → `server/lead.ts` (разбор и валидация) → `server/bitrix.ts` (`crm.lead.add` по входящему вебхуку) → лид в CRM, ID возвращается в браузер, а `server/telegram.ts` дублирует заявку в чат менеджера.
 
 | Файл | Роль |
 |---|---|
@@ -442,5 +443,6 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 | `server/lead.ts` | Разбор полезной нагрузки, определение типа контакта (телефон / e-mail / Telegram), валидация (контакт, предмет заявки, согласие), сборка полей `crm.lead.add`: `TITLE`, `PHONE`/`EMAIL`/`IM`, `SOURCE_ID`, `SOURCE_DESCRIPTION`, `UTM_*`, `COMMENTS`. |
 | `server/bitrix.ts` | HTTP-вызов метода REST: таймаут (`AbortSignal.timeout`), ретраи только на временных ошибках (сеть, `QUERY_LIMIT_EXCEEDED`, 5xx), повтор без поля `IM`, если портал его не принял. |
 | `server/index.ts` | Маршруты (`POST /api/lead`, `GET /healthz`), CORS, ограничение частоты по IP (тратится только на заявках, уходящих в CRM), honeypot, лимит размера тела, резервный `logs/leads-failed.jsonl` при недоступности CRM. |
+| `server/telegram.ts` | Уведомление в чат через Bot API (`parse_mode: HTML`, экранирование, ретрай): на успехе — данные заявки + ссылка на карточку лида, на сбое CRM — предупреждение с теми же данными. Отправляется после ответа браузеру и никогда не бросает исключение: упавший Telegram не должен ломать принятую заявку. |
 
 **Прод:** `server/` запускается рядом со статикой и проксируется на тот же домен по `/api/lead`; тогда `LEAD_API_URL=/api/lead` и CORS не требуется.
