@@ -11,19 +11,19 @@
   <div>
     <label class="field-label" for="lead-cargo">Что везёте</label>
     <input class="field-input" id="lead-cargo" name="cargo" type="text" placeholder="Напр.: керамическая плитка" data-validate="required" autocomplete="off" />
-    <p class="field-error" data-error-for="cargo">Укажите, что нужно перевезти.</p>
+    <p class="field-error hidden" data-error-for="cargo">Укажите, что нужно перевезти.</p>
   </div>
 
   <div>
     <label class="field-label" for="lead-volume">Объём / вес</label>
     <input class="field-input" id="lead-volume" name="volume" type="text" placeholder="Напр.: 20 т / 30 м³" data-validate="required" autocomplete="off" />
-    <p class="field-error" data-error-for="volume">Укажите объём или вес груза.</p>
+    <p class="field-error hidden" data-error-for="volume">Укажите объём или вес груза.</p>
   </div>
 
   <div>
     <label class="field-label" for="lead-contact">Телефон или Telegram</label>
     <input class="field-input" id="lead-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ или @username" data-validate="contact" autocomplete="off" />
-    <p class="field-error" data-error-for="contact">Укажите корректный телефон или Telegram.</p>
+    <p class="field-error hidden" data-error-for="contact">Укажите корректный телефон или Telegram.</p>
   </div>
 
   {% from "components/form-consent.njk" import formConsent %}

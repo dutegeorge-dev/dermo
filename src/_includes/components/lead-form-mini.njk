@@ -23,12 +23,12 @@
     <div>
       <label class="field-label" for="{{ id_prefix }}-cargo">{{ "home.heroForm.cargoLabel" | t(locale) }}</label>
       <input class="field-input min-h-[44px]" id="{{ id_prefix }}-cargo" name="cargo" type="text" data-validate="required" autocomplete="off" />
-      <p class="field-error" data-error-for="cargo">{{ "home.heroForm.cargoError" | t(locale) }}</p>
+      <p class="field-error hidden" data-error-for="cargo">{{ "home.heroForm.cargoError" | t(locale) }}</p>
     </div>
     <div>
       <label class="field-label" for="{{ id_prefix }}-contact">{{ "home.heroForm.contactLabel" | t(locale) }}</label>
       <input class="field-input min-h-[44px]" id="{{ id_prefix }}-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ · @username" data-validate="contact" autocomplete="off" />
-      <p class="field-error" data-error-for="contact">{{ "home.heroForm.contactError" | t(locale) }}</p>
+      <p class="field-error hidden" data-error-for="contact">{{ "home.heroForm.contactError" | t(locale) }}</p>
     </div>
 
     {{ formConsent(locale, id_prefix) }}

@@ -74,12 +74,12 @@ sitemap: true
           <div>
             <label class="field-label" for="trade-cargo">{{ "torgovlya.heroForm.cargoLabel" | t(locale) }}</label>
             <input class="field-input min-h-[44px]" id="trade-cargo" name="cargo" type="text" data-validate="required" autocomplete="off" />
-            <p class="field-error" data-error-for="cargo">{{ "torgovlya.heroForm.cargoError" | t(locale) }}</p>
+            <p class="field-error hidden" data-error-for="cargo">{{ "torgovlya.heroForm.cargoError" | t(locale) }}</p>
           </div>
           <div>
             <label class="field-label" for="trade-contact">{{ "torgovlya.heroForm.contactLabel" | t(locale) }}</label>
             <input class="field-input min-h-[44px]" id="trade-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ · @username" data-validate="contact" autocomplete="off" />
-            <p class="field-error" data-error-for="contact">{{ "torgovlya.heroForm.contactError" | t(locale) }}</p>
+            <p class="field-error hidden" data-error-for="contact">{{ "torgovlya.heroForm.contactError" | t(locale) }}</p>
           </div>
 
           {{ formConsent(locale, "trade") }}

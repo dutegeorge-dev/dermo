@@ -184,8 +184,11 @@
   .field-input {
     @apply w-full rounded-md border border-gray-300 px-3 py-2 text-base focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand;
   }
+  /* Видимостью управляет утилита `hidden` в разметке (её снимает/возвращает
+     assets/ts/main.ts). Внутрь класса `hidden` не вносить: тогда снятие
+     утилиты перестаёт работать и подсказки об ошибках не появляются. */
   .field-error {
-    @apply mt-1 hidden text-sm text-red-600;
+    @apply mt-1 text-sm text-red-600;
   }
 
   /* Базовая типографика статей блога (.prose) — лёгкая замена typography-плагина.

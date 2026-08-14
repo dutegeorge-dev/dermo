@@ -145,22 +145,20 @@ function initForms(): void {
     const success = form.querySelector<HTMLElement>("[data-form-success]");
     const failure = form.querySelector<HTMLElement>("[data-form-error]");
 
-    // Согласие на обработку ПДн (152-ФЗ): если чекбокс есть, кнопка отправки
-    // блокируется до его отметки. Состояние синхронизируется на старте и по change.
+    // Согласие на обработку ПДн (152-ФЗ) обязательно, но кнопку отправки оно
+    // НЕ блокирует: заблокированная кнопка молча ничего не делает, и человек,
+    // не заметивший чекбокс, просто уходит со страницы. Вместо этого форма по
+    // клику показывает, чего не хватает (см. проверку в обработчике submit).
     const consent = form.querySelector<HTMLInputElement>("[data-consent]");
     const submitBtn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     const consentError = form.querySelector<HTMLElement>('[data-error-for="consent"]');
 
-    const syncConsent = (): void => {
-      if (consent && submitBtn) submitBtn.disabled = !consent.checked;
-    };
-    if (consent) {
-      syncConsent();
-      consent.addEventListener("change", () => {
-        syncConsent();
-        if (consent.checked) consentError?.classList.add("hidden");
-      });
-    }
+    consent?.addEventListener("change", () => {
+      if (consent.checked) {
+        consent.removeAttribute("aria-invalid");
+        consentError?.classList.add("hidden");
+      }
+    });
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -195,7 +193,8 @@ function initForms(): void {
       });
 
       // Согласие обязательно, если чекбокс присутствует в форме.
-      if (consent && !consent.checked) {
+      const consentMissing = Boolean(consent && !consent.checked);
+      if (consentMissing && consent) {
         valid = false;
         consent.setAttribute("aria-invalid", "true");
         consentError?.classList.remove("hidden");
@@ -204,7 +203,14 @@ function initForms(): void {
         consentError?.classList.add("hidden");
       }
 
-      if (!valid) return;
+      if (!valid) {
+        // Уводим фокус на первую проблему, иначе на длинной форме подсказка
+        // может оказаться за пределами экрана и клик снова выглядит «пустым».
+        const firstInvalid = form.querySelector<HTMLElement>('[aria-invalid="true"]');
+        firstInvalid?.focus({ preventScroll: true });
+        firstInvalid?.scrollIntoView({ block: "center", behavior: "smooth" });
+        return;
+      }
 
       // ── Отправка на бэкенд ───────────────────────────────────────────────
       failure?.classList.add("hidden");
@@ -234,8 +240,6 @@ function initForms(): void {
             submitBtn.disabled = false;
             submitBtn.textContent = idleLabel;
           }
-          // reset() снимает отметку согласия — снова блокируем кнопку отправки.
-          syncConsent();
         });
     });
   });
