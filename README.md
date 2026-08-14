@@ -169,7 +169,7 @@ npm run cms      # в отдельном терминале: npx decap-server
 
 ```bash
 # 1. Код и зависимости
-sudo git clone <repo> /var/www/tlkbars && cd /var/www/tlkbars
+sudo git clone <repo> /var/www/tlkbars/repo && cd /var/www/tlkbars/repo
 npm ci                       # devDependencies нужны: сборку делают 11ty/tailwind/esbuild
 
 # 2. Секреты и адрес эндпоинта
@@ -197,6 +197,46 @@ sudo certbot --nginx -d tlkbars.ru -d www.tlkbars.ru
 ```
 
 Проверка: `curl -X POST https://tlkbars.ru/api/lead -H 'content-type: application/json' -d '{"cargo":"тест","contact":"+79990000000","consent":true}'` → `{"ok":true,"leadId":N}`, лид в CRM и сообщение в Telegram. Логи заявок — `journalctl -u bars-lead -f`.
+
+### Если nginx уже настроен
+
+Готовый конфиг из `deploy/` подключать не обязательно — достаточно, чтобы в вашем `server{}` было проксирование на обработчик:
+
+```nginx
+location /api/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+И проверьте два места, где типовой конфиг статики конфликтует с этим проектом:
+
+1. **Общий `location /assets/` с долгим кэшем ломает обновления форм.** `styles.css` и `main.js` собираются под постоянными именами, поэтому `expires 30d` + `immutable` означает, что вернувшийся посетитель до месяца будет работать со старым `main.js` — тем самым, который отправляет заявки, — и не увидит ни исправлений, ни смены адреса эндпоинта. Кэш нужно разделить:
+
+   ```nginx
+   location ~* ^/assets/(fonts|img)/ {
+       add_header Cache-Control "public, max-age=2592000, immutable" always;
+       access_log off;
+   }
+   location ~* ^/assets/(css|js)/ {
+       add_header Cache-Control "public, max-age=3600, must-revalidate" always;
+   }
+   ```
+
+2. **`try_files ... /404.html` отдаёт страницу 404 с кодом 200.** Поисковики считают такие «мягкие 404» обычными страницами и индексируют их. Правильнее:
+
+   ```nginx
+   location / {
+       try_files $uri $uri/ $uri.html =404;
+   }
+   error_page 404 /404.html;
+   ```
+
+Помните про правило `add_header`: если в каком-то `location` он появился, заголовки уровня `server{}` в этом блоке перестают отдаваться — их нужно продублировать (например, через `include snippets/tlkbars-security.conf`).
 
 **Важные детали:**
 

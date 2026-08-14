@@ -8,7 +8,11 @@
 #   journalctl -u bars-lead -f          # логи заявок
 #
 # Секреты (BITRIX_WEBHOOK_URL, TELEGRAM_BOT_TOKEN) обработчик читает сам из
-# /var/www/tlkbars/.env — в юните их дублировать не нужно.
+# .env в WorkingDirectory — в юните их дублировать не нужно.
+#
+# ⚠️ Пути ниже указаны под раскладку «репозиторий в /var/www/tlkbars/repo»
+# (root nginx при этом — /var/www/tlkbars/repo/_site). Свой путь — правьте
+# WorkingDirectory и ReadWritePaths.
 
 [Unit]
 Description=ТЛК БАРС — обработчик заявок (Bitrix24 + Telegram)
@@ -20,7 +24,7 @@ Wants=network-online.target
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/tlkbars
+WorkingDirectory=/var/www/tlkbars/repo
 
 # Node ≥ 22.18 исполняет TypeScript напрямую — сборка и node_modules
 # обработчику не нужны вообще.
@@ -51,7 +55,7 @@ ProtectHome=true
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
-ReadWritePaths=/var/www/tlkbars/logs
+ReadWritePaths=/var/www/tlkbars/repo/logs
 
 [Install]
 WantedBy=multi-user.target
