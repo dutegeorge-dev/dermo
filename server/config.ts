@@ -95,6 +95,8 @@ export const config = {
   host: process.env.LEAD_HOST?.trim() || "0.0.0.0",
   /** Путь эндпоинта приёма заявок. */
   path: process.env.LEAD_PATH?.trim() || "/api/lead",
+  /** Путь эндпоинта курсов ЦБ (нужен калькулятору доставки). */
+  ratesPath: process.env.RATES_PATH?.trim() || "/api/rates",
 
   bitrix: {
     /** Задан ли вебхук: без него заявки в CRM не уходят. */
@@ -122,6 +124,22 @@ export const config = {
     enabled: Boolean(telegramToken) && telegramChatIds.length > 0,
     /** Таймаут запроса к Bot API, мс. */
     timeoutMs: envNumber("TELEGRAM_TIMEOUT_MS", 10_000),
+  },
+
+  rates: {
+    /** Основной источник курсов ЦБ — готовый JSON. */
+    jsonUrl: process.env.RATES_JSON_URL?.trim() || "https://www.cbr-xml-daily.ru/daily_json.js",
+    /** Резервный источник — официальный XML ЦБ РФ. */
+    xmlUrl: process.env.RATES_XML_URL?.trim() || "https://www.cbr.ru/scripts/XML_daily.asp",
+    /** Сколько держим курс в памяти. ЦБ публикует его раз в сутки — 6 часов с запасом. */
+    ttlMs: envNumber("RATES_TTL_MS", 6 * 60 * 60 * 1000),
+    /** Таймаут запроса к ЦБ, мс. */
+    timeoutMs: envNumber("RATES_TIMEOUT_MS", 8000),
+    /** Файл последних известных курсов: переживает перезапуск службы. */
+    cacheFile: path.resolve(
+      ROOT,
+      process.env.RATES_CACHE_FILE?.trim() || "logs/rates-cache.json",
+    ),
   },
 
   cors: {

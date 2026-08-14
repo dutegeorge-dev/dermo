@@ -13,8 +13,11 @@
         <p class="mt-4 text-lg font-light text-white/85">{{ "home.ctaFinal.subtitle" | t(locale) }}</p>
       </div>
       <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center lg:shrink-0">
+        {# Кнопка называется «Оставить заявку» и ведёт к форме на контактах.
+           Кнопки «Рассчитать» (хедер, CTA-полосы) ведут на site.calculateUrl —
+           страницу калькулятора; здесь это была бы подмена обещания. #}
         <a
-          href="{{ site.calculateUrl | localizedUrl(locale) }}"
+          href="{{ '/kontakty/#raschet' | localizedUrl(locale) }}"
           class="inline-flex items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
         >
           {{ "cta.request" | t(locale) }}

@@ -1,0 +1,96 @@
+---
+# Страница благодарности калькулятора: /calculator/spasibo/ (+ языковые версии).
+# Отдельная от общей /spasibo/ — чтобы в аналитике конверсия калькулятора
+# считалась сама по себе.
+pagination:
+  data: locales
+  size: 1
+  alias: listLang
+permalink: "{{ '/calculator/spasibo/' | localizedUrl(listLang) }}"
+layout: layouts/base.njk
+title: "Расчёт отправлен"
+description: "Заявка с калькулятора принята — менеджер свяжется и пришлёт точную стоимость доставки."
+robots: "noindex, follow"
+eleventyExcludeFromCollections: true
+---
+{#
+  Куда попадает посетитель после кнопки «Отправить запрос» в калькуляторе
+  (адрес задан в data-redirect формы — см. src/pages/calculator.njk).
+#}
+{% from "partials/icon.njk" import icon %}
+
+{% include "partials/header.njk" %}
+
+<main class="flex-1">
+  <section class="container section">
+    <div class="mx-auto max-w-2xl text-center">
+      <span class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-cyan/10 text-cyan-dark">
+        {{ icon("check", "h-8 w-8") }}
+      </span>
+
+      <h1 class="mt-6 text-3xl font-semibold tracking-tight text-ink md:text-4xl">
+        Расчёт отправлен
+      </h1>
+      <p class="mt-4 text-lg leading-relaxed text-muted">
+        Заявка с параметрами вашего груза уже у менеджера. Свяжемся в течение рабочего дня,
+        уточним детали и пришлём точную стоимость доставки и таможенных платежей.
+      </p>
+      <p class="mt-3 text-base text-muted">{{ site.workingHours }}</p>
+
+      <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        <a
+          href="{{ site.telegram }}"
+          rel="nofollow noopener"
+          target="_blank"
+          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2"
+        >
+          {{ icon("send", "h-5 w-5") }}
+          Написать в Telegram
+        </a>
+        <a
+          href="tel:{{ site.phoneHref }}"
+          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-brand px-6 py-3 text-base font-medium text-brand transition-colors hover:bg-brand hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          {{ icon("phone", "h-5 w-5") }}
+          {{ site.phone }}
+        </a>
+      </div>
+
+      {# Пока ждёте ответа — что почитать по теме расчёта. #}
+      <div class="mt-12 grid gap-4 text-left sm:grid-cols-2">
+        <a
+          href="{{ '/blog/kod-tn-ved/' | localizedUrl(locale) }}"
+          class="group rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-cyan"
+        >
+          <span class="flex items-center gap-2 text-sm font-semibold text-ink">
+            {{ icon("file-text", "h-4 w-4 text-cyan") }}
+            Код ТН ВЭД
+          </span>
+          <span class="mt-2 block text-sm text-muted">
+            От чего зависят пошлина и НДС и почему код согласуют с декларантом.
+          </span>
+        </a>
+        <a
+          href="{{ '/uslugi/dostavka/sbornye-gruzy/' | localizedUrl(locale) }}"
+          class="group rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-cyan"
+        >
+          <span class="flex items-center gap-2 text-sm font-semibold text-ink">
+            {{ icon("package", "h-4 w-4 text-cyan") }}
+            Сборные грузы
+          </span>
+          <span class="mt-2 block text-sm text-muted">
+            Как устроена доставка сборных грузов из Китая и что входит в стоимость.
+          </span>
+        </a>
+      </div>
+
+      <p class="mt-10 text-sm">
+        <a class="link-inline" href="{{ '/calculator/' | localizedUrl(locale) }}">
+          Вернуться к калькулятору
+        </a>
+      </p>
+    </div>
+  </section>
+</main>
+
+{% include "partials/footer.njk" %}

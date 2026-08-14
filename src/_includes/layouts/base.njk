@@ -4,7 +4,7 @@
 {%- set canonicalUrl = site.url + page.url -%}
 {%- set ogImageUrl = (ogImage or site.defaultOgImage) | absoluteUrl(site.url) -%}
 <!doctype html>
-<html lang="{{ locale or site.lang }}"{% if site.analytics.yandexMetrika %} data-ym-id="{{ site.analytics.yandexMetrika }}"{% endif %} data-lead-endpoint="{{ site.leadApiUrl }}" data-form-sending="{{ 'forms.sending' | t(locale or site.lang) }}">
+<html lang="{{ locale or site.lang }}"{% if site.analytics.yandexMetrika %} data-ym-id="{{ site.analytics.yandexMetrika }}"{% endif %} data-lead-endpoint="{{ site.leadApiUrl }}" data-rates-endpoint="{{ site.ratesApiUrl }}" data-form-sending="{{ 'forms.sending' | t(locale or site.lang) }}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

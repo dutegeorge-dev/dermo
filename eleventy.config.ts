@@ -72,6 +72,7 @@ const LABELS: Record<string, string> = {
   kontakty: "Контакты",
   "politika-konfidencialnosti": "Политика конфиденциальности",
   spasibo: "Заявка принята",
+  calculator: "Калькулятор",
   dostavka: "Доставка",
   sposoby: "Способы",
   "dop-uslugi": "Дополнительные услуги",

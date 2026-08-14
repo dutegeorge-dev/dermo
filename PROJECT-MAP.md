@@ -121,7 +121,8 @@
     ├── pages/                # страницы сайта (URL — через permalink в *.json папок)
     │   ├── *.json            # директорные данные: permalink/layout по папкам
     │   ├── index.njk, kontakty.njk, logistika.njk, torgovlya.njk,
-    │   │   o-kompanii.njk, politika-konfidencialnosti.njk, spasibo.njk
+    │   │   o-kompanii.njk, politika-konfidencialnosti.njk, spasibo.njk,
+    │   │   calculator.njk, calculator-spasibo.njk
     │   ├── blog/index.njk, kejsy/index.njk      # витрины (локализованные)
     │   ├── r/                # рекламные посадочные (noindex, вне sitemap)
     │   └── uslugi/           # дерево услуг (dostavka/{sposoby,tovary,goroda,…}, torgovlya)
@@ -170,7 +171,7 @@ JSON задают только URL. Лейаут для листовых стр�
 
 ### Полный перечень маршрутов (ru)
 
-**Самостоятельные страницы:** `/`, `/logistika/`, `/torgovlya/`, `/o-kompanii/`, `/kontakty/`, `/politika-konfidencialnosti/`, `/spasibo/`.
+**Самостоятельные страницы:** `/`, `/logistika/`, `/torgovlya/`, `/o-kompanii/`, `/kontakty/`, `/politika-konfidencialnosti/`, `/spasibo/`, `/calculator/` (калькулятор доставки и таможенных платежей) и `/calculator/spasibo/` (благодарность после отправки расчёта, `noindex`, вне sitemap).
 
 **Раздел «Услуги»:**
 - хабы: `/uslugi/`, `/uslugi/dostavka/`, `/uslugi/dostavka/sposoby/`, `/uslugi/dostavka/tovary/`, `/uslugi/dostavka/goroda/`, `/uslugi/dostavka/dop-uslugi/`, `/uslugi/torgovlya/`;
@@ -211,7 +212,7 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 
 Все данные строго типизированы по `types.ts`. Тексты в разметку **не хардкодятся** — данные хранят слаги, иконки Lucide, URL и **ключи** словаря (i18n); сами строки лежат в `i18n/*.ts`.
 
-- **`site.ts`** — единый объект `site`: бренд/реквизиты (`name`, `legalName`, `director="Фотин Евгений Петрович"`, `inn=5024256988`, `kpp`, `ogrn`, адрес в Красногорске + офис в Гуанчжоу), контакты (RU/CN телефоны, Telegram, `email`, отдельный `privacyEmail` для запросов по ПДн), `mapEmbedSrc` (виджет Яндекс.Карт на Гуанчжоу), блоки `analytics`/`verification` целиком из env. **Плейсхолдеры:** телефоны `+7 (000) …`/`+86 000 …`, адрес CN «уточняется», `calculateUrl` — якорь-заглушка.
+- **`site.ts`** — единый объект `site`: бренд/реквизиты (`name`, `legalName`, `director="Фотин Евгений Петрович"`, `inn=5024256988`, `kpp`, `ogrn`, адрес в Красногорске + офис в Гуанчжоу), контакты (RU/CN телефоны, Telegram, `email`, отдельный `privacyEmail` для запросов по ПДн), `mapEmbedSrc` (виджет Яндекс.Карт на Гуанчжоу), блоки `analytics`/`verification` целиком из env, `calculateUrl` → `/calculator/` (страница калькулятора), `leadApiUrl`/`ratesApiUrl` — эндпоинты бэкенда. **Плейсхолдеры:** телефоны `+7 (000) …`/`+86 000 …`, адрес CN «уточняется».
 - **`navigation.ts`** — 5 пунктов верхнего меню по `titleKey`: `nav.services` (с `mega:true`, без url — открывает мега-меню), `nav.cases`→`/kejsy/`, `nav.blog`→`/blog/`, `nav.about`→`/o-kompanii/`, `nav.contacts`→`/kontakty/`.
 - **`uslugi.ts`** — **единый источник** структуры раздела «Услуги»: `methods` (4 способа), `tovary` (5 категорий), `goroda` (6 городов), `dopUslugi` (3, причём «Сертификация» ведёт на страницу торговли — без дубля), `torgovlyaServices` (10). Из него строятся витрины, списки, мега-меню и хлебные крошки.
 - **`megaMenu.ts`** — структура мега-меню «Услуги»: левое крыло «Логистика» (подгруппы «по способу»/«доп. услуги»/«по товару»/«по городу» с раскладкой по колонкам, `pinBottom`, `singleCol`), правое «Торговля» (7 ключевых услуг из единого источника + «все услуги»). Списки берутся из `uslugi.ts`, чтобы названия нигде не расходились.
@@ -312,7 +313,9 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 
 | Модуль | Что делает | Где |
 |---|---|---|
-| `main.ts` | Точка входа: импортирует `header`, `slider`, `cookie`; на `DOMContentLoaded` запускает `initForms()` и `initToc()`. **`initForms`** — валидация форм-заявок (телефон/Telegram-ник), чекбокс согласия 152-ФЗ блокирует submit, затем `POST` JSON на бэкенд заявок (адрес — `data-lead-endpoint` на `<html>`); на время запроса кнопка блокируется, при успехе — подтверждение, сброс формы и событие `lead_form_submit` в аналитику (`trackEvent` → `ym`/`gtag`), при сбое — блок `[data-form-error]`. UTM-метки берутся из URL и хранятся в `sessionStorage`. | формы `[data-lead-form]` |
+| `main.ts` | Точка входа: импортирует `header`, `slider`, `cookie`; на `DOMContentLoaded` запускает `initForms()`, `initToc()` и `initCalculator()`. **`initForms`** — валидация форм-заявок (телефон/Telegram-ник), обязательный чекбокс согласия 152-ФЗ, затем отправка через `sendLead` из `lead.ts`; на время запроса кнопка блокируется, при успехе — подтверждение, сброс формы и событие `lead_form_submit` в аналитику, при сбое — блок `[data-form-error]`. | формы `[data-lead-form]` |
+| `lead.ts` | Общий модуль отправки заявок: `sendLead(form, extra)` (сбор полей формы + UTM из URL/`sessionStorage` + honeypot → `POST` JSON на `data-lead-endpoint`), `isValidContact`, `trackEvent` (`ym`/`gtag`). Используется и обычными формами, и калькулятором. | все формы заявок |
+| `calculator.ts` | `initCalculator` — калькулятор `/calculator/`: мгновенный пересчёт на каждый ввод, мультитоварность (`<template>` + «Добавить товар»), курсы ЦБ из `GET data-rates-endpoint` (флаг `stale` и сообщение при недоступности), детализация расчёта, отправка расчёта заявкой через `sendLead` и редирект на `/calculator/spasibo/`. Формулы и тарифы импортируются из `server/calc.ts` — общего с бэкендом модуля. | `[data-calculator]` |
 | `header.ts` | `initStickyHeader` (сворачивание utility-полосы с гистерезисом COLLAPSE_AT=64/EXPAND_AT=8 против «дрожания»), `initMegaMenu` (тап/клик + Esc + клик-вне + focusout; hover — на CSS), `initAccordions` (универсальные `[data-accordion-toggle]`), `initMobilePanel` (off-canvas: бургер, оверлей, блокировка скролла, Esc, фокус). | хедер |
 | `toc.ts` | `initToc` — sticky-оглавление читательского шаблона: собирает разделы (`section[id]` или `h2/h3[id]`), показывает **только при 3+ разделах**, десктоп — правое sticky со scroll-spy (`IntersectionObserver`, активный — бирюза), мобайл — аккордеон «Содержание», плавная прокрутка + перевод фокуса для доступности. | `[data-reading]` |
 | `slider.ts` | `initSliders` — карусель без зависимостей (нативный скролл-трек + стрелки на ширину карточки, блокировка на краях). | `[data-slider]` (команда на «О компании») |
@@ -393,7 +396,6 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 - **Плейсхолдеры данных:** телефоны и адрес CN в `site.ts`; реквизиты в футере («Реквизиты-заглушки»); текстовый логотип (`logo.njk` — «Логотип-плейсхолдер»); `photo-placeholder.njk`; логотипы партнёров; фото команды; `homeBlog.ts`/`homeCases.ts` (видимые на старте плейсхолдеры карточек главной).
 - **Пустые посадочные `/r/`:** `belaya-dostavka.njk`, `napolnye-pokrytiya.njk`, `stroymaterialy.njk` содержат только комментарий, без контента.
 - **Переводы en/zh не написаны** — стабы с `[EN]`/`[ZH]`-маркерами на русском тексте; en/zh-страницы вне блога/кейсов не генерируются; `logistika`/`oKompanii` в en/zh — сырой ru.
-- **`calculateUrl`** в `site.ts` — якорь-заглушка `/kontakty/#raschet` до запуска.
 - **Описания части контента** — «Материал готовится».
 
 ---
@@ -443,7 +445,11 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 | `server/config.ts` | Загрузка `.env` (свой мини-парсер), нормализация `BITRIX_WEBHOOK_URL` до `/rest/<user>/<token>/` (принимает и полную ссылку на метод с query), маскирование токена для логов, CORS-allowlist, лимиты. |
 | `server/lead.ts` | Разбор полезной нагрузки, определение типа контакта (телефон / e-mail / Telegram), валидация (контакт, предмет заявки, согласие), сборка полей `crm.lead.add`: `TITLE`, `PHONE`/`EMAIL`/`IM`, `SOURCE_ID`, `SOURCE_DESCRIPTION`, `UTM_*`, `COMMENTS`. |
 | `server/bitrix.ts` | HTTP-вызов метода REST: таймаут (`AbortSignal.timeout`), ретраи только на временных ошибках (сеть, `QUERY_LIMIT_EXCEEDED`, 5xx), повтор без поля `IM`, если портал его не принял. |
-| `server/index.ts` | Маршруты (`POST /api/lead`, `GET /healthz`), CORS, ограничение частоты по IP (тратится только на заявках, уходящих в CRM), honeypot, лимит размера тела, резервный `logs/leads-failed.jsonl` при недоступности CRM. |
+| `server/calc.ts` | Единый источник тарифов и формул калькулятора (`CALC_CONFIG`, `computeCalculation`): им пользуются и бэкенд, и `src/_data/calculator.ts`, и клиентский `src/assets/ts/calculator.ts`. |
+| `server/rates.ts` | Курсы ЦБ РФ для калькулятора: `cbr-xml-daily.ru` с фолбэком на XML `cbr.ru`, кэш в памяти (`RATES_TTL_MS`) + файл последних известных курсов, отдача устаревших значений с флагом `stale` вместо ошибки. |
+| `server/index.ts` | Маршруты (`POST /api/lead`, `GET /api/rates`, `GET /healthz`), CORS, ограничение частоты по IP (тратится только на заявках, уходящих в CRM), honeypot, лимит размера тела, резервный `logs/leads-failed.jsonl` при недоступности CRM. |
 | `server/telegram.ts` | Уведомление в чат через Bot API (`parse_mode: HTML`, экранирование, ретрай): на успехе — данные заявки + ссылка на карточку лида, на сбое CRM — предупреждение с теми же данными. Отправляется после ответа браузеру и никогда не бросает исключение: упавший Telegram не должен ломать принятую заявку. |
 
-**Прод:** `server/` запускается рядом со статикой и проксируется на тот же домен по `/api/lead`; тогда `LEAD_API_URL=/api/lead` и CORS не требуется. Готовые конфиги — `deploy/nginx/tlkbars.ru.conf` (+ сниппет заголовков) и `deploy/systemd/bars-lead.service`; порядок развёртывания — в README, раздел «Хостинг». Две грабли зафиксированы в самих конфигах: `add_header` внутри `location` отменяет унаследованные заголовки (поэтому сниппет включается в каждый блок), а `LEAD_API_URL` вшивается в HTML на сборке, а не читается в рантайме.
+**Калькулятор.** Заявка со страницы `/calculator/` приходит тем же `POST /api/lead`, но с блоком `calc`: обработчик **пересчитывает суммы сам** (`server/calc.ts` + текущие курсы ЦБ) — в лид попадают наши числа, а не пришедшие из браузера. Заголовок такого лида — «Заявка с калькулятора», детализация расчёта уходит в `COMMENTS`, краткая сводка — в Telegram. Тарифы и ставки правятся только в `server/calc.ts`.
+
+**Прод:** `server/` запускается рядом со статикой и проксируется на тот же домен по `/api/lead` и `/api/rates`; тогда `LEAD_API_URL=/api/lead` и CORS не требуется. Готовые конфиги — `deploy/nginx/tlkbars.ru.conf` (+ сниппет заголовков) и `deploy/systemd/bars-lead.service`; порядок развёртывания — в README, раздел «Хостинг». Две грабли зафиксированы в самих конфигах: `add_header` внутри `location` отменяет унаследованные заголовки (поэтому сниппет включается в каждый блок), а `LEAD_API_URL` вшивается в HTML на сборке, а не читается в рантайме.

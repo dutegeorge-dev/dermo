@@ -46,7 +46,7 @@ export interface SiteConfig {
   phoneCn: string;
   /** Телефон в Китае для href (tel:). */
   phoneCnHref: string;
-  /** URL формы/секции расчёта (на старте — якорь-заглушка). */
+  /** URL страницы калькулятора доставки (кнопки «Рассчитать»). */
   calculateUrl: string;
   /** Ссылка на Telegram. */
   telegram: string;
@@ -72,6 +72,8 @@ export interface SiteConfig {
   verification: VerificationConfig;
   /** URL бэкенд-обработчика заявок (передаётся в вёрстку как data-lead-endpoint). */
   leadApiUrl: string;
+  /** URL эндпоинта курсов ЦБ (в вёрстке — data-rates-endpoint). */
+  ratesApiUrl: string;
 }
 
 /**

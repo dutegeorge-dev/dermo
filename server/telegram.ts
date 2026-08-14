@@ -7,6 +7,7 @@
  * поэтому функция никогда не бросает исключение.
  */
 
+import type { CalcResult } from "./calc.ts";
 import { config } from "./config.ts";
 import type { LeadInput } from "./lead.ts";
 
@@ -26,13 +27,27 @@ function leadUrl(leadId: number): string {
   return `${origin}/crm/lead/details/${leadId}/`;
 }
 
+/** Краткая сводка расчёта с калькулятора (полная версия — в карточке лида). */
+function calcSummary(calc: CalcResult): string {
+  const rows = [
+    `<b>Расчёт:</b> ${escapeHtml(calc.city)}, ${escapeHtml(calc.method.label)}`,
+    `${calc.volume} куб.м / ${calc.weight} кг → ${calc.chargeableVolume} куб.м к оплате`,
+    `Доставка ${calc.delivery.toFixed(2)} $ · пошлина ${calc.duty.toFixed(2)} $ · НДС ${calc.vat.toFixed(2)} $`,
+    `Товары ${calc.goodsUsd.toFixed(2)} $ · <b>итого ${calc.total.toFixed(2)} $</b>`,
+  ];
+  return rows.join("\n");
+}
+
 /** Текст уведомления о заявке. */
 function buildMessage(
   lead: LeadInput,
   result: { leadId: number | null; error?: string },
+  calc?: CalcResult | null,
 ): string {
   const header = result.leadId
-    ? "🔔 <b>Новая заявка с сайта</b>"
+    ? calc
+      ? "🧮 <b>Новая заявка с калькулятора</b>"
+      : "🔔 <b>Новая заявка с сайта</b>"
     : "⚠️ <b>Заявка с сайта — НЕ попала в CRM</b>";
 
   const contact = [
@@ -56,6 +71,8 @@ function buildMessage(
     line("Груз", lead.cargo),
     line("Объём/вес", lead.volume),
     line("Комментарий", lead.comment),
+    calc ? "" : null,
+    calc ? calcSummary(calc) : null,
     "",
     line("Страница", lead.page),
     line("Форма", lead.form),
@@ -104,10 +121,11 @@ async function sendToChat(chatId: string, text: string): Promise<void> {
 export async function notifyTelegram(
   lead: LeadInput,
   result: { leadId: number | null; error?: string },
+  calc?: CalcResult | null,
 ): Promise<void> {
   if (!config.telegram.enabled) return;
 
-  const text = buildMessage(lead, result);
+  const text = buildMessage(lead, result, calc);
 
   await Promise.all(
     config.telegram.chatIds.map(async (chatId) => {

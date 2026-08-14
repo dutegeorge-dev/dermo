@@ -23,7 +23,7 @@ const site: SiteConfig = {
   phoneHref: "+79859673614",
   phoneCn: "+86 156 2617 0598",
   phoneCnHref: "+8615626170598",
-  calculateUrl: "/kontakty/#raschet",
+  calculateUrl: "/calculator/",
   telegram: "https://t.me/tlkbars",
   email: "info@tlkbars.ru",
   privacyEmail: "barslogistics@yandex.com",
@@ -52,6 +52,9 @@ const site: SiteConfig = {
   // Эндпоинт бэкенда заявок (server/index.ts). На проде эндпоинт обычно
   // проксируется на тот же домен — тогда достаточно LEAD_API_URL=/api/lead.
   leadApiUrl: process.env.LEAD_API_URL || "http://localhost:3000/api/lead",
+  // Эндпоинт курсов ЦБ для калькулятора (server/rates.ts). На проде — тот же
+  // домен: RATES_API_URL=/api/rates.
+  ratesApiUrl: process.env.RATES_API_URL || "http://localhost:3000/api/rates",
 };
 
 export default site;

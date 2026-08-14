@@ -6,6 +6,14 @@
  * поддержаны на будущее, если поля появятся в формах.
  */
 
+import {
+  parseCalcInput,
+  parseCalcRates,
+  type CalcInput,
+  type CalcRates,
+  type CalcResult,
+} from "./calc.ts";
+
 /** Сырые данные, пришедшие от клиента (после JSON.parse — тип неизвестен). */
 export type RawPayload = Record<string, unknown>;
 
@@ -38,6 +46,10 @@ export interface LeadInput {
   referrer: string;
   /** UTM-метки. */
   utm: Record<string, string>;
+  /** Данные калькулятора доставки (только для формы calculator). */
+  calc: CalcInput | null;
+  /** Курсы, которые видел посетитель. Запасной вариант, если ЦБ недоступен. */
+  calcRates: CalcRates | null;
 }
 
 export interface ValidationResult {
@@ -133,10 +145,21 @@ export function parseLead(payload: RawPayload): ValidationResult {
   const explicitPhone = str(payload.phone);
   const explicitEmail = str(payload.email);
 
+  // Заявка с калькулятора приходит без полей «что везёте» и «объём/вес»:
+  // и то и другое уже есть в расчёте, поэтому достаём их оттуда.
+  const calc = parseCalcInput(payload.calc);
+  const calcCargo = calc
+    ? calc.items
+        .map((item) => item.name)
+        .filter(Boolean)
+        .join(", ")
+    : "";
+  const calcVolume = calc ? `${calc.volume} куб.м / ${calc.weight} кг` : "";
+
   const lead: LeadInput = {
     name: str(payload.name, 200),
-    cargo: str(payload.cargo),
-    volume: str(payload.volume),
+    cargo: str(payload.cargo) || calcCargo,
+    volume: str(payload.volume) || calcVolume,
     contact,
     phone: explicitPhone ? normalizePhone(explicitPhone) : parsed.phone,
     email: EMAIL_RE.test(explicitEmail) ? explicitEmail : parsed.email,
@@ -148,6 +171,8 @@ export function parseLead(payload: RawPayload): ValidationResult {
     form: str(payload.form, 64) || "lead",
     referrer: str(payload.referrer, 500),
     utm: readUtm(payload),
+    calc,
+    calcRates: parseCalcRates(payload.calcRates),
   };
 
   const errors: Record<string, string> = {};
@@ -158,7 +183,9 @@ export function parseLead(payload: RawPayload): ValidationResult {
     errors.contact = "Не удалось распознать контакт. Проверьте телефон или Telegram.";
   }
 
-  if (!lead.cargo && !lead.comment) {
+  // У заявки с калькулятора предмет обращения — сам расчёт (город, объём,
+  // товары), поэтому отдельное «что везёте» с неё не требуем.
+  if (!lead.cargo && !lead.comment && !lead.calc) {
     errors.cargo = "Укажите, что нужно перевезти или закупить.";
   }
 
@@ -175,10 +202,15 @@ const FORM_TITLES: Record<string, string> = {
   logi: "логистика",
   trade: "торговля",
   lead: "форма заявки",
+  calculator: "калькулятор",
 };
 
 /** Заголовок лида: «Заявка с сайта — <груз>». */
 function buildTitle(lead: LeadInput): string {
+  // Заявка с калькулятора выделяется в CRM отдельным заголовком: менеджер
+  // сразу видит, что к обращению приложен предварительный расчёт.
+  if (lead.calc) return "Заявка с калькулятора";
+
   const source = FORM_TITLES[lead.form] ?? lead.form;
   const subject = lead.cargo || lead.comment;
   const base = subject
@@ -187,9 +219,62 @@ function buildTitle(lead: LeadInput): string {
   return base.slice(0, 240);
 }
 
+/** Денежная строка для комментария лида. */
+function money(value: number): string {
+  return `${value.toFixed(2)} $`;
+}
+
+/**
+ * Расчёт калькулятора в виде текстового блока для карточки лида.
+ * Менеджер должен увидеть параметры груза и предварительные суммы, не
+ * открывая ничего дополнительно.
+ */
+function buildCalcBlock(calc: CalcResult): string[] {
+  const lines: string[] = [
+    "── Предварительный расчёт с калькулятора ──",
+    `Город назначения: ${calc.city}`,
+    `Способ доставки: ${calc.method.label} (${calc.method.rate} $/куб.м, ${calc.method.time})`,
+    `Вес: ${calc.weight} кг · Объём: ${calc.volume} куб.м`,
+    `Расчётный объём: ${calc.chargeableVolume} куб.м (${
+      calc.chargeableBy === "weight" ? "по весу, 300 кг/куб.м" : "по объёму"
+    })`,
+    `Стоимость доставки: ${money(calc.delivery)}`,
+    "",
+  ];
+
+  calc.items.forEach((item, index) => {
+    lines.push(
+      `Товар ${index + 1}: ${item.name || "без наименования"} — ${item.priceCny} ¥ ` +
+        `(${money(item.priceUsd)}), пошлина ${item.dutyRate} % = ${money(item.duty)}, ` +
+        `НДС ${item.vatRate} % = ${money(item.vat)}`,
+    );
+  });
+
+  lines.push(
+    "",
+    `Стоимость товара всего: ${money(calc.goodsUsd)}`,
+    `Пошлина всего: ${money(calc.duty)} · НДС всего: ${money(calc.vat)}`,
+    `Доставка и таможня: ${money(calc.deliveryAndCustoms)}`,
+    `ИТОГО с товаром: ${money(calc.total)}`,
+    `Курсы ЦБ${calc.rates.date ? ` на ${calc.rates.date}` : ""}: ` +
+      `доллар ${calc.rates.usd.toFixed(4)} ₽, юань ${calc.rates.cny.toFixed(4)} ₽`,
+    "Расчёт предварительный (погрешность 10–15 %), ставки пошлины и НДС введены клиентом " +
+      "и требуют подтверждения по коду ТН ВЭД.",
+    "",
+  );
+
+  return lines;
+}
+
 /** Комментарий лида: всё, что не влезло в типизированные поля Bitrix24. */
-function buildComments(lead: LeadInput, meta: { ip: string; userAgent: string }): string {
+function buildComments(
+  lead: LeadInput,
+  meta: { ip: string; userAgent: string },
+  calc?: CalcResult | null,
+): string {
   const lines: string[] = [];
+
+  if (calc) lines.push(...buildCalcBlock(calc));
 
   if (lead.cargo) lines.push(`Груз: ${lead.cargo}`);
   if (lead.volume) lines.push(`Объём/вес: ${lead.volume}`);
@@ -228,13 +313,14 @@ export function buildLeadFields(
   lead: LeadInput,
   meta: { ip: string; userAgent: string },
   options: { sourceId: string; assignedById: string },
+  calc?: CalcResult | null,
 ): LeadFields {
   const fields: LeadFields = {
     TITLE: buildTitle(lead),
     NAME: lead.name || undefined,
     SOURCE_ID: options.sourceId,
     SOURCE_DESCRIPTION: lead.page || "Сайт",
-    COMMENTS: buildComments(lead, meta),
+    COMMENTS: buildComments(lead, meta, calc),
     OPENED: "Y",
   };
 

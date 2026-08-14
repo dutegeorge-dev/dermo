@@ -1,0 +1,540 @@
+---
+# По одной локализованной странице на язык: /calculator/, /en/calculator/, /zh/calculator/.
+pagination:
+  data: locales
+  size: 1
+  alias: listLang
+permalink: "{{ '/calculator/' | localizedUrl(listLang) }}"
+layout: layouts/base.njk
+title: "Калькулятор доставки из Китая и таможенных платежей"
+description: "Предварительный расчёт сборной доставки из Китая: стоимость перевозки по ЖД и авто, пошлина и НДС по курсу ЦБ РФ. Итог «под ключ» и заявка менеджеру."
+sitemap: true
+---
+{#
+  Калькулятор стоимости доставки и таможенных платежей (/calculator/).
+
+  Тарифы, города, лимит 300 кг/куб.м и ставки НДС берутся из данных
+  `calculator` (src/_data/calculator.ts → server/calc.ts) — те же значения
+  использует бэкенд, когда пересчитывает заявку перед отправкой в Bitrix24.
+  Расчёт и отправка — src/assets/ts/calculator.ts (контракт разметки — атрибуты
+  data-calc-*). Курсы валют приходят с бэкенда: GET /api/rates.
+
+  Тексты страницы намеренно в разметке (как на /kontakty/): страница
+  русскоязычная во всех локалях — в en/zh переводится вместе с юридическими
+  формулировками про ТН ВЭД, отдельно от общего словаря.
+#}
+{% from "partials/icon.njk" import icon %}
+{% from "components/form-consent.njk" import formConsent %}
+{% from "components/cta-band.njk" import ctaBand %}
+{% set C = calculator %}
+
+{#
+  Строка товара. Используется дважды: первая строка рендерится сервером
+  (калькулятор виден и без JS), она же лежит в <template> для кнопки
+  «Добавить товар» — там вместо номера стоит плейсхолдер __ID__.
+#}
+{% macro itemRow(uid, C) %}
+<div class="rounded-lg border border-slate-200 bg-white p-4" data-calc-item>
+  <div class="flex items-center justify-between gap-3">
+    <p class="text-sm font-semibold text-ink" data-item-caption>Товар</p>
+    <button
+      type="button"
+      data-item-remove
+      class="inline-flex min-h-[36px] items-center gap-1 rounded-md px-2 text-sm text-muted transition-colors hover:text-danger"
+    >
+      <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      Удалить
+    </button>
+  </div>
+
+  <div class="mt-3 grid gap-4 sm:grid-cols-2">
+    <div class="sm:col-span-2">
+      <label class="field-label" for="calc-item-name-{{ uid }}">Наименование товара</label>
+      <input class="field-input min-h-[44px]" id="calc-item-name-{{ uid }}" type="text" placeholder="Напр.: керамическая плитка" autocomplete="off" data-item-name />
+    </div>
+
+    <div>
+      <label class="field-label" for="calc-item-price-{{ uid }}">Стоимость товара, юани</label>
+      <input class="field-input min-h-[44px]" id="calc-item-price-{{ uid }}" type="text" inputmode="decimal" placeholder="0" data-item-price />
+    </div>
+
+    <div>
+      <label class="field-label" for="calc-item-duty-{{ uid }}">Ставка пошлины, %</label>
+      <input class="field-input min-h-[44px]" id="calc-item-duty-{{ uid }}" type="text" inputmode="decimal" placeholder="0" data-item-duty />
+      <p class="mt-1 text-xs text-muted">Зависит от кода ТН ВЭД</p>
+    </div>
+
+    <div>
+      <label class="field-label" for="calc-item-vat-{{ uid }}">Ставка НДС, %</label>
+      <select class="field-input min-h-[44px]" id="calc-item-vat-{{ uid }}" data-item-vat>
+        {% for vat in C.vatRates %}
+          <option value="{{ vat.value }}">{{ vat.label }}</option>
+        {% endfor %}
+      </select>
+      <p class="mt-1 text-xs text-muted">Базовая с 01.01.2026 — 22 %; уточните ставку по коду ТН ВЭД</p>
+    </div>
+
+    <div class="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+      <div>
+        <label class="field-label" for="calc-item-duty-sum-{{ uid }}">Сумма пошлины, $</label>
+        <input class="field-input min-h-[44px] bg-surface-alt text-muted" id="calc-item-duty-sum-{{ uid }}" type="text" value="—" readonly tabindex="-1" data-item-duty-sum />
+      </div>
+      <div>
+        <label class="field-label" for="calc-item-vat-sum-{{ uid }}">Сумма НДС, $</label>
+        <input class="field-input min-h-[44px] bg-surface-alt text-muted" id="calc-item-vat-sum-{{ uid }}" type="text" value="—" readonly tabindex="-1" data-item-vat-sum />
+      </div>
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{% include "partials/header.njk" %}
+
+<main class="flex-1">
+  {% include "partials/breadcrumbs.njk" %}
+
+  {# ── Hero ──────────────────────────────────────────────────────────────── #}
+  <section class="bg-brand text-white">
+    <div class="container py-12 md:py-16">
+      <h1 class="max-w-3xl text-3xl font-light leading-tight tracking-tight sm:text-4xl md:text-5xl">
+        Калькулятор доставки и таможенных платежей
+      </h1>
+      <p class="mt-5 max-w-2xl text-lg font-light leading-relaxed text-white/85">
+        Считаем сборную доставку из Китая, пошлину и НДС по курсу ЦБ РФ — и показываем
+        итоговую стоимость товара «под ключ». Расчёт предварительный: точную цену
+        подтверждает менеджер.
+      </p>
+
+      <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {% for method in C.methods %}
+          <div class="rounded-xl bg-white/10 p-4">
+            <div class="flex items-center gap-2 text-cyan">
+              {{ icon(method.icon, "h-5 w-5") }}
+              <span class="text-sm font-medium text-white">{{ method.label }}</span>
+            </div>
+            <p class="mt-2 text-2xl font-semibold">{{ method.rate }} $<span class="text-base font-normal text-white/70">/куб.м</span></p>
+            <p class="mt-1 text-sm text-white/70">{{ method.time }}</p>
+          </div>
+        {% endfor %}
+        <div class="rounded-xl bg-white/10 p-4">
+          <div class="flex items-center gap-2 text-cyan">
+            {{ icon("scale", "h-5 w-5") }}
+            <span class="text-sm font-medium text-white">Весовой лимит</span>
+          </div>
+          <p class="mt-2 text-2xl font-semibold">{{ C.weightPerCbm }} кг<span class="text-base font-normal text-white/70">/куб.м</span></p>
+          <p class="mt-1 text-sm text-white/70">Тяжёлый груз считаем по весу</p>
+        </div>
+        <div class="rounded-xl bg-white/10 p-4">
+          <div class="flex items-center gap-2 text-cyan">
+            {{ icon("package", "h-5 w-5") }}
+            <span class="text-sm font-medium text-white">Сборные грузы</span>
+          </div>
+          <p class="mt-2 text-2xl font-semibold">до {{ C.maxVolume }} куб.м</p>
+          <p class="mt-1 text-sm text-white/70">Больше объём — расчёт у менеджера</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ── Калькулятор ───────────────────────────────────────────────────────── #}
+  <section class="container section" data-calculator>
+    {# Предупреждение о характере расчёта — до всех полей, а не мелким шрифтом внизу. #}
+    <div class="rounded-xl border-l-4 border-accent bg-accent/5 px-5 py-4">
+      <p class="flex items-start gap-3 text-base font-medium text-ink">
+        {{ icon("clipboard-list", "mt-0.5 h-5 w-5 shrink-0 text-accent-dark") }}
+        <span>
+          Это предварительный расчёт для сборных грузов объёмом до {{ C.maxVolume }} куб.м,
+          с погрешностью {{ C.accuracy }}. Для точной стоимости обратитесь к менеджеру —
+          он учтёт характер груза, упаковку, страховку и документы.
+        </span>
+      </p>
+    </div>
+
+    <div class="mt-8 grid gap-8 lg:grid-cols-5">
+      {# ── Ввод данных ─────────────────────────────────────────────────── #}
+      <div class="lg:col-span-3">
+        <form data-calc-form novalidate>
+          {# Курсы ЦБ — подтягиваются с бэкенда при загрузке страницы. #}
+          <div class="rounded-xl bg-surface-alt p-4 sm:p-5">
+            <div class="flex flex-wrap items-baseline gap-x-8 gap-y-2">
+              <p class="text-sm text-muted">
+                Курс доллара:
+                <span class="text-base font-semibold text-ink" data-calc-out="rateUsd">—</span> ₽
+              </p>
+              <p class="text-sm text-muted">
+                Курс юаня:
+                <span class="text-base font-semibold text-ink" data-calc-out="rateCny">—</span> ₽
+              </p>
+              <p class="text-sm text-muted">
+                ЦБ РФ <span data-calc-out="ratesDate"></span>
+              </p>
+            </div>
+            <p class="mt-2 hidden text-sm text-accent-dark" data-rates-stale role="status">
+              ЦБ РФ сейчас не отвечает — показаны последние известные курсы.
+            </p>
+            <p class="mt-2 hidden text-sm text-danger" data-rates-error role="alert">
+              Не удалось получить курсы ЦБ РФ. Таможенные платежи не рассчитываются —
+              обновите страницу позже или напишите менеджеру.
+            </p>
+          </div>
+
+          {# Параметры доставки. #}
+          <h2 class="mt-8 text-xl font-semibold tracking-tight text-ink">Параметры доставки</h2>
+
+          <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="field-label" for="calc-city">Город назначения</label>
+              <select class="field-input min-h-[44px]" id="calc-city" name="city" data-calc-city>
+                {% for city in C.cities %}
+                  <option value="{{ city }}">{{ city }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="sm:row-span-2">
+              <span class="field-label">Способ доставки</span>
+              <div class="grid gap-3 sm:grid-cols-2">
+                {% for method in C.methods %}
+                  <label class="cursor-pointer">
+                    <input
+                      class="peer sr-only"
+                      type="radio"
+                      name="method"
+                      value="{{ method.id }}"
+                      data-calc-method
+                      {% if loop.first %}checked{% endif %}
+                    />
+                    <span class="flex h-full flex-col rounded-lg border border-slate-300 bg-white p-3 transition-colors peer-checked:border-cyan peer-checked:bg-cyan/5 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan">
+                      <span class="flex items-center gap-2 text-sm font-medium text-ink">
+                        {{ icon(method.icon, "h-4 w-4 text-cyan") }}
+                        {{ method.label }}
+                      </span>
+                      <span class="mt-1 text-sm font-semibold text-cyan-dark">{{ method.rate }} $/куб.м</span>
+                      <span class="mt-0.5 text-xs text-muted">{{ method.time }}</span>
+                    </span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label class="field-label" for="calc-weight">Вес товара, кг</label>
+                <input class="field-input min-h-[44px]" id="calc-weight" name="weight" type="text" inputmode="decimal" placeholder="500" data-calc-weight />
+                <p class="field-error hidden" data-error-for="weight">Укажите вес или объём груза.</p>
+              </div>
+              <div>
+                <label class="field-label" for="calc-volume">Объём товара, куб.м</label>
+                <input class="field-input min-h-[44px]" id="calc-volume" name="volume" type="text" inputmode="decimal" placeholder="3" data-calc-volume />
+                <p class="field-error hidden" data-error-for="volume">Укажите объём или вес груза.</p>
+              </div>
+            </div>
+          </div>
+
+          {# Товары: минимум одна строка, остальные добавляются кнопкой. #}
+          <h2 class="mt-8 text-xl font-semibold tracking-tight text-ink">Товары</h2>
+          <p class="mt-1 text-sm text-muted">
+            Ставки пошлины и НДС зависят от кода ТН ВЭД — вводите свои значения.
+            Несколько позиций добавляются кнопкой ниже, суммы складываются.
+          </p>
+
+          <div class="mt-4 space-y-4" data-calc-items>
+            {{ itemRow(1, C) }}
+          </div>
+
+          <template data-calc-item-template>
+            {{ itemRow("__ID__", C) }}
+          </template>
+
+          <div class="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              data-calc-add
+              class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-brand px-5 text-sm font-medium text-brand transition-colors hover:bg-brand hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {{ icon("plus", "h-4 w-4") }}
+              Добавить товар
+            </button>
+            <button
+              type="submit"
+              class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-accent px-6 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+            >
+              {{ icon("calculator", "h-4 w-4") }}
+              Рассчитать
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {#
+        Итоги. На широком экране колонка занимает обе строки сетки (рядом с
+        формой и с пояснениями под ней) — тогда липкий блок с суммами виден,
+        пока человек читает про ТН ВЭД. На узком экране порядок обычный:
+        форма → итоги → пояснения.
+      #}
+      <aside class="lg:col-span-2 lg:row-span-2">
+        <div class="space-y-4 lg:sticky lg:top-28" data-calc-summary>
+          <div class="rounded-xl border border-slate-200 bg-white p-5">
+            <p class="text-sm text-muted">Стоимость доставки и таможни</p>
+            <p class="mt-1 text-2xl font-semibold text-ink" data-calc-out="deliveryAndCustoms">0,00 $</p>
+            <p class="text-sm text-muted" data-calc-out="deliveryAndCustomsRub"></p>
+
+            <dl class="mt-4 space-y-1.5 border-t border-slate-200 pt-4 text-sm">
+              <div class="flex justify-between gap-4">
+                <dt class="text-muted">Доставка</dt>
+                <dd class="font-medium text-ink" data-calc-out="delivery">0,00 $</dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt class="text-muted">Пошлина</dt>
+                <dd class="font-medium text-ink" data-calc-out="duty">—</dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt class="text-muted">НДС</dt>
+                <dd class="font-medium text-ink" data-calc-out="vat">—</dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt class="text-muted">Объём к оплате</dt>
+                <dd class="font-medium text-ink" data-calc-out="chargeable">0 куб.м</dd>
+              </div>
+            </dl>
+            <p class="mt-2 text-xs text-muted">
+              <span data-calc-out="chargeableBy"></span> · тариф <span data-calc-out="tariff"></span>
+            </p>
+          </div>
+
+          <div class="rounded-xl border border-slate-200 bg-white p-5">
+            <p class="text-sm text-muted">Стоимость товара всего</p>
+            <p class="mt-1 text-2xl font-semibold text-ink" data-calc-out="goods">—</p>
+            <p class="text-sm text-muted" data-calc-out="goodsRub"></p>
+          </div>
+
+          <div class="rounded-xl border-2 border-cyan bg-cyan/5 p-5">
+            <p class="text-sm font-medium text-cyan-dark">Стоимость товара с доставкой и таможней</p>
+            <p class="mt-1 text-3xl font-semibold text-ink" data-calc-out="total">—</p>
+            <p class="text-sm text-muted" data-calc-out="totalRub"></p>
+            <p class="mt-2 text-xs text-muted">Ориентировочная сумма, не является офертой.</p>
+          </div>
+
+          {# Груз крупнее сборного: расчёт по этим тарифам уже некорректен. #}
+          <p class="hidden rounded-lg border-l-4 border-accent bg-accent/5 px-4 py-3 text-sm text-ink" data-calc-over-limit role="status">
+            Объём больше {{ C.maxVolume }} куб.м — это уже не сборный груз.
+            Отправьте расчёт: посчитаем отдельным тарифом (частичная или полная загрузка контейнера).
+          </p>
+
+          {# Детализация — как в исходном калькуляторе-референсе. #}
+          <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white p-5">
+            <p class="text-sm font-semibold text-ink">Детализация расчёта</p>
+            <table class="mt-3 w-full text-sm">
+              <tbody data-calc-table></tbody>
+            </table>
+          </div>
+
+          {# ── Заявка в CRM ───────────────────────────────────────────── #}
+          <form
+            data-calc-request
+            data-redirect="{{ '/calculator/spasibo/' | localizedUrl(locale) }}"
+            novalidate
+            class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
+            <h2 class="text-lg font-semibold text-ink">Отправить расчёт менеджеру</h2>
+            <p class="mt-1 text-sm text-muted">
+              Пришлём точную стоимость с учётом характера груза и подскажем по коду ТН ВЭД.
+              Параметры расчёта уйдут вместе с заявкой.
+            </p>
+
+            <div class="mt-4 space-y-4">
+              <div>
+                <label class="field-label" for="calc-contact">Телефон или Telegram</label>
+                <input class="field-input min-h-[44px]" id="calc-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ · @username" data-validate="contact" autocomplete="off" />
+                <p class="field-error hidden" data-error-for="contact">Укажите корректный телефон или Telegram.</p>
+              </div>
+
+              <div>
+                <label class="field-label" for="calc-comment">Комментарий (необязательно)</label>
+                <textarea class="field-input min-h-[44px]" id="calc-comment" name="comment" rows="2" placeholder="Сроки, особенности груза, вопросы"></textarea>
+              </div>
+
+              {{ formConsent(locale, "calc") }}
+
+              {# Ловушка для ботов: поле скрыто от людей, заполнение = спам. #}
+              <div class="hidden" aria-hidden="true">
+                <label for="calc-company">Не заполняйте это поле</label>
+                <input id="calc-company" name="company" type="text" tabindex="-1" autocomplete="off" />
+              </div>
+
+              <button
+                type="submit"
+                class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Отправить запрос
+              </button>
+
+              <p class="hidden rounded-md bg-green-50 px-4 py-3 text-sm text-green-700" data-form-success role="status">
+                Заявка отправлена! Мы свяжемся с вами в ближайшее время.
+              </p>
+              <p class="hidden rounded-md bg-red-50 px-4 py-3 text-sm text-red-700" data-form-error role="alert">
+                {{ "forms.sendError" | t(locale) }}
+              </p>
+            </div>
+          </form>
+        </div>
+      </aside>
+
+      {# ── Обязательные пояснения ──────────────────────────────────────── #}
+      <div class="space-y-4 lg:col-span-3">
+        <div class="rounded-xl border-l-4 border-cyan bg-surface-alt px-5 py-5">
+          <h2 class="flex items-center gap-2 text-lg font-semibold text-ink">
+            {{ icon("file-text", "h-5 w-5 shrink-0 text-cyan") }}
+            Ставки зависят от кода ТН ВЭД
+          </h2>
+          <p class="mt-3 text-sm leading-relaxed text-ink">
+            Размер пошлины и ставка НДС определяются не типом товара «на глаз», а
+            десятизначным кодом ТН ВЭД ЕАЭС, под который товар классифицируют на таможне.
+            От кода зависят и пошлина, и НДС, и необходимость сертификатов, и попадание
+            товара под ограничения.
+          </p>
+          <p class="mt-3 text-sm leading-relaxed text-ink">
+            Код смотрят в Едином таможенном тарифе ЕАЭС по описанию, материалу и назначению
+            товара. Ставки, которые вы вводите в калькулятор, — ваша прикидка: финальные
+            значения обязательно согласуйте с таможенным декларантом до подачи декларации.
+            Ошибка в коде — это доначисление платежей и задержка груза.
+          </p>
+          <p class="mt-3 text-sm">
+            <a class="link-inline" href="{{ '/blog/kod-tn-ved/' | localizedUrl(locale) }}">
+              Подробно про код ТН ВЭД — в статье блога
+            </a>
+          </p>
+        </div>
+
+        <div class="rounded-xl border-l-4 border-accent bg-surface-alt px-5 py-5">
+          <h2 class="flex items-center gap-2 text-lg font-semibold text-ink">
+            {{ icon("scale", "h-5 w-5 shrink-0 text-accent-dark") }}
+            Что калькулятор не учитывает
+          </h2>
+          <ul class="mt-3 space-y-2 text-sm leading-relaxed text-ink">
+            <li class="flex items-start gap-2">
+              {{ icon("minus", "mt-1 h-3 w-3 shrink-0 text-accent-dark") }}
+              <span>Негабарит, опасные и температурные грузы — считаются отдельно.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              {{ icon("minus", "mt-1 h-3 w-3 shrink-0 text-accent-dark") }}
+              <span>Упаковку, паллетирование, страхование и хранение на складе.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              {{ icon("minus", "mt-1 h-3 w-3 shrink-0 text-accent-dark") }}
+              <span>Сертификацию, маркировку «Честный знак» и разрешительные документы.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              {{ icon("minus", "mt-1 h-3 w-3 shrink-0 text-accent-dark") }}
+              <span>Антидемпинговые и специальные пошлины, таможенные сборы за оформление.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              {{ icon("minus", "mt-1 h-3 w-3 shrink-0 text-accent-dark") }}
+              <span>Доставку от терминала до вашего склада и разгрузку.</span>
+            </li>
+          </ul>
+          <p class="mt-3 text-sm text-muted">
+            Поэтому итог калькулятора — ориентир, а не коммерческое предложение.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ── Инструкция ────────────────────────────────────────────────────────── #}
+  <section class="container section">
+    <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">
+      Как пользоваться калькулятором
+    </h2>
+
+    <div class="mt-8 grid gap-6 lg:grid-cols-2">
+      <ol class="space-y-4">
+        <li class="flex gap-4">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-sm font-semibold text-cyan-dark">1</span>
+          <p class="text-base leading-relaxed text-ink">
+            <strong class="font-semibold">Укажите город и способ доставки.</strong>
+            ЖД дешевле, авто быстрее. Тариф на старте единый для всех наших направлений —
+            город нужен, чтобы менеджер сразу считал маршрут до вашего склада.
+          </p>
+        </li>
+        <li class="flex gap-4">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-sm font-semibold text-cyan-dark">2</span>
+          <p class="text-base leading-relaxed text-ink">
+            <strong class="font-semibold">Введите вес и объём груза.</strong>
+            Это данные из упаковочного листа поставщика. Если объём известен только
+            приблизительно — берите с запасом: расчёт всё равно предварительный.
+          </p>
+        </li>
+        <li class="flex gap-4">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-sm font-semibold text-cyan-dark">3</span>
+          <p class="text-base leading-relaxed text-ink">
+            <strong class="font-semibold">Добавьте товары со стоимостью в юанях.</strong>
+            Стоимость берётся из инвойса поставщика. Для каждой позиции укажите свою
+            ставку пошлины и НДС — они зависят от кода ТН ВЭД.
+          </p>
+        </li>
+        <li class="flex gap-4">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-sm font-semibold text-cyan-dark">4</span>
+          <p class="text-base leading-relaxed text-ink">
+            <strong class="font-semibold">Отправьте расчёт менеджеру.</strong>
+            Все параметры уйдут вместе с заявкой — не придётся диктовать их повторно.
+          </p>
+        </li>
+      </ol>
+
+      <div class="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 class="text-lg font-semibold text-ink">Как считаются суммы</h3>
+        <dl class="mt-4 space-y-4 text-sm leading-relaxed">
+          <div>
+            <dt class="font-semibold text-ink">Объём для тарификации</dt>
+            <dd class="mt-1 text-muted">
+              max(объём в куб.м; вес в кг ÷ {{ C.weightPerCbm }}). Лёгкий груз оплачивается
+              по объёму, тяжёлый — по весу. Пример: 3 куб.м и 500 кг → 500 ÷ {{ C.weightPerCbm }} = 1,67 куб.м,
+              что меньше 3 → платим за 3 куб.м. А 1 куб.м и 500 кг → платим за 1,67 куб.м.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-ink">Стоимость доставки</dt>
+            <dd class="mt-1 text-muted">
+              Объём для тарификации × тариф способа доставки
+              ({% for m in C.methods %}{{ m.label | lower }} — {{ m.rate }} $/куб.м{% if not loop.last %}, {% endif %}{% endfor %}).
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-ink">Стоимость товара в долларах</dt>
+            <dd class="mt-1 text-muted">
+              Цена в юанях × кросс-курс ЦБ РФ (курс юаня ÷ курс доллара). Курсы тянутся
+              автоматически с сайта ЦБ и обновляются вместе с официальным курсом.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-ink">Пошлина и НДС</dt>
+            <dd class="mt-1 text-muted">
+              Пошлина = стоимость товара × ставка пошлины. НДС = (стоимость товара + пошлина)
+              × ставка НДС: налог считается от таможенной стоимости уже с учётом пошлины.
+              При нескольких товарах суммы складываются.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-ink">Итог «под ключ»</dt>
+            <dd class="mt-1 text-muted">
+              Стоимость товаров + доставка + пошлина + НДС. Это ориентир по бюджету
+              поставки, а не коммерческое предложение.
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  {{ ctaBand(
+    "Написать в Telegram",
+    site.telegram,
+    "Нужен точный расчёт с документами и сроками? Напишите — ответим в течение рабочего дня.",
+    "",
+    "inline",
+    "send"
+  ) }}
+</main>
+
+{% include "partials/footer.njk" %}

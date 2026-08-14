@@ -2,8 +2,9 @@
  * HTTP-обработчик заявок с форм сайта → Bitrix24 CRM.
  *
  * Слушает порт 3000 (LEAD_PORT) и принимает:
- *   POST /api/lead — заявка с формы (JSON или form-urlencoded);
- *   GET  /healthz  — проверка живости.
+ *   POST /api/lead  — заявка с формы (JSON или form-urlencoded);
+ *   GET  /api/rates — курсы валют ЦБ РФ для калькулятора доставки;
+ *   GET  /healthz   — проверка живости.
  *
  * Запуск: `npm run server` (или `npm run dev` — поднимается вместе с 11ty).
  */
@@ -14,7 +15,9 @@ import path from "node:path";
 
 import { config, maskSecrets } from "./config.ts";
 import { createLead } from "./bitrix.ts";
+import { computeCalculation, type CalcRates } from "./calc.ts";
 import { buildLeadFields, parseLead, type RawPayload } from "./lead.ts";
+import { getRates } from "./rates.ts";
 import { notifyTelegram } from "./telegram.ts";
 
 /** Ответ клиенту в JSON. */
@@ -48,7 +51,8 @@ function corsHeaders(origin: string | undefined): Record<string, string> {
   if (!allowed) return { vary: "Origin" };
   return {
     "access-control-allow-origin": allowed,
-    "access-control-allow-methods": "POST, OPTIONS",
+    // GET нужен калькулятору: он забирает курсы ЦБ с /api/rates.
+    "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-headers": "content-type",
     "access-control-max-age": "86400",
     vary: "Origin",
@@ -147,6 +151,20 @@ function saveFailedLead(entry: unknown): void {
   }
 }
 
+/**
+ * Курсы для пересчёта заявки с калькулятора: наши (из кэша ЦБ), а если ЦБ
+ * недоступен — те, что видел посетитель на странице. Расчёт всё равно
+ * предварительный, но заявка не должна теряться из-за молчания ЦБ.
+ */
+async function resolveRates(fallback: CalcRates | null): Promise<CalcRates> {
+  try {
+    const rates = await getRates();
+    return { usd: rates.usd, cny: rates.cny, date: rates.date };
+  } catch {
+    return fallback ?? { usd: 0, cny: 0, date: "" };
+  }
+}
+
 /** Обработчик POST /api/lead. */
 async function handleLead(
   req: http.IncomingMessage,
@@ -203,10 +221,15 @@ async function handleLead(
 
   consumeRate(ip);
 
+  // Заявка с калькулятора: суммы пересчитываем здесь заново, на курсах ЦБ с
+  // нашей стороны. В CRM должен попасть наш расчёт, а не числа из браузера.
+  const calc = lead.calc ? computeCalculation(lead.calc, await resolveRates(lead.calcRates)) : null;
+
   const fields = buildLeadFields(
     lead,
     { ip, userAgent: String(req.headers["user-agent"] ?? "").slice(0, 300) },
     { sourceId: config.bitrix.sourceId, assignedById: config.bitrix.assignedById },
+    calc,
   );
 
   try {
@@ -216,7 +239,7 @@ async function handleLead(
     );
     sendJson(res, 200, { ok: true, leadId }, headers);
     // Уведомление шлём после ответа клиенту: форма не должна ждать Telegram.
-    void notifyTelegram(lead, { leadId });
+    void notifyTelegram(lead, { leadId }, calc);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[lead] Bitrix24 отклонил заявку: ${maskSecrets(message)}`);
@@ -229,7 +252,32 @@ async function handleLead(
     );
     // Именно здесь уведомление важнее всего: CRM недоступна, и только
     // Telegram донесёт контакт клиента до менеджера.
-    void notifyTelegram(lead, { leadId: null, error: maskSecrets(message) });
+    void notifyTelegram(lead, { leadId: null, error: maskSecrets(message) }, calc);
+  }
+}
+
+/** Обработчик GET /api/rates — курсы ЦБ для калькулятора. */
+async function handleRates(
+  res: http.ServerResponse,
+  headers: Record<string, string>,
+): Promise<void> {
+  try {
+    const rates = await getRates();
+    sendJson(res, 200, rates, {
+      ...headers,
+      // Курс ЦБ меняется раз в сутки: получасовой кэш в браузере/на прокси
+      // снимает нагрузку и не даёт показать вчерашний курс надолго.
+      "cache-control": "public, max-age=1800",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[rates] ${message}`);
+    sendJson(
+      res,
+      503,
+      { ok: false, error: "Курсы ЦБ временно недоступны. Попробуйте обновить страницу позже." },
+      headers,
+    );
   }
 }
 
@@ -245,7 +293,21 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && (url.pathname === "/healthz" || url.pathname === "/")) {
-    sendJson(res, 200, { ok: true, service: "bars-lead-api", endpoint: config.path }, headers);
+    sendJson(
+      res,
+      200,
+      { ok: true, service: "bars-lead-api", endpoint: config.path, rates: config.ratesPath },
+      headers,
+    );
+    return;
+  }
+
+  if (url.pathname === config.ratesPath) {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "Используйте GET." }, { ...headers, allow: "GET, OPTIONS" });
+      return;
+    }
+    void handleRates(res, headers);
     return;
   }
 
@@ -264,6 +326,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(config.port, config.host, () => {
   console.log(`[lead] обработчик заявок слушает http://${config.host}:${config.port}${config.path}`);
+  console.log(`[rates] курсы ЦБ для калькулятора: http://${config.host}:${config.port}${config.ratesPath}`);
   if (config.bitrix.configured) {
     console.log(`[lead] CRM: ${maskSecrets(config.bitrix.base)} (источник ${config.bitrix.sourceId})`);
   } else {
