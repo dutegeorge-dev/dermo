@@ -7,8 +7,8 @@
  * поэтому функция никогда не бросает исключение.
  */
 
-import { config } from "./config.js";
-import type { LeadInput } from "./lead.js";
+import { config } from "./config.ts";
+import type { LeadInput } from "./lead.ts";
 
 /** Экранирование под parse_mode: HTML (Telegram требует только эти три). */
 function escapeHtml(value: string): string {

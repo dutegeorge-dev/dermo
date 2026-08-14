@@ -12,10 +12,10 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 
-import { config, maskSecrets } from "./config.js";
-import { createLead } from "./bitrix.js";
-import { buildLeadFields, parseLead, type RawPayload } from "./lead.js";
-import { notifyTelegram } from "./telegram.js";
+import { config, maskSecrets } from "./config.ts";
+import { createLead } from "./bitrix.ts";
+import { buildLeadFields, parseLead, type RawPayload } from "./lead.ts";
+import { notifyTelegram } from "./telegram.ts";
 
 /** Ответ клиенту в JSON. */
 function sendJson(

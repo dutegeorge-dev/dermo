@@ -1,0 +1,57 @@
+# Обработчик заявок с форм сайта → Bitrix24 CRM + Telegram.
+#
+# Установка:
+#   sudo cp deploy/systemd/bars-lead.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bars-lead
+#   systemctl status bars-lead
+#   journalctl -u bars-lead -f          # логи заявок
+#
+# Секреты (BITRIX_WEBHOOK_URL, TELEGRAM_BOT_TOKEN) обработчик читает сам из
+# /var/www/tlkbars/.env — в юните их дублировать не нужно.
+
+[Unit]
+Description=ТЛК БАРС — обработчик заявок (Bitrix24 + Telegram)
+Documentation=https://github.com/dutegeorge-dev/dermo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/tlkbars
+
+# Node ≥ 22.18 исполняет TypeScript напрямую — сборка и node_modules
+# обработчику не нужны вообще.
+ExecStart=/usr/bin/node server/index.ts
+# На Node 20 (см. .nvmrc) нужен tsx из devDependencies — тогда вместо строки
+# выше используйте:
+# ExecStart=/usr/bin/node --import tsx server/index.ts
+
+Environment=NODE_ENV=production
+# Слушаем только localhost: наружу порт публикует nginx, а не сам обработчик.
+Environment=LEAD_HOST=127.0.0.1
+Environment=LEAD_PORT=3000
+
+Restart=always
+RestartSec=3s
+
+# Логи заявок идут в journald.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bars-lead
+
+# Ограничения прав: обработчику нужен только каталог для резервного лога
+# незаписанных в CRM заявок.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/www/tlkbars/logs
+
+[Install]
+WantedBy=multi-user.target

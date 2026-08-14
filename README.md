@@ -158,4 +158,49 @@ npm run cms      # в отдельном терминале: npx decap-server
 
 ## Хостинг
 
-Любая статика/CDN (Netlify, Vercel и т.д.). Каталог сборки — `_site/`. Команда сборки — `npm run build`.
+Сайт статический (каталог сборки `_site/`, команда `npm run build`), но формам нужен живой обработчик заявок. Поэтому вариантов два:
+
+- **Статика/CDN (Netlify, Vercel)** — обработчик придётся разместить отдельно и указать его абсолютный адрес в `LEAD_API_URL`, добавив домен сайта в `LEAD_ALLOWED_ORIGINS` (нужен CORS).
+- **Свой сервер с nginx** — статика и `/api/lead` живут на одном домене, CORS не нужен. Готовые конфиги лежат в `deploy/`.
+
+### Развёртывание на nginx
+
+Файлы: `deploy/nginx/tlkbars.ru.conf` (сайт + проксирование `/api/lead`), `deploy/nginx/snippets/tlkbars-security.conf` (заголовки безопасности), `deploy/systemd/bars-lead.service` (обработчик как служба). Инструкции по установке — в шапке каждого файла.
+
+```bash
+# 1. Код и зависимости
+sudo git clone <repo> /var/www/tlkbars && cd /var/www/tlkbars
+npm ci                       # devDependencies нужны: сборку делают 11ty/tailwind/esbuild
+
+# 2. Секреты и адрес эндпоинта
+sudo cp .env.example .env && sudo nano .env
+#   BITRIX_WEBHOOK_URL=...   TELEGRAM_BOT_TOKEN=...   TELEGRAM_CHAT_ID=...
+#   LEAD_API_URL=/api/lead   SITE_URL=https://tlkbars.ru
+sudo chown www-data:www-data .env && sudo chmod 600 .env
+
+# 3. Сборка статики
+npm run build
+
+# 4. Служба обработчика (слушает только 127.0.0.1:3000)
+sudo cp deploy/systemd/bars-lead.service /etc/systemd/system/
+sudo mkdir -p logs && sudo chown www-data:www-data logs
+sudo systemctl daemon-reload && sudo systemctl enable --now bars-lead
+
+# 5. nginx
+sudo cp deploy/nginx/snippets/tlkbars-security.conf /etc/nginx/snippets/
+sudo cp deploy/nginx/tlkbars.ru.conf /etc/nginx/sites-available/tlkbars.ru
+sudo ln -s /etc/nginx/sites-available/tlkbars.ru /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+# 6. HTTPS
+sudo certbot --nginx -d tlkbars.ru -d www.tlkbars.ru
+```
+
+Проверка: `curl -X POST https://tlkbars.ru/api/lead -H 'content-type: application/json' -d '{"cargo":"тест","contact":"+79990000000","consent":true}'` → `{"ok":true,"leadId":N}`, лид в CRM и сообщение в Telegram. Логи заявок — `journalctl -u bars-lead -f`.
+
+**Важные детали:**
+
+- **`LEAD_API_URL` читается на сборке, а не в рантайме** — адрес эндпоинта 11ty вшивает в HTML (`data-lead-endpoint`). Меняли переменную → пересоберите `npm run build`, иначе браузер продолжит стучаться по старому адресу.
+- **Node на сервере.** `ExecStart=/usr/bin/node server/index.ts` работает на Node ≥ 22.18 (исполняет TypeScript сам). На Node 20 (как в `.nvmrc`) в юните нужен вариант с `--import tsx` — он там закомментирован.
+- **`X-Forwarded-For` обязателен** (в конфиге он есть): без него обработчик посчитает, что все заявки идут с одного IP — самого nginx, и антиспам заблокирует поток после `LEAD_RATE_LIMIT` заявок.
+- **Обновление сайта:** `git pull && npm ci && npm run build && sudo systemctl restart bars-lead`. Перезапуск нужен только если менялся `server/` или `.env`.

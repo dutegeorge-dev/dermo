@@ -15,6 +15,10 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    // server/ должен запускаться штатным Node без сборки (стираемый синтаксис).
+    "erasableSyntaxOnly": true,
+    // …и импортирует соседние модули по реальному пути (`./config.ts`).
+    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true

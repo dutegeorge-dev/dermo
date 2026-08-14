@@ -5,18 +5,25 @@
  * с JSON-телом `{ fields, params }`; токен живёт в URL вебхука и не логируется.
  */
 
-import { config, maskSecrets } from "./config.js";
-import type { LeadFields } from "./lead.js";
+import { config, maskSecrets } from "./config.ts";
+import type { LeadFields } from "./lead.ts";
 
-/** Ошибка вызова Bitrix24 REST (сеть, HTTP или error в теле ответа). */
+/**
+ * Ошибка вызова Bitrix24 REST (сеть, HTTP или error в теле ответа).
+ *
+ * Поля присваиваются явно, а не через parameter properties: так весь код
+ * `server/` остаётся «стираемым» TypeScript и запускается штатным Node
+ * (≥ 22.18) без сборки и без tsx — удобно для systemd на проде.
+ */
 export class BitrixError extends Error {
-  constructor(
-    message: string,
-    readonly code: string = "BITRIX_ERROR",
-    readonly retryable: boolean = false,
-  ) {
+  readonly code: string;
+  readonly retryable: boolean;
+
+  constructor(message: string, code = "BITRIX_ERROR", retryable = false) {
     super(message);
     this.name = "BitrixError";
+    this.code = code;
+    this.retryable = retryable;
   }
 }
 
