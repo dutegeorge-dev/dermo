@@ -105,25 +105,19 @@ sitemap: true
         подтверждает менеджер.
       </p>
 
-      <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {# Тарифы и нормы загрузки — внутренние данные: в карточках только сроки
+         и границы применимости расчёта, без цен за куб и весового лимита. #}
+      <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {% for method in C.methods %}
           <div class="rounded-xl bg-white/10 p-4">
             <div class="flex items-center gap-2 text-cyan">
               {{ icon(method.icon, "h-5 w-5") }}
               <span class="text-sm font-medium text-white">{{ method.label }}</span>
             </div>
-            <p class="mt-2 text-2xl font-semibold">{{ method.rate }} $<span class="text-base font-normal text-white/70">/куб.м</span></p>
-            <p class="mt-1 text-sm text-white/70">{{ method.time }}</p>
+            <p class="mt-2 text-2xl font-semibold">{{ method.time }}</p>
+            <p class="mt-1 text-sm text-white/70">Срок в пути от отправки</p>
           </div>
         {% endfor %}
-        <div class="rounded-xl bg-white/10 p-4">
-          <div class="flex items-center gap-2 text-cyan">
-            {{ icon("scale", "h-5 w-5") }}
-            <span class="text-sm font-medium text-white">Весовой лимит</span>
-          </div>
-          <p class="mt-2 text-2xl font-semibold">{{ C.weightPerCbm }} кг<span class="text-base font-normal text-white/70">/куб.м</span></p>
-          <p class="mt-1 text-sm text-white/70">Тяжёлый груз считаем по весу</p>
-        </div>
         <div class="rounded-xl bg-white/10 p-4">
           <div class="flex items-center gap-2 text-cyan">
             {{ icon("package", "h-5 w-5") }}
@@ -209,8 +203,7 @@ sitemap: true
                         {{ icon(method.icon, "h-4 w-4 text-cyan") }}
                         {{ method.label }}
                       </span>
-                      <span class="mt-1 text-sm font-semibold text-cyan-dark">{{ method.rate }} $/куб.м</span>
-                      <span class="mt-0.5 text-xs text-muted">{{ method.time }}</span>
+                      <span class="mt-1 text-sm font-semibold text-cyan-dark">{{ method.time }}</span>
                     </span>
                   </label>
                 {% endfor %}
@@ -292,14 +285,10 @@ sitemap: true
                 <dt class="text-muted">НДС</dt>
                 <dd class="font-medium text-ink" data-calc-out="vat">—</dd>
               </div>
-              <div class="flex justify-between gap-4">
-                <dt class="text-muted">Объём к оплате</dt>
-                <dd class="font-medium text-ink" data-calc-out="chargeable">0 куб.м</dd>
-              </div>
             </dl>
-            <p class="mt-2 text-xs text-muted">
-              <span data-calc-out="chargeableBy"></span> · тариф <span data-calc-out="tariff"></span>
-            </p>
+            {# Ни тариф за куб, ни объём к оплате не показываем: это внутренние
+               данные (цена за куб и норма загрузки). Наружу — только сумма. #}
+            <p class="mt-3 text-xs text-muted" data-calc-out="deliveryNote"></p>
           </div>
 
           <div class="rounded-xl border border-slate-200 bg-white p-5">
@@ -485,19 +474,15 @@ sitemap: true
       <div class="rounded-xl border border-slate-200 bg-white p-6">
         <h3 class="text-lg font-semibold text-ink">Как считаются суммы</h3>
         <dl class="mt-4 space-y-4 text-sm leading-relaxed">
-          <div>
-            <dt class="font-semibold text-ink">Объём для тарификации</dt>
-            <dd class="mt-1 text-muted">
-              max(объём в куб.м; вес в кг ÷ {{ C.weightPerCbm }}). Лёгкий груз оплачивается
-              по объёму, тяжёлый — по весу. Пример: 3 куб.м и 500 кг → 500 ÷ {{ C.weightPerCbm }} = 1,67 куб.м,
-              что меньше 3 → платим за 3 куб.м. А 1 куб.м и 500 кг → платим за 1,67 куб.м.
-            </dd>
-          </div>
+          {# Тариф за кубометр и норма загрузки — внутренние данные и меняются,
+             поэтому здесь только принцип, без цифр. #}
           <div>
             <dt class="font-semibold text-ink">Стоимость доставки</dt>
             <dd class="mt-1 text-muted">
-              Объём для тарификации × тариф способа доставки
-              ({% for m in C.methods %}{{ m.label | lower }} — {{ m.rate }} $/куб.м{% if not loop.last %}, {% endif %}{% endfor %}).
+              Считается от объёма груза по тарифу выбранного способа доставки. Если груз
+              плотный и тяжёлый для своего объёма, расчёт идёт по весу — поэтому у компактной,
+              но тяжёлой партии доставка выходит дороже, чем кажется по кубатуре.
+              Действующий тариф под ваш груз и направление подтверждает менеджер.
             </dd>
           </div>
           <div>

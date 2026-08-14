@@ -163,19 +163,13 @@ export function initCalculator(): void {
     if (!tableBody) return;
     tableBody.textContent = "";
 
+    // Объём к оплате и тариф за куб в детализацию не идут: по ним считается
+    // внутренняя цена перевозки. Клиенту — введённые им данные и итоговая сумма.
     const rows: [string, string][] = [
       ["Город", result.city],
       ["Способ доставки", `${result.method.label} · ${result.method.time}`],
       ["Вес", `${nfVolume.format(result.weight)} кг`],
       ["Объём", `${nfVolume.format(result.volume)} куб.м`],
-      [
-        "Объём для тарификации",
-        `${nfVolume.format(result.chargeableVolume)} куб.м · ${
-          result.chargeableBy === "weight"
-            ? `по весу (${CALC_CONFIG.weightPerCbm} кг/куб.м)`
-            : "по объёму"
-        }`,
-      ],
       ["Стоимость доставки", usd(result.delivery)],
     ];
 
@@ -218,16 +212,14 @@ export function initCalculator(): void {
 
     const known = Boolean(rates);
     out("delivery", usd(result.delivery));
-    out("chargeable", `${nfVolume.format(result.chargeableVolume)} куб.м`);
+    // Почему сумма такая — без цифр нормы загрузки: сама норма и тариф за куб
+    // остаются внутренними данными.
     out(
-      "chargeableBy",
+      "deliveryNote",
       result.chargeableBy === "weight"
-        ? `тарифицируем по весу: ${nfVolume.format(result.weight)} кг ÷ ${
-            CALC_CONFIG.weightPerCbm
-          } кг/куб.м`
-        : "тарифицируем по объёму груза",
+        ? "Груз плотный: доставка считается по весу, а не по объёму."
+        : "Доставка считается по объёму груза.",
     );
-    out("tariff", `${result.method.rate} $/куб.м · ${result.method.time}`);
     out("duty", known ? usd(result.duty) : "—");
     out("vat", known ? usd(result.vat) : "—");
     out("deliveryAndCustoms", known ? usd(result.deliveryAndCustoms) : usd(result.delivery));
