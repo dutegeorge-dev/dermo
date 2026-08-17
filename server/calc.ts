@@ -8,19 +8,24 @@
  * в этом файле меняет и то, что видит посетитель, и то, что уходит менеджеру.
  *
  * Что считаем (расчёт предварительный, не оферта):
- *   • доставка — по расчётному объёму: max(объём; вес / 300), лимит 300 кг/куб;
- *   • пошлина — процент от стоимости товара;
- *   • НДС — процент от стоимости товара ВМЕСТЕ с пошлиной (как на таможне).
+ *   • доставка — разовый сбор за оформление (bill list) плюс тариф за каждый
+ *     расчётный кубометр: max(объём; вес / 300), лимит 300 кг/куб;
+ *   • таможенная стоимость — товар ПЛЮС половина стоимости перевозки;
+ *   • пошлина — процент от таможенной стоимости;
+ *   • НДС — процент от таможенной стоимости ВМЕСТЕ с пошлиной;
+ *   • комиссия компании — фиксированная, зависит от стоимости товара.
  */
 
-/** Способ доставки со своим тарифом за кубометр. */
+/** Способ доставки: разовый сбор за оформление плюс тариф за кубометр. */
 export interface DeliveryMethod {
   /** Идентификатор, уходящий в заявку. */
   id: string;
   /** Подпись в интерфейсе. */
   label: string;
-  /** Тариф, $ за 1 куб.м. */
+  /** Тариф, $ за 1 куб.м (без разового сбора). */
   rate: number;
+  /** Разовый сбор за оформление (bill list), $ — берётся один раз на партию. */
+  billList: number;
   /** Ориентировочный срок в пути. */
   time: string;
   /** Иконка (partials/icon.njk). */
@@ -55,10 +60,15 @@ export const CALC_CONFIG = {
     "Благовещенск",
   ] as string[],
 
-  /** Способы доставки сборного груза и их тарифы. */
+  /**
+   * Способы доставки сборного груза и их тарифы.
+   * Разовый сбор (bill list) входит в цену первого куба: ЖД 150 + 160 = 310 $
+   * за первый кубометр и по 160 $ за каждый следующий; авто — 150 + 330 = 480 $
+   * за первый и по 330 $ далее.
+   */
   methods: [
-    { id: "zhd", label: "Железная дорога", rate: 310, time: "20–30 дней", icon: "train-front" },
-    { id: "avto", label: "Автодоставка", rate: 480, time: "8–14 дней", icon: "truck" },
+    { id: "zhd", label: "Железная дорога", rate: 160, billList: 150, time: "20–30 дней", icon: "train-front" },
+    { id: "avto", label: "Автодоставка", rate: 330, billList: 150, time: "8–14 дней", icon: "truck" },
   ] as DeliveryMethod[],
 
   /** Лимит веса на кубометр: тяжёлый груз тарифицируется по весу. */
@@ -69,6 +79,22 @@ export const CALC_CONFIG = {
 
   /** Заявленная погрешность расчёта, %. */
   accuracy: "10–15 %",
+
+  /**
+   * Комиссия компании — фиксированная сумма, зависит от стоимости товара.
+   * Дешевле порога — `below`, от порога и выше — `above`.
+   */
+  commission: {
+    /** Порог стоимости товара, $. */
+    threshold: 10_000,
+    /** Комиссия при стоимости товара меньше порога, $. */
+    below: 700,
+    /** Комиссия при стоимости товара от порога, $. */
+    above: 1000,
+  },
+
+  /** Доля стоимости перевозки, включаемая в таможенную стоимость. */
+  freightInCustomsShare: 0.5,
 
   /** Варианты ставки НДС (подписи короткие — это селект). Первый — по умолчанию. */
   vatRates: [
@@ -102,6 +128,11 @@ export interface CalcItemInput {
 export interface CalcItemResult extends CalcItemInput {
   /** Стоимость товара в долларах (через кросс-курс ЦБ). */
   priceUsd: number;
+  /**
+   * Таможенная стоимость товара, $: цена плюс приходящаяся на него доля
+   * перевозки (половина доставки делится между товарами пропорционально цене).
+   */
+  customsValue: number;
   /** Сумма пошлины, $. */
   duty: number;
   /** Сумма НДС, $. */
@@ -141,13 +172,17 @@ export interface CalcResult {
   items: CalcItemResult[];
   /** Стоимость всех товаров, $. */
   goodsUsd: number;
+  /** Таможенная стоимость: товары + половина доставки, $. */
+  customsValue: number;
   /** Сумма пошлин по всем товарам, $. */
   duty: number;
   /** Сумма НДС по всем товарам, $. */
   vat: number;
-  /** Доставка + пошлины + НДС, $. */
+  /** Комиссия компании, $. */
+  commission: number;
+  /** Доставка + пошлины + НДС + комиссия, $ (всё, кроме самого товара). */
   deliveryAndCustoms: number;
-  /** Итог «под ключ»: товары + доставка + таможня, $. */
+  /** Итог «под ключ»: товары + доставка + таможня + комиссия, $. */
   total: number;
   rates: CalcRates;
 }
@@ -239,27 +274,47 @@ export function computeCalculation(input: CalcInput, rates: CalcRates): CalcResu
   const byWeight = input.weight / CALC_CONFIG.weightPerCbm;
   const chargeable = chargeableVolume(input.volume, input.weight);
 
+  // Разовый сбор берётся только за реальную партию: на пустой форме (объём и
+  // вес ещё не введены) показывать 150 $ было бы враньём.
+  const deliveryRaw = chargeable > 0 ? method.billList + chargeable * method.rate : 0;
+  const delivery = round2(deliveryRaw);
+
   // Кросс-курс юань → доллар через рублёвые курсы ЦБ.
   const cnyToUsd = rates.usd > 0 ? rates.cny / rates.usd : 0;
 
-  const items: CalcItemResult[] = input.items.map((item) => {
-    const priceUsd = item.priceCny * cnyToUsd;
-    const duty = priceUsd * (item.dutyRate / 100);
+  const pricesUsd = input.items.map((item) => item.priceCny * cnyToUsd);
+  const goodsRaw = pricesUsd.reduce((sum, price) => sum + price, 0);
+
+  // В таможенную стоимость входит половина перевозки. Она распределяется между
+  // товарами пропорционально их цене: у каждого своя ставка пошлины и НДС,
+  // поэтому общей суммой обойтись нельзя.
+  const freightInCustoms = deliveryRaw * CALC_CONFIG.freightInCustomsShare;
+
+  const items: CalcItemResult[] = input.items.map((item, index) => {
+    const priceUsd = pricesUsd[index];
+    const share = goodsRaw > 0 ? priceUsd / goodsRaw : 0;
+    const customsValue = priceUsd + freightInCustoms * share;
+    const duty = customsValue * (item.dutyRate / 100);
     // НДС — от таможенной стоимости С УЧЁТОМ пошлины.
-    const vat = (priceUsd + duty) * (item.vatRate / 100);
+    const vat = (customsValue + duty) * (item.vatRate / 100);
     return {
       ...item,
       priceUsd: round2(priceUsd),
+      customsValue: round2(customsValue),
       duty: round2(duty),
       vat: round2(vat),
     };
   });
 
-  const goodsUsd = round2(items.reduce((sum, item) => sum + item.priceUsd, 0));
+  const goodsUsd = round2(goodsRaw);
   const duty = round2(items.reduce((sum, item) => sum + item.duty, 0));
   const vat = round2(items.reduce((sum, item) => sum + item.vat, 0));
-  const delivery = round2(chargeable * method.rate);
-  const deliveryAndCustoms = round2(delivery + duty + vat);
+  // Комиссия зависит от стоимости товара, а не от итоговой суммы: она известна
+  // ещё до расчёта таможни и не «плавает» вслед за пошлиной.
+  const { threshold, below, above } = CALC_CONFIG.commission;
+  const commission = goodsRaw > 0 ? (goodsRaw < threshold ? below : above) : 0;
+  const customsValue = round2(goodsRaw > 0 ? goodsRaw + freightInCustoms : 0);
+  const deliveryAndCustoms = round2(delivery + duty + vat + commission);
 
   return {
     city: input.city,
@@ -271,8 +326,10 @@ export function computeCalculation(input: CalcInput, rates: CalcRates): CalcResu
     delivery,
     items,
     goodsUsd,
+    customsValue,
     duty,
     vat,
+    commission,
     deliveryAndCustoms,
     total: round2(deliveryAndCustoms + goodsUsd),
     rates,

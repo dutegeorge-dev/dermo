@@ -233,7 +233,8 @@ function buildCalcBlock(calc: CalcResult): string[] {
   const lines: string[] = [
     "── Предварительный расчёт с калькулятора ──",
     `Город назначения: ${calc.city}`,
-    `Способ доставки: ${calc.method.label} (${calc.method.rate} $/куб.м, ${calc.method.time})`,
+    `Способ доставки: ${calc.method.label} (${calc.method.billList} $ оформление + ` +
+      `${calc.method.rate} $/куб.м, ${calc.method.time})`,
     `Вес: ${calc.weight} кг · Объём: ${calc.volume} куб.м`,
     `Расчётный объём: ${calc.chargeableVolume} куб.м (${
       calc.chargeableBy === "weight" ? "по весу, 300 кг/куб.м" : "по объёму"
@@ -245,7 +246,8 @@ function buildCalcBlock(calc: CalcResult): string[] {
   calc.items.forEach((item, index) => {
     lines.push(
       `Товар ${index + 1}: ${item.name || "без наименования"} — ${item.priceCny} ¥ ` +
-        `(${money(item.priceUsd)}), пошлина ${item.dutyRate} % = ${money(item.duty)}, ` +
+        `(${money(item.priceUsd)}), таможенная стоимость ${money(item.customsValue)}, ` +
+        `пошлина ${item.dutyRate} % = ${money(item.duty)}, ` +
         `НДС ${item.vatRate} % = ${money(item.vat)}`,
     );
   });
@@ -253,8 +255,10 @@ function buildCalcBlock(calc: CalcResult): string[] {
   lines.push(
     "",
     `Стоимость товара всего: ${money(calc.goodsUsd)}`,
+    `Таможенная стоимость (товар + половина перевозки): ${money(calc.customsValue)}`,
     `Пошлина всего: ${money(calc.duty)} · НДС всего: ${money(calc.vat)}`,
-    `Доставка и таможня: ${money(calc.deliveryAndCustoms)}`,
+    `Комиссия компании: ${money(calc.commission)}`,
+    `Доставка, таможня и комиссия: ${money(calc.deliveryAndCustoms)}`,
     `ИТОГО с товаром: ${money(calc.total)}`,
     `Курсы ЦБ${calc.rates.date ? ` на ${calc.rates.date}` : ""}: ` +
       `доллар ${calc.rates.usd.toFixed(4)} ₽, юань ${calc.rates.cny.toFixed(4)} ₽`,

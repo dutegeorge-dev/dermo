@@ -268,7 +268,7 @@ sitemap: true
       <aside class="lg:col-span-2 lg:row-span-2">
         <div class="space-y-4 lg:sticky lg:top-28" data-calc-summary>
           <div class="rounded-xl border border-slate-200 bg-white p-5">
-            <p class="text-sm text-muted">Стоимость доставки и таможни</p>
+            <p class="text-sm text-muted">Стоимость доставки, таможни и услуг</p>
             <p class="mt-1 text-2xl font-semibold text-ink" data-calc-out="deliveryAndCustoms">0,00 $</p>
             <p class="text-sm text-muted" data-calc-out="deliveryAndCustomsRub"></p>
 
@@ -284,6 +284,10 @@ sitemap: true
               <div class="flex justify-between gap-4">
                 <dt class="text-muted">НДС</dt>
                 <dd class="font-medium text-ink" data-calc-out="vat">—</dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt class="text-muted">Комиссия</dt>
+                <dd class="font-medium text-ink" data-calc-out="commission">—</dd>
               </div>
             </dl>
             {# Ни тариф за куб, ни объём к оплате не показываем: это внутренние

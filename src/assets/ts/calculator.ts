@@ -180,11 +180,19 @@ export function initCalculator(): void {
         `Стоимость товара${number}`,
         rates ? `${nfMoney.format(item.priceCny)} ¥ · ${usd(item.priceUsd)}` : "—",
       ]);
+      rows.push([
+        `Таможенная стоимость${number}`,
+        rates ? usd(item.customsValue) : "—",
+      ]);
       rows.push([`Ставка пошлины${number}`, `${nfVolume.format(item.dutyRate)} %`]);
       rows.push([`Сумма пошлины${number}`, rates ? usd(item.duty) : "—"]);
       rows.push([`Ставка НДС${number}`, `${nfVolume.format(item.vatRate)} %`]);
       rows.push([`Сумма НДС${number}`, rates ? usd(item.vat) : "—"]);
     });
+
+    if (result.commission > 0) {
+      rows.push(["Комиссия компании", usd(result.commission)]);
+    }
 
     rows.forEach(([label, value]) => {
       const tr = document.createElement("tr");
@@ -222,6 +230,9 @@ export function initCalculator(): void {
     );
     out("duty", known ? usd(result.duty) : "—");
     out("vat", known ? usd(result.vat) : "—");
+    // Комиссия известна и без курсов ЦБ, но зависит от стоимости товара —
+    // пока товары не введены, показывать нечего.
+    out("commission", result.commission > 0 ? usd(result.commission) : "—");
     out("deliveryAndCustoms", known ? usd(result.deliveryAndCustoms) : usd(result.delivery));
     out("deliveryAndCustomsRub", known ? rub(result.deliveryAndCustoms) : "");
     out("goods", known ? usd(result.goodsUsd) : "—");

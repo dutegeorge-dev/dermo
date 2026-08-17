@@ -32,7 +32,7 @@ function calcSummary(calc: CalcResult): string {
   const rows = [
     `<b>Расчёт:</b> ${escapeHtml(calc.city)}, ${escapeHtml(calc.method.label)}`,
     `${calc.volume} куб.м / ${calc.weight} кг → ${calc.chargeableVolume} куб.м к оплате`,
-    `Доставка ${calc.delivery.toFixed(2)} $ · пошлина ${calc.duty.toFixed(2)} $ · НДС ${calc.vat.toFixed(2)} $`,
+    `Доставка ${calc.delivery.toFixed(2)} $ · пошлина ${calc.duty.toFixed(2)} $ · НДС ${calc.vat.toFixed(2)} $ · комиссия ${calc.commission.toFixed(2)} $`,
     `Товары ${calc.goodsUsd.toFixed(2)} $ · <b>итого ${calc.total.toFixed(2)} $</b>`,
   ];
   return rows.join("\n");
