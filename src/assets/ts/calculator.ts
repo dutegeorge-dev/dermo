@@ -191,7 +191,7 @@ export function initCalculator(): void {
     });
 
     if (result.commission > 0) {
-      rows.push(["Комиссия компании", usd(result.commission)]);
+      rows.push(["Комиссия ТЛК БАРС", usd(result.commission)]);
     }
 
     rows.forEach(([label, value]) => {

@@ -257,7 +257,7 @@ function buildCalcBlock(calc: CalcResult): string[] {
     `Стоимость товара всего: ${money(calc.goodsUsd)}`,
     `Таможенная стоимость (товар + половина перевозки): ${money(calc.customsValue)}`,
     `Пошлина всего: ${money(calc.duty)} · НДС всего: ${money(calc.vat)}`,
-    `Комиссия компании: ${money(calc.commission)}`,
+    `Комиссия ТЛК БАРС: ${money(calc.commission)}`,
     `Доставка, таможня и комиссия: ${money(calc.deliveryAndCustoms)}`,
     `ИТОГО с товаром: ${money(calc.total)}`,
     `Курсы ЦБ${calc.rates.date ? ` на ${calc.rates.date}` : ""}: ` +

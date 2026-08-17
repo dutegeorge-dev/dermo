@@ -20,8 +20,8 @@ const en: Dictionary = {
   cta: {
     request: "Submit a request",
     calculate: "Calculate",
-    telegram: "Telegram",
-    telegramWrite: "Message us on Telegram",
+    telegram: "Telegram / MAX",
+    telegramWrite: "Message us on Telegram / MAX",
   },
   mega: {
     logistics: {
@@ -113,8 +113,8 @@ const en: Dictionary = {
       note: "We'll reply within one business day",
       cargoLabel: "What you're shipping or need to source",
       cargoError: "Please specify the product or task.",
-      contactLabel: "Phone or Telegram",
-      contactError: "Please enter a valid phone number or Telegram.",
+      contactLabel: "Phone, Telegram or MAX",
+      contactError: "Please enter a valid phone number or Telegram / MAX username.",
       success: "Request sent! We'll get in touch within one business day.",
     },
     trust: {
@@ -223,8 +223,8 @@ const en: Dictionary = {
       note: "We'll reply within one business day",
       cargoLabel: "What you need to source",
       cargoError: "Please specify what you need to source.",
-      contactLabel: "Phone or Telegram",
-      contactError: "Please enter a valid phone number or Telegram.",
+      contactLabel: "Phone, Telegram or MAX",
+      contactError: "Please enter a valid phone number or Telegram / MAX username.",
       success: "Request sent! We'll get in touch within one business day.",
     },
     alibaba: {
@@ -427,7 +427,7 @@ const en: Dictionary = {
       text: "We reply within one business day. Write or call however is convenient — in Russia and in China.",
       phoneRuLabel: "Phone in Russia",
       phoneCnLabel: "Phone in China",
-      telegramLabel: "Telegram",
+      telegramLabel: "Telegram / MAX",
       emailLabel: "Email",
     },
     faq: {
@@ -480,7 +480,7 @@ const en: Dictionary = {
     utilityNav: "Utility bar",
     phoneRu: "Phone in Russia",
     phoneCn: "Phone in China",
-    telegram: "Message us on Telegram",
+    telegram: "Message us on Telegram / MAX",
   },
   forms: {
     consentPrefix:
@@ -489,7 +489,7 @@ const en: Dictionary = {
     consentSuffix: ".",
     consentError: "Please confirm your consent to the processing of personal data.",
     sending: "Sending…",
-    sendError: "Could not send the request. Please try again or message us on Telegram.",
+    sendError: "Could not send the request. Please try again or message us on Telegram / MAX.",
   },
   cookie: {
     aria: "Cookie usage notice",
@@ -833,7 +833,7 @@ const en: Dictionary = {
       text: "We reply within one business day. Write or call however is convenient — in Russia and in China.",
       phoneRuLabel: "Phone in Russia",
       phoneCnLabel: "Phone in China",
-      telegramLabel: "Telegram",
+      telegramLabel: "Telegram / MAX",
       emailLabel: "Email",
     },
     finalCta: {

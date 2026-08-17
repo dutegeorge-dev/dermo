@@ -183,6 +183,13 @@ sitemap: true
                   <option value="{{ city }}">{{ city }}</option>
                 {% endfor %}
               </select>
+              {# Тариф до других городов зависит от плеча по России — считает
+                 менеджер. Говорим об этом сразу, а не после расчёта. #}
+              <p class="mt-1.5 text-xs text-muted">
+                Расчёт до Москвы. Доставку в другие города считаем отдельно —
+                <a href="#zayavka" class="underline decoration-cyan/40 underline-offset-2 hover:text-brand">оставьте заявку</a>,
+                менеджер посчитает маршрут и стоимость.
+              </p>
             </div>
 
             <div class="sm:row-span-2">
@@ -286,7 +293,7 @@ sitemap: true
                 <dd class="font-medium text-ink" data-calc-out="vat">—</dd>
               </div>
               <div class="flex justify-between gap-4">
-                <dt class="text-muted">Комиссия</dt>
+                <dt class="text-muted">Комиссия ТЛК БАРС</dt>
                 <dd class="font-medium text-ink" data-calc-out="commission">—</dd>
               </div>
             </dl>
@@ -324,6 +331,7 @@ sitemap: true
 
           {# ── Заявка в CRM ───────────────────────────────────────────── #}
           <form
+            id="zayavka"
             data-calc-request
             data-redirect="{{ '/calculator/spasibo/' | localizedUrl(locale) }}"
             novalidate
@@ -337,9 +345,9 @@ sitemap: true
 
             <div class="mt-4 space-y-4">
               <div>
-                <label class="field-label" for="calc-contact">Телефон или Telegram</label>
-                <input class="field-input min-h-[44px]" id="calc-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ · @username" data-validate="contact" autocomplete="off" />
-                <p class="field-error hidden" data-error-for="contact">Укажите корректный телефон или Telegram.</p>
+                <label class="field-label" for="calc-contact">Телефон, Telegram или Макс</label>
+                <input class="field-input min-h-[44px]" id="calc-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ · @логин в Telegram / Макс" data-validate="contact" autocomplete="off" />
+                <p class="field-error hidden" data-error-for="contact">Укажите корректный телефон или логин Telegram / Макс.</p>
               </div>
 
               <div>
@@ -517,7 +525,7 @@ sitemap: true
   </section>
 
   {{ ctaBand(
-    "Написать в Telegram",
+    "Написать в Telegram / Макс",
     site.telegram,
     "Нужен точный расчёт с документами и сроками? Напишите — ответим в течение рабочего дня.",
     "",

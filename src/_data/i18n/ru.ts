@@ -15,8 +15,8 @@ const ru: Dictionary = {
   cta: {
     request: "Оставить заявку",
     calculate: "Рассчитать",
-    telegram: "Telegram",
-    telegramWrite: "Написать в Telegram",
+    telegram: "Telegram / Макс",
+    telegramWrite: "Написать в Telegram / Макс",
   },
   mega: {
     logistics: {
@@ -108,8 +108,8 @@ const ru: Dictionary = {
       note: "Ответим в течение рабочего дня",
       cargoLabel: "Что везёте или что нужно закупить",
       cargoError: "Укажите товар или задачу.",
-      contactLabel: "Телефон или Telegram",
-      contactError: "Укажите корректный телефон или Telegram.",
+      contactLabel: "Телефон, Telegram или Макс",
+      contactError: "Укажите корректный телефон или логин Telegram / Макс.",
       success: "Заявка отправлена! Свяжемся с вами в течение рабочего дня.",
     },
     trust: {
@@ -218,8 +218,8 @@ const ru: Dictionary = {
       note: "Ответим в течение рабочего дня",
       cargoLabel: "Что нужно закупить",
       cargoError: "Укажите, что нужно закупить.",
-      contactLabel: "Телефон или Telegram",
-      contactError: "Укажите корректный телефон или Telegram.",
+      contactLabel: "Телефон, Telegram или Макс",
+      contactError: "Укажите корректный телефон или логин Telegram / Макс.",
       success: "Заявка отправлена! Свяжемся с вами в течение рабочего дня.",
     },
     alibaba: {
@@ -422,7 +422,7 @@ const ru: Dictionary = {
       text: "Отвечаем в течение рабочего дня. Пишите и звоните удобным способом — в России и в Китае.",
       phoneRuLabel: "Телефон в России",
       phoneCnLabel: "Телефон в Китае",
-      telegramLabel: "Telegram",
+      telegramLabel: "Telegram / Макс",
       emailLabel: "Email",
     },
     faq: {
@@ -475,7 +475,7 @@ const ru: Dictionary = {
     utilityNav: "Сервисная панель",
     phoneRu: "Телефон в России",
     phoneCn: "Телефон в Китае",
-    telegram: "Написать в Telegram",
+    telegram: "Написать в Telegram / Макс",
   },
   forms: {
     consentPrefix: "Отправляя заявку, я соглашаюсь с обработкой персональных данных и ",
@@ -484,7 +484,7 @@ const ru: Dictionary = {
     consentError: "Подтвердите согласие на обработку персональных данных.",
     sending: "Отправляем…",
     sendError:
-      "Не удалось отправить заявку. Попробуйте ещё раз или напишите нам в Telegram.",
+      "Не удалось отправить заявку. Попробуйте ещё раз или напишите нам в Telegram / Макс.",
   },
   cookie: {
     aria: "Уведомление об использовании файлов cookies",
@@ -829,7 +829,7 @@ const ru: Dictionary = {
       text: "Отвечаем в течение рабочего дня. Пишите и звоните удобным способом — в России и в Китае.",
       phoneRuLabel: "Телефон в России",
       phoneCnLabel: "Телефон в Китае",
-      telegramLabel: "Telegram",
+      telegramLabel: "Telegram / Макс",
       emailLabel: "Email",
     },
     finalCta: {

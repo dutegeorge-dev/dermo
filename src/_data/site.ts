@@ -19,8 +19,8 @@ const site: SiteConfig = {
   defaultDescription:
     "Торгово-логистическая компания ООО ТЛК БАРС: доставляем и закупаем товары из Китая под ключ. Белая доставка с полным пакетом документов, команда в Гуанчжоу.",
   defaultOgImage: "/assets/img/og-default.svg",
-  phone: "+7 985 967 3614",
-  phoneHref: "+79859673614",
+  phone: "+7 495 133 12 60",
+  phoneHref: "+74951331260",
   phoneCn: "+86 156 2617 0598",
   phoneCnHref: "+8615626170598",
   calculateUrl: "/calculator/",

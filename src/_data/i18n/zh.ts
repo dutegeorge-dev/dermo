@@ -19,8 +19,8 @@ const zh: Dictionary = {
   cta: {
     request: "提交需求",
     calculate: "估算",
-    telegram: "Telegram",
-    telegramWrite: "通过 Telegram 联系我们",
+    telegram: "Telegram / MAX",
+    telegramWrite: "通过 Telegram / MAX 联系我们",
   },
   mega: {
     logistics: {
@@ -112,8 +112,8 @@ const zh: Dictionary = {
       note: "我们将在一个工作日内回复",
       cargoLabel: "您要运输或需要采购什么",
       cargoError: "请填写商品或需求。",
-      contactLabel: "电话或 Telegram",
-      contactError: "请填写正确的电话或 Telegram。",
+      contactLabel: "电话、Telegram 或 MAX",
+      contactError: "请填写正确的电话或 Telegram / MAX 账号。",
       success: "需求已提交！我们将在一个工作日内与您联系。",
     },
     trust: {
@@ -222,8 +222,8 @@ const zh: Dictionary = {
       note: "我们将在一个工作日内回复",
       cargoLabel: "您需要采购什么",
       cargoError: "请填写您需要采购的内容。",
-      contactLabel: "电话或 Telegram",
-      contactError: "请填写正确的电话或 Telegram。",
+      contactLabel: "电话、Telegram 或 MAX",
+      contactError: "请填写正确的电话或 Telegram / MAX 账号。",
       success: "需求已提交！我们将在一个工作日内与您联系。",
     },
     alibaba: {
@@ -426,7 +426,7 @@ const zh: Dictionary = {
       text: "我们在一个工作日内回复。请以方便的方式来信或来电——中国和俄罗斯都可。",
       phoneRuLabel: "俄罗斯电话",
       phoneCnLabel: "中国电话",
-      telegramLabel: "Telegram",
+      telegramLabel: "Telegram / MAX",
       emailLabel: "Email",
     },
     faq: {
@@ -479,7 +479,7 @@ const zh: Dictionary = {
     utilityNav: "功能栏",
     phoneRu: "俄罗斯电话",
     phoneCn: "中国电话",
-    telegram: "通过 Telegram 联系我们",
+    telegram: "通过 Telegram / MAX 联系我们",
   },
   forms: {
     consentPrefix:
@@ -488,7 +488,7 @@ const zh: Dictionary = {
     consentSuffix: "。",
     consentError: "请确认您同意处理个人数据。",
     sending: "正在发送…",
-    sendError: "提交失败。请重试，或通过 Telegram 联系我们。",
+    sendError: "提交失败。请重试，或通过 Telegram / MAX 联系我们。",
   },
   cookie: {
     aria: "Cookie 使用提示",
@@ -832,7 +832,7 @@ const zh: Dictionary = {
       text: "我们在一个工作日内回复。请以方便的方式来信或来电——中国和俄罗斯都可。",
       phoneRuLabel: "俄罗斯电话",
       phoneCnLabel: "中国电话",
-      telegramLabel: "Telegram",
+      telegramLabel: "Telegram / MAX",
       emailLabel: "Email",
     },
     finalCta: {
