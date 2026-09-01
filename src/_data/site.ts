@@ -42,7 +42,13 @@ const site: SiteConfig = {
   kpp: "502401001",
   ogrn: "1255000095778",
   analytics: {
-    yandexMetrika: process.env.YM_COUNTER_ID || "",
+    // Номер счётчика Метрики публичен по определению — он и так виден в коде
+    // любой страницы, поэтому боевое значение живёт прямо здесь, а не в .env:
+    // иначе забытая переменная на сервере молча выключает всю аналитику.
+    // YM_COUNTER_ID переопределяет его (в т.ч. пустым значением — так счётчик
+    // отключается локально, чтобы не пачкать статистику разработкой).
+    yandexMetrika:
+      process.env.YM_COUNTER_ID !== undefined ? process.env.YM_COUNTER_ID : "112129007",
     ga4: process.env.GA4_ID || "",
   },
   verification: {

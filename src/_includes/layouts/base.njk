@@ -9,6 +9,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+    {# Метрика — как можно раньше: счётчик должен успеть отправить просмотр,
+       даже если посетитель сразу закроет вкладку. #}
+    {% include "partials/analytics-yandex.njk" %}
+
     <title>{{ pageTitle }}</title>
     <meta name="description" content="{{ pageDescription }}" />
     <meta name="robots" content="{{ pageRobots }}" />
@@ -53,8 +57,7 @@
     {# JSON-LD Organization — на всех страницах #}
     {% include "partials/schema-organization.njk" %}
 
-    {# Счётчики аналитики (условно, по наличию ID) #}
-    {% include "partials/analytics-yandex.njk" %}
+    {# GA4 (условно, по наличию ID). Метрика подключена выше — в начале <head>. #}
     {% include "partials/analytics-ga.njk" %}
   </head>
   <body class="flex min-h-screen flex-col bg-white font-sans text-gray-900 antialiased">
