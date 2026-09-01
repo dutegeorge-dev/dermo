@@ -21,7 +21,7 @@ import { initToc } from "./toc";
 import { initCalculator } from "./calculator";
 
 // Отправка заявок на бэкенд — см. ./lead.ts.
-import { isValidContact, sendLead, trackEvent } from "./lead";
+import { GOALS, initContactGoals, isValidContact, sendLead, trackEvent } from "./lead";
 
 /** Инициализация форм заявок: валидация, отправка на бэкенд, состояния. */
 function initForms(): void {
@@ -112,7 +112,8 @@ function initForms(): void {
 
       void sendLead(form)
         .then(() => {
-          trackEvent("lead_form_submit");
+          // Цель шлём только после подтверждения от бэкенда, а не по клику.
+          trackEvent(GOALS.leadForm);
           success?.classList.remove("hidden");
           form.reset();
         })
@@ -135,6 +136,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initForms();
   initToc();
   initCalculator();
+  initContactGoals();
 });
 
 export {};

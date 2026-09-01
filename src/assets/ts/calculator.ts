@@ -21,7 +21,7 @@ import {
   type CalcResult,
 } from "../../../server/calc.ts";
 
-import { isValidContact, sendLead, trackEvent } from "./lead";
+import { GOALS, isValidContact, sendLead, trackEvent } from "./lead";
 
 /** Ответ GET /api/rates. */
 interface RatesResponse {
@@ -413,8 +413,8 @@ export function initCalculator(): void {
 
     void sendLead(requestForm, { form: "calculator", calc: input, calcRates: rates })
       .then(() => {
-        trackEvent("lead_form_submit");
-        trackEvent("calculator_submit");
+        // Цель отдельная от обычных форм: заявка с расчётом — другой сценарий.
+        trackEvent(GOALS.calcLead);
         // Страница благодарности — отдельная (не контакты): адрес задаётся в
         // разметке, чтобы работали языковые версии.
         const thanks = requestForm.dataset.redirect;

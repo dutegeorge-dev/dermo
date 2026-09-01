@@ -18,7 +18,28 @@ declare global {
   }
 }
 
-/** Отправка цели/события в Яндекс.Метрику и GA4, если счётчики подключены. */
+/**
+ * Идентификаторы целей. Ровно эти строки владелец заводит в кабинете
+ * Метрики как цели типа «JavaScript-событие» — менять их без пересоздания
+ * целей нельзя, иначе статистика молча обнулится.
+ */
+export const GOALS = {
+  /** Успешная отправка обычной формы заявки. */
+  leadForm: "lead_form",
+  /** Успешная отправка заявки с калькулятора. */
+  calcLead: "calc_lead",
+  /** Клик по ссылке в Telegram. */
+  telegramClick: "telegram_click",
+  /** Клик по номеру телефона. */
+  phoneClick: "phone_click",
+} as const;
+
+/**
+ * Отправка цели в Яндекс.Метрику и GA4, если счётчики подключены.
+ * Номер счётчика берётся из data-ym-id на <html> (его туда кладёт base.njk из
+ * site.analytics.yandexMetrika) — чтобы он был задан ровно в одном месте.
+ * Без счётчика (dev, отключённая аналитика) вызов молча ничего не делает.
+ */
 export function trackEvent(eventName: string): void {
   const ymId = document.documentElement.dataset.ymId;
   if (window.ym && ymId) {
@@ -27,6 +48,34 @@ export function trackEvent(eventName: string): void {
   if (window.gtag) {
     window.gtag("event", eventName);
   }
+}
+
+/**
+ * Цели по кликам на контакты: телефон и Telegram.
+ *
+ * Слушатель один на весь документ и вешается в фазе перехвата: ссылки на
+ * контакты разбросаны по шапке, подвалу, hero и блокам контактов, а на
+ * странице их к тому же может добавить другой скрипт.
+ */
+export function initContactGoals(): void {
+  document.addEventListener(
+    "click",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const link = target.closest("a[href]");
+      if (!link) return;
+
+      const href = link.getAttribute("href") ?? "";
+      if (href.startsWith("tel:")) {
+        trackEvent(GOALS.phoneClick);
+      } else if (/^(?:https?:)?\/\/(?:t\.me|telegram\.me)\//i.test(href)) {
+        trackEvent(GOALS.telegramClick);
+      }
+    },
+    { capture: true },
+  );
 }
 
 /** Простейшая валидация телефона/Telegram. */
