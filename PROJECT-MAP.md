@@ -262,6 +262,7 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 | `tovar-content.njk` | Общее тело товарных страниц (`dict.uslugi.tovary[tovarKey]`): сетка продуктов, таблица качества, доп. секции, FAQ. JSON-LD `FAQPage` + `Service`. |
 | `lead-form.njk` | Форма-заявка (используется в `landing.njk`). **Заглушка** без бэкенда; явный `TODO(integration)`. Тексты захардкожены (не i18n). |
 | `icon.njk` | Макрос `icon(name, class)` — Lucide-иконки инлайновым SVG (`currentColor`), цепочка `if/elif` по ~55 именам. |
+| `messengers.njk` | Макрос `messengers(size, ringOffset, grow, long)` — пара кнопок «Telegram» и «Макс» (разные сервисы, разные ссылки: `site.telegram` и `site.max`). Импортируется **с контекстом**. |
 | `logo.njk` | Макрос `logo(variant)` — текстовый логотип-плейсхолдер (badge «Б» + «ТЛК БАРС»), варианты `light`/`dark`. |
 | `schema-organization.njk` | JSON-LD `Organization` (на каждой странице через base). |
 | `schema-breadcrumbs.njk` | JSON-LD `BreadcrumbList`. |
@@ -288,6 +289,7 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
   - `accent` — янтарь `#F5A623` (`hover/dark #D98E0B`): **только** главные CTA;
   - `cyan` — бирюза `#22B8CF`: мелкие акценты, активные состояния, перелинковка;
   - `telegram` — `#229ED9`: кнопки Telegram;
+  - `max` — `#6C33E8`: кнопки мессенджера Макс;
   - `ink #0F172A` (текст), `muted #64748B` (вторичный), `surface #FFFFFF`, `surface-alt #F1F5F9`;
   - `success`/`danger` — служебные статусные цвета (только для ✓/✗ и таблиц, не часть бренд-палитры).
 - Шрифт: `sans` → `Onest, system-ui, …`.
@@ -314,7 +316,7 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 | Модуль | Что делает | Где |
 |---|---|---|
 | `main.ts` | Точка входа: импортирует `header`, `slider`, `cookie`; на `DOMContentLoaded` запускает `initForms()`, `initToc()` и `initCalculator()`. **`initForms`** — валидация форм-заявок (телефон/Telegram-ник), обязательный чекбокс согласия 152-ФЗ, затем отправка через `sendLead` из `lead.ts`; на время запроса кнопка блокируется, при успехе — подтверждение, сброс формы и событие `lead_form_submit` в аналитику, при сбое — блок `[data-form-error]`. | формы `[data-lead-form]` |
-| `lead.ts` | Общий модуль отправки заявок: `sendLead(form, extra)` (сбор полей формы + UTM из URL/`sessionStorage` + honeypot → `POST` JSON на `data-lead-endpoint`), `isValidContact`, `trackEvent` (`ym`/`gtag`, номер счётчика из `data-ym-id`), `GOALS` — идентификаторы целей Метрики (`lead_form`, `calc_lead`, `telegram_click`, `phone_click`), `initContactGoals` — делегированный слушатель кликов по `tel:` и `t.me`. Цели форм шлются только после успешного ответа бэкенда. Используется и обычными формами, и калькулятором. | все формы заявок |
+| `lead.ts` | Общий модуль отправки заявок: `sendLead(form, extra)` (сбор полей формы + UTM из URL/`sessionStorage` + honeypot → `POST` JSON на `data-lead-endpoint`), `isValidContact`, `trackEvent` (`ym`/`gtag`, номер счётчика из `data-ym-id`), `GOALS` — идентификаторы целей Метрики (`lead_form`, `calc_lead`, `telegram_click`, `max_click`, `phone_click`), `initContactGoals` — делегированный слушатель кликов по `tel:`, `t.me` и `max.ru`. Цели форм шлются только после успешного ответа бэкенда. Используется и обычными формами, и калькулятором. | все формы заявок |
 | `calculator.ts` | `initCalculator` — калькулятор `/calculator/`: мгновенный пересчёт на каждый ввод, мультитоварность (`<template>` + «Добавить товар»), курсы ЦБ из `GET data-rates-endpoint` (флаг `stale` и сообщение при недоступности), детализация расчёта, отправка расчёта заявкой через `sendLead` и редирект на `/calculator/spasibo/`. Формулы и тарифы импортируются из `server/calc.ts` — общего с бэкендом модуля. | `[data-calculator]` |
 | `header.ts` | `initStickyHeader` (сворачивание utility-полосы с гистерезисом COLLAPSE_AT=64/EXPAND_AT=8 против «дрожания»), `initMegaMenu` (тап/клик + Esc + клик-вне + focusout; hover — на CSS), `initAccordions` (универсальные `[data-accordion-toggle]`), `initMobilePanel` (off-canvas: бургер, оверлей, блокировка скролла, Esc, фокус). | хедер |
 | `toc.ts` | `initToc` — sticky-оглавление читательского шаблона: собирает разделы (`section[id]` или `h2/h3[id]`), показывает **только при 3+ разделах**, десктоп — правое sticky со scroll-spy (`IntersectionObserver`, активный — бирюза), мобайл — аккордеон «Содержание», плавная прокрутка + перевод фокуса для доступности. | `[data-reading]` |

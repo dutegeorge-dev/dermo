@@ -15,8 +15,10 @@ const ru: Dictionary = {
   cta: {
     request: "Оставить заявку",
     calculate: "Рассчитать",
-    telegram: "Telegram / Макс",
-    telegramWrite: "Написать в Telegram / Макс",
+    telegram: "Telegram",
+    max: "Макс",
+    telegramWrite: "Написать в Telegram",
+    maxWrite: "Написать в Макс",
   },
   mega: {
     logistics: {
@@ -419,10 +421,10 @@ const ru: Dictionary = {
     },
     contacts: {
       title: "Как с нами связаться",
-      text: "Отвечаем в течение рабочего дня. Пишите и звоните удобным способом — в России и в Китае.",
-      phoneRuLabel: "Телефон в России",
-      phoneCnLabel: "Телефон в Китае",
-      telegramLabel: "Telegram / Макс",
+      text: "Работаем с 8:00 до 20:00 по московскому времени. Пишите и звоните удобным способом.",
+      phoneRuLabel: "Телефон",
+      telegramLabel: "Telegram",
+      maxLabel: "Макс",
       emailLabel: "Email",
     },
     faq: {
@@ -474,8 +476,8 @@ const ru: Dictionary = {
     mainNav: "Основная навигация",
     utilityNav: "Сервисная панель",
     phoneRu: "Телефон в России",
-    phoneCn: "Телефон в Китае",
-    telegram: "Написать в Telegram / Макс",
+    telegram: "Написать в Telegram",
+    max: "Написать в Макс",
   },
   forms: {
     consentPrefix: "Отправляя заявку, я соглашаюсь с обработкой персональных данных и ",
@@ -484,7 +486,7 @@ const ru: Dictionary = {
     consentError: "Подтвердите согласие на обработку персональных данных.",
     sending: "Отправляем…",
     sendError:
-      "Не удалось отправить заявку. Попробуйте ещё раз или напишите нам в Telegram / Макс.",
+      "Не удалось отправить заявку. Попробуйте ещё раз или напишите нам в Telegram или Макс.",
   },
   cookie: {
     aria: "Уведомление об использовании файлов cookies",
@@ -826,10 +828,10 @@ const ru: Dictionary = {
     },
     contacts: {
       title: "Как с нами связаться",
-      text: "Отвечаем в течение рабочего дня. Пишите и звоните удобным способом — в России и в Китае.",
-      phoneRuLabel: "Телефон в России",
-      phoneCnLabel: "Телефон в Китае",
-      telegramLabel: "Telegram / Макс",
+      text: "Работаем с 8:00 до 20:00 по московскому времени. Пишите и звоните удобным способом.",
+      phoneRuLabel: "Телефон",
+      telegramLabel: "Telegram",
+      maxLabel: "Макс",
       emailLabel: "Email",
     },
     finalCta: {

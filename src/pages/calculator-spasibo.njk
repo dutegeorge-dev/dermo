@@ -18,6 +18,7 @@ eleventyExcludeFromCollections: true
   (адрес задан в data-redirect формы — см. src/pages/calculator.njk).
 #}
 {% from "partials/icon.njk" import icon %}
+{% from "partials/messengers.njk" import messengers with context %}
 
 {% include "partials/header.njk" %}
 
@@ -38,15 +39,7 @@ eleventyExcludeFromCollections: true
       <p class="mt-3 text-base text-muted">{{ site.workingHours }}</p>
 
       <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-        <a
-          href="{{ site.telegram }}"
-          rel="nofollow noopener"
-          target="_blank"
-          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2"
-        >
-          {{ icon("send", "h-5 w-5") }}
-          Написать в Telegram / Макс
-        </a>
+        {{ messengers("lg") }}
         <a
           href="tel:{{ site.phoneHref }}"
           class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-brand px-6 py-3 text-base font-medium text-brand transition-colors hover:bg-brand hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"

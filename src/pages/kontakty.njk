@@ -10,18 +10,22 @@ sitemap: true
 ---
 {# Контакты — реквизиты + форма заявки + офис в Гуанчжоу (карта и фото). #}
 {% from "partials/icon.njk" import icon %}
+{% from "partials/messengers.njk" import messengers with context %}
 
 <div class="mt-8 grid gap-8 lg:grid-cols-2">
   <div class="space-y-3 text-gray-700">
-    <p><span class="font-semibold">Телефон (РФ):</span> <a href="tel:{{ site.phoneHref }}" class="text-brand">{{ site.phone }}</a></p>
-    <p><span class="font-semibold">Телефон (Китай):</span> <a href="tel:{{ site.phoneCnHref }}" class="text-brand">{{ site.phoneCn }}</a></p>
+    <p><span class="font-semibold">Телефон:</span> <a href="tel:{{ site.phoneHref }}" class="text-brand">{{ site.phone }}</a></p>
     <p><span class="font-semibold">E-mail:</span> <a href="mailto:{{ site.email }}" class="text-brand">{{ site.email }}</a></p>
-    <p><span class="font-semibold">Telegram / Макс:</span> <a href="{{ site.telegram }}" class="text-brand" rel="nofollow noopener" target="_blank">{{ site.telegram }}</a></p>
     <p><span class="font-semibold">Офис в Гуанчжоу:</span> {{ site.addressCn }}</p>
 
-    {# Время ответа с учётом разницы во времени РФ/Китай. #}
+    {# Мессенджеры — двумя кнопками: Telegram и Макс, разные ссылки. #}
+    <div class="flex flex-col gap-3 pt-1 sm:flex-row">
+      {{ messengers("lg") }}
+    </div>
+
+    {# Время работы. #}
     <p class="flex items-start gap-2 rounded-md bg-surface-alt px-3 py-2 text-sm text-muted">
-      {{ icon("phone", "mt-0.5 h-4 w-4 shrink-0 text-cyan") }}
+      {{ icon("clock", "mt-0.5 h-4 w-4 shrink-0 text-cyan") }}
       <span>{{ site.workingHours }}</span>
     </p>
 

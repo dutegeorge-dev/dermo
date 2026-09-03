@@ -30,6 +30,8 @@ export const GOALS = {
   calcLead: "calc_lead",
   /** Клик по ссылке в Telegram. */
   telegramClick: "telegram_click",
+  /** Клик по ссылке в мессенджер Макс. */
+  maxClick: "max_click",
   /** Клик по номеру телефона. */
   phoneClick: "phone_click",
 } as const;
@@ -51,7 +53,7 @@ export function trackEvent(eventName: string): void {
 }
 
 /**
- * Цели по кликам на контакты: телефон и Telegram.
+ * Цели по кликам на контакты: телефон, Telegram и Макс.
  *
  * Слушатель один на весь документ и вешается в фазе перехвата: ссылки на
  * контакты разбросаны по шапке, подвалу, hero и блокам контактов, а на
@@ -72,6 +74,8 @@ export function initContactGoals(): void {
         trackEvent(GOALS.phoneClick);
       } else if (/^(?:https?:)?\/\/(?:t\.me|telegram\.me)\//i.test(href)) {
         trackEvent(GOALS.telegramClick);
+      } else if (/^(?:https?:)?\/\/(?:[\w-]+\.)?max\.ru\//i.test(href)) {
+        trackEvent(GOALS.maxClick);
       }
     },
     { capture: true },

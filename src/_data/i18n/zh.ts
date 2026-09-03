@@ -19,8 +19,10 @@ const zh: Dictionary = {
   cta: {
     request: "提交需求",
     calculate: "估算",
-    telegram: "Telegram / MAX",
-    telegramWrite: "通过 Telegram / MAX 联系我们",
+    telegram: "Telegram",
+    max: "MAX",
+    telegramWrite: "通过 Telegram 联系我们",
+    maxWrite: "通过 MAX 联系我们",
   },
   mega: {
     logistics: {
@@ -423,10 +425,10 @@ const zh: Dictionary = {
     },
     contacts: {
       title: "如何联系我们",
-      text: "我们在一个工作日内回复。请以方便的方式来信或来电——中国和俄罗斯都可。",
-      phoneRuLabel: "俄罗斯电话",
-      phoneCnLabel: "中国电话",
-      telegramLabel: "Telegram / MAX",
+      text: "工作时间为莫斯科时间 8:00–20:00。请以方便的方式来信或来电。",
+      phoneRuLabel: "电话",
+      telegramLabel: "Telegram",
+      maxLabel: "MAX",
       emailLabel: "Email",
     },
     faq: {
@@ -478,8 +480,8 @@ const zh: Dictionary = {
     mainNav: "主导航",
     utilityNav: "功能栏",
     phoneRu: "俄罗斯电话",
-    phoneCn: "中国电话",
-    telegram: "通过 Telegram / MAX 联系我们",
+    telegram: "通过 Telegram 联系我们",
+    max: "通过 MAX 联系我们",
   },
   forms: {
     consentPrefix:
@@ -488,7 +490,7 @@ const zh: Dictionary = {
     consentSuffix: "。",
     consentError: "请确认您同意处理个人数据。",
     sending: "正在发送…",
-    sendError: "提交失败。请重试，或通过 Telegram / MAX 联系我们。",
+    sendError: "提交失败。请重试，或通过 Telegram 或 MAX 联系我们。",
   },
   cookie: {
     aria: "Cookie 使用提示",
@@ -829,10 +831,10 @@ const zh: Dictionary = {
     },
     contacts: {
       title: "如何联系我们",
-      text: "我们在一个工作日内回复。请以方便的方式来信或来电——中国和俄罗斯都可。",
-      phoneRuLabel: "俄罗斯电话",
-      phoneCnLabel: "中国电话",
-      telegramLabel: "Telegram / MAX",
+      text: "工作时间为莫斯科时间 8:00–20:00。请以方便的方式来信或来电。",
+      phoneRuLabel: "电话",
+      telegramLabel: "Telegram",
+      maxLabel: "MAX",
       emailLabel: "Email",
     },
     finalCta: {

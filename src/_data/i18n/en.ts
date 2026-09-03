@@ -20,8 +20,10 @@ const en: Dictionary = {
   cta: {
     request: "Submit a request",
     calculate: "Calculate",
-    telegram: "Telegram / MAX",
-    telegramWrite: "Message us on Telegram / MAX",
+    telegram: "Telegram",
+    max: "MAX",
+    telegramWrite: "Message us on Telegram",
+    maxWrite: "Message us on MAX",
   },
   mega: {
     logistics: {
@@ -424,10 +426,10 @@ const en: Dictionary = {
     },
     contacts: {
       title: "How to reach us",
-      text: "We reply within one business day. Write or call however is convenient — in Russia and in China.",
-      phoneRuLabel: "Phone in Russia",
-      phoneCnLabel: "Phone in China",
-      telegramLabel: "Telegram / MAX",
+      text: "We work from 8:00 to 20:00 Moscow time. Write or call however is convenient.",
+      phoneRuLabel: "Phone",
+      telegramLabel: "Telegram",
+      maxLabel: "MAX",
       emailLabel: "Email",
     },
     faq: {
@@ -479,8 +481,8 @@ const en: Dictionary = {
     mainNav: "Main navigation",
     utilityNav: "Utility bar",
     phoneRu: "Phone in Russia",
-    phoneCn: "Phone in China",
-    telegram: "Message us on Telegram / MAX",
+    telegram: "Message us on Telegram",
+    max: "Message us on MAX",
   },
   forms: {
     consentPrefix:
@@ -489,7 +491,7 @@ const en: Dictionary = {
     consentSuffix: ".",
     consentError: "Please confirm your consent to the processing of personal data.",
     sending: "Sending…",
-    sendError: "Could not send the request. Please try again or message us on Telegram / MAX.",
+    sendError: "Could not send the request. Please try again or message us on Telegram or MAX.",
   },
   cookie: {
     aria: "Cookie usage notice",
@@ -830,10 +832,10 @@ const en: Dictionary = {
     },
     contacts: {
       title: "How to reach us",
-      text: "We reply within one business day. Write or call however is convenient — in Russia and in China.",
-      phoneRuLabel: "Phone in Russia",
-      phoneCnLabel: "Phone in China",
-      telegramLabel: "Telegram / MAX",
+      text: "We work from 8:00 to 20:00 Moscow time. Write or call however is convenient.",
+      phoneRuLabel: "Phone",
+      telegramLabel: "Telegram",
+      maxLabel: "MAX",
       emailLabel: "Email",
     },
     finalCta: {

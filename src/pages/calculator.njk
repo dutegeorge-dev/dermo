@@ -24,6 +24,7 @@ sitemap: true
   формулировками про ТН ВЭД, отдельно от общего словаря.
 #}
 {% from "partials/icon.njk" import icon %}
+{% from "partials/messengers.njk" import messengers with context %}
 {% from "components/form-consent.njk" import formConsent %}
 {% from "components/cta-band.njk" import ctaBand %}
 {% set C = calculator %}
@@ -524,14 +525,20 @@ sitemap: true
     </div>
   </section>
 
-  {{ ctaBand(
-    "Написать в Telegram / Макс",
-    site.telegram,
-    "Нужен точный расчёт с документами и сроками? Напишите — ответим в течение рабочего дня.",
-    "",
-    "inline",
-    "send"
-  ) }}
+  {# Не ctaBand: у полосы одна кнопка, а мессенджеров два — Telegram и Макс. #}
+  <section class="py-6 md:py-8">
+    <div class="container">
+      <div class="flex flex-col items-start gap-4 rounded-xl border border-cyan/40 bg-surface-alt px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <p class="flex items-start gap-3 text-base font-medium text-ink">
+          {{ icon("send", "mt-0.5 h-5 w-5 shrink-0 text-cyan") }}
+          <span>Нужен точный расчёт с документами и сроками? Напишите — ответим в течение рабочего дня.</span>
+        </p>
+        <div class="flex w-full shrink-0 gap-3 sm:w-auto">
+          {{ messengers("lg") }}
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 {% include "partials/footer.njk" %}

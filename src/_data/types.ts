@@ -42,14 +42,12 @@ export interface SiteConfig {
   phone: string;
   /** Телефон РФ для href (tel:). */
   phoneHref: string;
-  /** Телефон в Китае в человекочитаемом виде. */
-  phoneCn: string;
-  /** Телефон в Китае для href (tel:). */
-  phoneCnHref: string;
   /** URL страницы калькулятора доставки (кнопки «Рассчитать»). */
   calculateUrl: string;
   /** Ссылка на Telegram. */
   telegram: string;
+  /** Ссылка на мессенджер Макс (отдельная от Telegram). */
+  max: string;
   /** E-mail для связи. */
   email: string;
   /** E-mail для обращений по вопросам обработки персональных данных. */
@@ -58,8 +56,10 @@ export interface SiteConfig {
   address: string;
   /** Адрес офиса в Гуанчжоу (текст для блока контактов и карты). */
   addressCn: string;
-  /** Строка о времени ответа с учётом разницы РФ/Китай. */
+  /** Время работы фразой — для блока контактов. */
   workingHours: string;
+  /** Время работы в короткой форме («8:00–20:00 МСК») — для шапки и подвала. */
+  workingHoursShort: string;
   /** URL встраиваемой карты (виджет Яндекс.Карт) с меткой офиса в Гуанчжоу. */
   mapEmbedSrc: string;
   /** ИНН. */
@@ -476,8 +476,8 @@ export interface Logistika {
     title: string;
     text: string;
     phoneRuLabel: string;
-    phoneCnLabel: string;
     telegramLabel: string;
+    maxLabel: string;
     emailLabel: string;
   };
   finalCta: { title: string; subtitle: string; button: string };
@@ -984,8 +984,14 @@ export interface Dictionary {
   cta: {
     request: string;
     calculate: string;
+    /** Короткая подпись кнопки Telegram. */
     telegram: string;
+    /** Короткая подпись кнопки Макс. */
+    max: string;
+    /** Развёрнутый CTA Telegram («Написать в Telegram»). */
     telegramWrite: string;
+    /** Развёрнутый CTA Макс («Написать в Макс»). */
+    maxWrite: string;
   };
   mega: {
     logistics: { title: string; subtitle: string };
@@ -1292,8 +1298,8 @@ export interface Dictionary {
       title: string;
       text: string;
       phoneRuLabel: string;
-      phoneCnLabel: string;
       telegramLabel: string;
+      maxLabel: string;
       emailLabel: string;
     };
     faq: {
@@ -1320,8 +1326,8 @@ export interface Dictionary {
     mainNav: string;
     utilityNav: string;
     phoneRu: string;
-    phoneCn: string;
     telegram: string;
+    max: string;
   };
   /** Общие тексты форм: согласие на обработку ПДн (152-ФЗ). */
   forms: {

@@ -1,11 +1,13 @@
 {#
   Двухъярусный sticky-хедер ТЛК БАРС.
-  Ярус 1 (utility) — переключатель языка, «Рассчитать», два телефона, Telegram.
+  Ярус 1 (utility) — переключатель языка, «Рассчитать», телефон, время работы,
+  Telegram и Макс (две отдельные ссылки — это разные мессенджеры).
   Ярус 2 (navbar) — логотип, меню (5 пунктов), янтарная CTA. «Услуги» → мега-меню.
   Тексты — из словаря (t), без хардкода. Поведение — header.ts (прогрессивное улучшение).
 #}
 {% from "partials/icon.njk" import icon %}
 {% from "partials/logo.njk" import logo %}
+{% from "partials/messengers.njk" import messengers with context %}
 
 <header data-header class="sticky top-0 z-40">
   {# ── Ярус 1: utility-полоса (скрывается при скролле) ───────────────── #}
@@ -23,7 +25,7 @@
         {% endfor %}
       </nav>
 
-      {# Сервисы: Рассчитать · телефоны · Telegram #}
+      {# Сервисы: Рассчитать · телефон · время работы · Telegram и Макс #}
       <div class="flex items-center gap-3 text-white/80">
         <a href="{{ site.calculateUrl | localizedUrl(locale) }}" class="hidden items-center gap-1.5 transition-colors hover:text-cyan sm:inline-flex">
           {{ icon("calculator", "h-4 w-4") }}
@@ -34,12 +36,13 @@
           {{ icon("phone", "h-3.5 w-3.5 text-cyan") }}
           <span>{{ site.phone }}</span>
         </a>
-        <span class="text-white/30" aria-hidden="true">·</span>
-        <a href="tel:{{ site.phoneCnHref }}" class="hidden items-center gap-1.5 transition-colors hover:text-cyan md:inline-flex" aria-label="{{ 'a11y.phoneCn' | t(locale) }}">
-          <span>{{ site.phoneCn }}</span>
-        </a>
+        <span class="hidden text-white/30 md:inline" aria-hidden="true">·</span>
+        <span class="hidden md:inline">{{ site.workingHoursShort }}</span>
         <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.telegram' | t(locale) }}">
           {{ icon("send", "h-4 w-4") }}
+        </a>
+        <a href="{{ site.max }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.max' | t(locale) }}">
+          {{ icon("max", "h-4 w-4") }}
         </a>
       </div>
     </div>
@@ -225,23 +228,21 @@
       </ul>
     </nav>
 
-    {# Utility-блок панели: телефоны, Telegram, Рассчитать, язык #}
+    {# Utility-блок панели: телефон, время работы, мессенджеры, Рассчитать, язык #}
     <div class="border-t border-slate-200 px-4 py-4">
       <div class="space-y-2">
         <a href="tel:{{ site.phoneHref }}" class="flex min-h-[44px] items-center gap-2 text-sm font-medium text-ink">
           {{ icon("phone", "h-4 w-4 text-cyan") }}{{ site.phone }}
         </a>
-        <a href="tel:{{ site.phoneCnHref }}" class="flex min-h-[44px] items-center gap-2 text-sm font-medium text-ink">
-          {{ icon("phone", "h-4 w-4 text-cyan") }}{{ site.phoneCn }}
-        </a>
-        <div class="flex flex-wrap items-center gap-2 pt-1">
-          <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white">
-            {{ icon("send", "h-4 w-4") }} {{ "cta.telegram" | t(locale) }}
-          </a>
-          <a href="{{ site.calculateUrl | localizedUrl(locale) }}" class="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-cyan px-4 text-sm font-medium text-cyan">
-            {{ icon("calculator", "h-4 w-4") }} {{ "cta.calculate" | t(locale) }}
-          </a>
+        <p class="flex min-h-[44px] items-center gap-2 text-sm text-muted">
+          {{ icon("clock", "h-4 w-4 text-cyan") }}{{ site.workingHoursShort }}
+        </p>
+        <div class="flex items-center gap-2 pt-1">
+          {{ messengers("sm", grow=true) }}
         </div>
+        <a href="{{ site.calculateUrl | localizedUrl(locale) }}" class="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-cyan px-4 text-sm font-medium text-cyan">
+          {{ icon("calculator", "h-4 w-4") }} {{ "cta.calculate" | t(locale) }}
+        </a>
       </div>
       <div class="mt-4 flex items-center gap-1 text-sm">
         {% for loc in locales %}

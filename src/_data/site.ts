@@ -21,18 +21,20 @@ const site: SiteConfig = {
   defaultOgImage: "/assets/img/og-default.svg",
   phone: "+7 495 133 12 60",
   phoneHref: "+74951331260",
-  phoneCn: "+86 156 2617 0598",
-  phoneCnHref: "+8615626170598",
   calculateUrl: "/calculator/",
+  // Telegram и Макс — разные мессенджеры и разные ссылки. Одной кнопкой
+  // «Telegram / Макс» их выводить нельзя: клик уводил бы в один из двух.
   telegram: "https://t.me/tlkbars",
+  max: "https://max.ru/tlkbars",
   email: "info@tlkbars.ru",
   privacyEmail: "barslogistics@yandex.com",
   address:
     "143408, Московская область, г.о. Красногорск, г. Красногорск, б-р Космонавтов, д. 7, кв. 189",
   addressCn:
     "广东省广州市番禺区 汇智三路66号(德舜大厦C塔)ITC国际科创中心19F1913 单元",
-  workingHours:
-    "Отвечаем в течение рабочего дня. Команда работает по китайскому времени (UTC+8) — это +5 часов к Москве.",
+  workingHours: "Работаем с 8:00 до 20:00 по московскому времени.",
+  // Короткая форма — для шапки и подвала, где на фразу нет места.
+  workingHoursShort: "8:00–20:00 МСК",
   // Google Maps embed по координатам офиса. Именно maps.google.com/maps?...
   // &output=embed допускает встраивание в iframe (современный www.google.com/maps
   // фреймить запрещает).

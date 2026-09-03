@@ -1,0 +1,39 @@
+{#
+  Пара кнопок мессенджеров: Telegram и Макс.
+  Это два разных сервиса с разными ссылками, поэтому одной кнопкой
+  «Telegram / Макс» их выводить нельзя — клик уводил бы в один из двух.
+
+  Импортировать обязательно с контекстом (макросу нужны site и locale):
+    {% from "partials/messengers.njk" import messengers with context %}
+
+  size:       "lg" — герой и CTA-блоки, "sm" — мобильная панель и узкие места.
+  ringOffset  — класс ring-offset-* под цвет фона блока (на ультрамарине —
+                ring-offset-brand, на белом достаточно значения по умолчанию).
+  grow        — растянуть кнопки поровну (flex-1) внутри своей строки.
+  long        — развёрнутые подписи «Написать в …» вместо коротких.
+#}
+{% from "partials/icon.njk" import icon %}
+
+{% macro messengers(size="lg", ringOffset="", grow=false, long=false) %}
+{% set shape = "px-6 py-3 text-base" if size == "lg" else "px-4 text-sm" %}
+{% set iconSize = "h-5 w-5" if size == "lg" else "h-4 w-4" %}
+{% set base = "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg font-medium text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 " + shape + " " + ringOffset + (" flex-1" if grow else "") %}
+<a
+  href="{{ site.telegram }}"
+  rel="nofollow noopener"
+  target="_blank"
+  class="{{ base }} bg-telegram hover:bg-telegram-hover focus-visible:ring-telegram"
+>
+  {{ icon("send", iconSize) }}
+  {{ ("cta.telegramWrite" if long else "cta.telegram") | t(locale) }}
+</a>
+<a
+  href="{{ site.max }}"
+  rel="nofollow noopener"
+  target="_blank"
+  class="{{ base }} bg-max hover:bg-max-hover focus-visible:ring-max"
+>
+  {{ icon("max", iconSize) }}
+  {{ ("cta.maxWrite" if long else "cta.max") | t(locale) }}
+</a>
+{% endmacro %}

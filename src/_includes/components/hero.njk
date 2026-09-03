@@ -6,6 +6,7 @@
   обработка в assets/ts/main.ts). Тексты — из словаря (home.hero.*, home.heroForm.*).
 #}
 {% from "partials/icon.njk" import icon %}
+{% from "partials/messengers.njk" import messengers with context %}
 {% from "components/lead-form-mini.njk" import leadFormMini %}
 
 <section class="bg-brand text-white">
@@ -18,18 +19,10 @@
       <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85 md:text-xl">
         {{ "home.hero.subtitle" | t(locale) }}
       </p>
-      {# Две кнопки — НЕ дублируют форму расчёта справа: Telegram (в фирменных
-         цветах) + белая кнопка-переход на статью блога «Как мы работаем». #}
+      {# Кнопки — НЕ дублируют форму расчёта справа: два мессенджера в их
+         фирменных цветах + белая кнопка-переход на кейсы. #}
       <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <a
-          href="{{ site.telegram }}"
-          rel="nofollow noopener"
-          target="_blank"
-          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
-        >
-          {{ icon("send", "h-5 w-5") }}
-          {{ "cta.telegramWrite" | t(locale) }}
-        </a>
+        {{ messengers("lg", "ring-offset-brand") }}
         <a
           href="{{ '/kejsy/' | localizedUrl(locale) }}"
           class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-medium text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand"

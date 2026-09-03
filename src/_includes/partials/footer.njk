@@ -29,9 +29,11 @@
       <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-900">Контакты</h2>
       <ul class="mt-4 space-y-2 text-sm text-gray-600">
         <li><a href="tel:{{ site.phoneHref }}" class="font-semibold text-brand">{{ site.phone }}</a></li>
-        <li><a href="tel:{{ site.phoneCnHref }}" class="font-semibold text-brand">{{ site.phoneCn }}</a></li>
         <li><a href="mailto:{{ site.email }}" class="hover:text-brand">{{ site.email }}</a></li>
-        <li><a href="{{ site.telegram }}" class="hover:text-brand" rel="nofollow noopener" target="_blank">Telegram / Макс</a></li>
+        {# Telegram и Макс — разные мессенджеры, поэтому две отдельные ссылки. #}
+        <li><a href="{{ site.telegram }}" class="hover:text-brand" rel="nofollow noopener" target="_blank">Telegram</a></li>
+        <li><a href="{{ site.max }}" class="hover:text-brand" rel="nofollow noopener" target="_blank">Макс</a></li>
+        <li class="pt-1 text-gray-500">{{ site.workingHoursShort }}</li>
       </ul>
     </div>
   </div>
