@@ -238,7 +238,7 @@ collections:
         label: "Логотип, лицензия, сертификаты, партнёры"
         file: "src/_data/company.json"
         fields:
-          - { label: "Логотип компании (пусто — текстовый логотип)", name: "logo", widget: "image", required: false }
+          - { label: "Логотип компании (пусто — фирменный логотип ТЛК БАРС)", name: "logo", widget: "image", required: false }
           - { label: "Бизнес-лицензия (скан/фото)", name: "businessLicense", widget: "image", required: false }
           - label: "Сертификаты"
             name: "certificates"

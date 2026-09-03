@@ -1,25 +1,22 @@
 {#
-  Логотип ТЛК БАРС.
+  Логотип ТЛК БАРС: фирменный знак (барс) + надпись «ТЛК БАРС».
   variant: "light" — для тёмного фона (хедер), "dark" — для светлого (мобильная панель, подвал).
   logoSrc — путь к загруженному логотипу (company.logo из Decap → «Компания»).
-  Если задан — рендерим картинку; иначе — текстовый плейсхолдер (буква + название).
+  Если задан — вместо фирменного знака рендерим картинку на белой плитке (произвольный
+  логотип может быть тёмным, на ультрамарине он иначе не читается).
   (Логотип не прогоняем через eleventy-img: шорткод async, а логотип выводится в
   партиалах внутри layout, где async-шорткод не исполняется; для лого это не нужно.)
 #}
 {% macro logo(variant="light", logoSrc="") %}
-{% if logoSrc %}
-{# Логотип-картинка на белой плитке (со скруглёнными краями) + подпись «ТЛК БАРС»
-   справа. Цвет подписи зависит от фона: белый на тёмном хедере, тёмный на светлом. #}
-<span class="inline-flex items-center gap-2.5">
+{% set tone = "-white" if variant == "light" else "" %}
+<span class="inline-flex items-center gap-2 sm:gap-2.5">
+  {% if logoSrc %}
   <span class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-white">
-    <img src="{{ logoSrc }}" alt="ООО ТЛК БАРС" loading="lazy" decoding="async" width="44" height="44" class="h-full w-full object-contain p-0.5" />
+    <img src="{{ logoSrc }}" alt="" loading="lazy" decoding="async" width="44" height="44" class="h-full w-full object-contain p-0.5" />
   </span>
-  <span class="text-lg font-medium tracking-tight {{ 'text-white' if variant == 'light' else 'text-ink' }}">ТЛК БАРС</span>
+  {% else %}
+  <img src="/assets/img/logo-mark{{ tone }}.svg" alt="" width="40" height="36" class="h-8 w-auto sm:h-9" />
+  {% endif %}
+  <img src="/assets/img/logo-wordmark{{ tone }}.svg" alt="ООО ТЛК БАРС" width="165" height="16" class="h-3 w-auto sm:h-4" />
 </span>
-{% else %}
-<span class="inline-flex items-center gap-2.5">
-  <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-lg font-semibold text-brand">Б</span>
-  <span class="text-lg font-medium tracking-tight {{ 'text-white' if variant == 'light' else 'text-ink' }}">ТЛК БАРС</span>
-</span>
-{% endif %}
 {% endmacro %}
