@@ -12,7 +12,7 @@
   grow        — растянуть кнопки поровну (flex-1) внутри своей строки.
   long        — развёрнутые подписи «Написать в …» вместо коротких.
 #}
-{% from "partials/icon.njk" import icon %}
+{% from "partials/brand-icon.njk" import brandIcon %}
 
 {% macro messengers(size="lg", ringOffset="", grow=false, long=false) %}
 {% set shape = "px-6 py-3 text-base" if size == "lg" else "px-4 text-sm" %}
@@ -24,7 +24,7 @@
   target="_blank"
   class="{{ base }} bg-telegram hover:bg-telegram-hover focus-visible:ring-telegram"
 >
-  {{ icon("send", iconSize) }}
+  {{ brandIcon("telegram", iconSize) }}
   {{ ("cta.telegramWrite" if long else "cta.telegram") | t(locale) }}
 </a>
 <a
@@ -33,7 +33,7 @@
   target="_blank"
   class="{{ base }} bg-max hover:bg-max-hover focus-visible:ring-max"
 >
-  {{ icon("max", iconSize) }}
+  {{ brandIcon("max", iconSize) }}
   {{ ("cta.maxWrite" if long else "cta.max") | t(locale) }}
 </a>
 {% endmacro %}

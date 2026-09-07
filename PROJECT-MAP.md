@@ -262,6 +262,7 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 | `tovar-content.njk` | Общее тело товарных страниц (`dict.uslugi.tovary[tovarKey]`): сетка продуктов, таблица качества, доп. секции, FAQ. JSON-LD `FAQPage` + `Service`. |
 | `lead-form.njk` | Форма-заявка (используется в `landing.njk`). **Заглушка** без бэкенда; явный `TODO(integration)`. Тексты захардкожены (не i18n). |
 | `icon.njk` | Макрос `icon(name, class)` — Lucide-иконки инлайновым SVG (`currentColor`), цепочка `if/elif` по ~55 именам. |
+| `brand-icon.njk` | Макрос `brandIcon(name, class)` — глифы логотипов Telegram и Макса одним цветом (`currentColor`), контуры из официальных SVG. |
 | `messengers.njk` | Макрос `messengers(size, ringOffset, grow, long)` — пара кнопок «Telegram» и «Макс» (разные сервисы, разные ссылки: `site.telegram` и `site.max`). Импортируется **с контекстом**. |
 | `logo.njk` | Макрос `logo(variant)` — текстовый логотип-плейсхолдер (badge «Б» + «ТЛК БАРС»), варианты `light`/`dark`. |
 | `schema-organization.njk` | JSON-LD `Organization` (на каждой странице через base). |
@@ -289,7 +290,7 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
   - `accent` — янтарь `#F5A623` (`hover/dark #D98E0B`): **только** главные CTA;
   - `cyan` — бирюза `#22B8CF`: мелкие акценты, активные состояния, перелинковка;
   - `telegram` — `#229ED9`: кнопки Telegram;
-  - `max` — `#6C33E8`: кнопки мессенджера Макс;
+  - `max` — `#5533EE`: кнопки мессенджера Макс (средний стоп его градиента);
   - `ink #0F172A` (текст), `muted #64748B` (вторичный), `surface #FFFFFF`, `surface-alt #F1F5F9`;
   - `success`/`danger` — служебные статусные цвета (только для ✓/✗ и таблиц, не часть бренд-палитры).
 - Шрифт: `sans` → `Onest, system-ui, …`.

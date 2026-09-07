@@ -7,6 +7,7 @@
 #}
 {% from "partials/icon.njk" import icon %}
 {% from "partials/logo.njk" import logo %}
+{% from "partials/brand-icon.njk" import brandIcon %}
 {% from "partials/messengers.njk" import messengers with context %}
 
 <header data-header class="sticky top-0 z-40">
@@ -39,10 +40,10 @@
         <span class="hidden text-white/30 md:inline" aria-hidden="true">·</span>
         <span class="hidden md:inline">{{ site.workingHoursShort }}</span>
         <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.telegram' | t(locale) }}">
-          {{ icon("send", "h-4 w-4") }}
+          {{ brandIcon("telegram", "h-4 w-4") }}
         </a>
         <a href="{{ site.max }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.max' | t(locale) }}">
-          {{ icon("max", "h-4 w-4") }}
+          {{ brandIcon("max", "h-4 w-4") }}
         </a>
       </div>
     </div>
