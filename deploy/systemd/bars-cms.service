@@ -1,0 +1,67 @@
+# Локальный decap-server для админки CMS.
+#
+# Пишет правки из админки прямо в файлы репозитория и делает локальный
+# git-коммит на каждое сохранение (история для отката). Наружу НЕ выставляется:
+# слушает localhost, ходит к нему только наш обработчик (bars-lead) после
+# проверки логина/пароля из .env. GitHub здесь не участвует.
+#
+# Установка:
+#   sudo cp deploy/systemd/bars-cms.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bars-cms
+#   systemctl status bars-cms
+#   journalctl -u bars-cms -f
+#
+# Требования на сервере (один раз):
+#   • npm ci             — decap-server ставится из devDependencies;
+#   • каталог репозитория принадлежит www-data (правки и коммиты идут от него);
+#   • задана git-личность для коммитов CMS, например:
+#       sudo -u www-data git -C /var/www/tlkbars/repo config user.name  "ТЛК БАРС CMS"
+#       sudo -u www-data git -C /var/www/tlkbars/repo config user.email "cms@tlkbars.ru"
+#   • порт 8081 закрыт фаерволом снаружи (наружу его публиковать не нужно).
+#
+# ⚠️ Пути — под раскладку «репозиторий в /var/www/tlkbars/repo». Свой путь —
+# правьте WorkingDirectory, GIT_REPO_DIRECTORY и ReadWritePaths.
+
+[Unit]
+Description=ТЛК БАРС — CMS backend (decap-server, git-режим)
+Documentation=https://github.com/dutegeorge-dev/dermo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/tlkbars/repo
+
+# decap-server из node_modules (.bin — симлинк на пакет). На Node 20 при
+# необходимости укажите полный путь до dist-файла пакета.
+ExecStart=/usr/bin/node node_modules/.bin/decap-server
+
+Environment=NODE_ENV=production
+# git-режим: писать файлы и коммитить локально (никуда не пушим).
+Environment=MODE=git
+Environment=GIT_REPO_DIRECTORY=/var/www/tlkbars/repo
+Environment=PORT=8081
+Environment=LOG_LEVEL=info
+
+Restart=always
+RestartSec=3s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bars-cms
+
+# Права: сервису нужно писать в файлы контента и в .git репозитория.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/www/tlkbars/repo
+
+[Install]
+WantedBy=multi-user.target

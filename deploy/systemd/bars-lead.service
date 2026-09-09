@@ -1,4 +1,9 @@
-# Обработчик заявок с форм сайта → Bitrix24 CRM + Telegram.
+# Обработчик заявок с форм сайта (→ Bitrix24 CRM + Telegram) и шлюз админки CMS.
+#
+# Кроме заявок этот сервис обслуживает вход в админку (логин/пароль из .env),
+# проксирует протокол Decap на локальный decap-server (служба bars-cms) и после
+# каждой правки пересобирает сайт (npm run build:11ty). Поэтому ему нужен доступ
+# на запись во весь каталог репозитория (сборка пишет в _site).
 #
 # Установка:
 #   sudo cp deploy/systemd/bars-lead.service /etc/systemd/system/
@@ -46,8 +51,9 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=bars-lead
 
-# Ограничения прав: обработчику нужен только каталог для резервного лога
-# незаписанных в CRM заявок.
+# Ограничения прав. Нужна запись во весь каталог репозитория: пересборка сайта
+# после правок в CMS пишет в _site (и кэш eleventy-img). Резервный лог заявок
+# лежит там же (logs/).
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
@@ -55,7 +61,7 @@ ProtectHome=true
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
-ReadWritePaths=/var/www/tlkbars/repo/logs
+ReadWritePaths=/var/www/tlkbars/repo
 
 [Install]
 WantedBy=multi-user.target

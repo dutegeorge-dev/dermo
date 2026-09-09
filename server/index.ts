@@ -14,6 +14,14 @@ import http from "node:http";
 import path from "node:path";
 
 import { config, maskSecrets } from "./config.ts";
+import {
+  clearCookieHeader,
+  issueSession,
+  sessionCookieHeader,
+  sessionUser,
+  verifyCredentials,
+} from "./auth.ts";
+import { proxyCms } from "./cms.ts";
 import { createLead } from "./bitrix.ts";
 import { computeCalculation, type CalcRates } from "./calc.ts";
 import { buildLeadFields, parseLead, type RawPayload } from "./lead.ts";
@@ -102,14 +110,17 @@ const cleanupTimer = setInterval(() => {
 cleanupTimer.unref();
 
 /** Читает тело запроса с ограничением по размеру. */
-function readBody(req: http.IncomingMessage): Promise<string> {
+function readBody(
+  req: http.IncomingMessage,
+  maxBytes: number = config.maxBodyBytes,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
 
     req.on("data", (chunk: Buffer) => {
       size += chunk.length;
-      if (size > config.maxBodyBytes) {
+      if (size > maxBytes) {
         reject(new Error("PAYLOAD_TOO_LARGE"));
         req.destroy();
         return;
@@ -281,6 +292,77 @@ async function handleRates(
   }
 }
 
+/** Редирект (для форм логина/логаута админки). */
+function redirect(res: http.ServerResponse, location: string, cookie?: string): void {
+  const headers: Record<string, string> = { location };
+  if (cookie) headers["set-cookie"] = cookie;
+  res.writeHead(302, headers);
+  res.end();
+}
+
+/** POST /api/cms/login — проверка логина/пароля из .env, выдача сессии. */
+async function handleCmsLogin(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<void> {
+  let payload: RawPayload;
+  try {
+    const body = await readBody(req, 8 * 1024);
+    payload = parseBody(body, String(req.headers["content-type"] ?? ""));
+  } catch {
+    redirect(res, "/admin/login.html?error=1");
+    return;
+  }
+
+  const login = typeof payload.login === "string" ? payload.login.trim() : "";
+  const password = typeof payload.password === "string" ? payload.password : "";
+
+  if (!login || !password || !verifyCredentials(login, password)) {
+    console.warn(`[cms] неудачный вход: «${login || "—"}»`);
+    redirect(res, "/admin/login.html?error=1");
+    return;
+  }
+
+  console.log(`[cms] вход: ${login}`);
+  redirect(res, "/admin/", sessionCookieHeader(issueSession(login)));
+}
+
+/** GET /api/cms/verify — 200 при валидной сессии, иначе 401 (для nginx auth_request). */
+function handleCmsVerify(req: http.IncomingMessage, res: http.ServerResponse): void {
+  if (sessionUser(req.headers.cookie)) {
+    res.writeHead(204, { "cache-control": "no-store" });
+  } else {
+    res.writeHead(401, { "cache-control": "no-store" });
+  }
+  res.end();
+}
+
+/** POST /api/cms/v1 — проброс протокола Decap на локальный decap-server. */
+async function handleCmsProxy(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<void> {
+  if (!sessionUser(req.headers.cookie)) {
+    sendJson(res, 401, { error: "Требуется вход в админку." });
+    return;
+  }
+
+  let body: string;
+  try {
+    body = await readBody(req, config.cms.maxBodyBytes);
+  } catch {
+    sendJson(res, 413, { error: "Слишком большой запрос." });
+    return;
+  }
+
+  const result = await proxyCms(body);
+  res.writeHead(result.status, {
+    "content-type": result.contentType,
+    "cache-control": "no-store",
+  });
+  res.end(result.body);
+}
+
 const server = http.createServer((req, res) => {
   const origin = req.headers.origin;
   const headers = corsHeaders(origin);
@@ -289,6 +371,32 @@ const server = http.createServer((req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204, headers);
     res.end();
+    return;
+  }
+
+  // ── Админка CMS (логин из .env + проброс протокола Decap) ────────────────
+  if (url.pathname.startsWith("/api/cms/")) {
+    if (!config.cms.enabled) {
+      sendJson(res, 503, { error: "Админка не настроена: задайте CMS_USERS и CMS_SESSION_SECRET." });
+      return;
+    }
+    if (url.pathname === "/api/cms/login" && req.method === "POST") {
+      void handleCmsLogin(req, res);
+      return;
+    }
+    if (url.pathname === "/api/cms/logout") {
+      redirect(res, "/admin/login.html", clearCookieHeader());
+      return;
+    }
+    if (url.pathname === "/api/cms/verify" && req.method === "GET") {
+      handleCmsVerify(req, res);
+      return;
+    }
+    if (url.pathname === "/api/cms/v1" && req.method === "POST") {
+      void handleCmsProxy(req, res);
+      return;
+    }
+    sendJson(res, 404, { error: "Не найдено." });
     return;
   }
 
@@ -341,6 +449,18 @@ server.listen(config.port, config.host, () => {
       : "[lead] Telegram-уведомления отключены (нет TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)",
   );
   console.log(`[lead] разрешённые Origin: ${config.cors.allowedOrigins.join(", ") || "—"}`);
+
+  if (config.cms.enabled) {
+    console.log(
+      `[cms] админка включена: ${config.cms.users.size} польз., проксируем на ${config.cms.proxyTarget}`,
+    );
+  } else if (config.cms.hasUsers || config.cms.hasSecret) {
+    console.warn(
+      "[cms] админка ВЫКЛЮЧЕНА: нужны обе переменные — CMS_USERS и CMS_SESSION_SECRET.",
+    );
+  } else {
+    console.log("[cms] админка отключена (CMS_USERS / CMS_SESSION_SECRET не заданы)");
+  }
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

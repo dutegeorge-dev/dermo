@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { loadDotEnv } from "./dotenv.ts";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 loadDotEnv();
 
@@ -66,6 +66,30 @@ const telegramChatIds = (process.env.TELEGRAM_CHAT_ID ?? "")
   .split(",")
   .map((id) => id.trim())
   .filter(Boolean);
+
+/**
+ * Учётки CMS из CMS_USERS — «логин:пароль», пары через запятую или перевод
+ * строки. Пароль хранится открытым текстом (осознанный выбор ради простоты):
+ * защищайте .env правами доступа на сервере. Логин обычно e-mail и «:» не
+ * содержит, поэтому разбиваем по первому двоеточию — пароль может быть любым.
+ */
+function parseCmsUsers(): Map<string, string> {
+  const raw = process.env.CMS_USERS ?? "";
+  const users = new Map<string, string>();
+  for (const pair of raw.split(/[,\n]/)) {
+    const entry = pair.trim();
+    if (!entry) continue;
+    const sep = entry.indexOf(":");
+    if (sep <= 0) continue;
+    const login = entry.slice(0, sep).trim();
+    const password = entry.slice(sep + 1);
+    if (login && password) users.set(login, password);
+  }
+  return users;
+}
+
+const cmsUsers = parseCmsUsers();
+const cmsSessionSecret = process.env.CMS_SESSION_SECRET?.trim() ?? "";
 
 /** Источники, которым разрешён CORS-доступ к обработчику. */
 function parseOrigins(): string[] {
@@ -163,4 +187,34 @@ export const config = {
 
   /** Максимальный размер тела запроса, байт. */
   maxBodyBytes: envNumber("LEAD_MAX_BODY_BYTES", 16 * 1024),
+
+  cms: {
+    /** Включена ли админка: нужны и учётки, и секрет для подписи сессий. */
+    enabled: cmsUsers.size > 0 && Boolean(cmsSessionSecret),
+    /** Заданы ли учётки (для внятного предупреждения на старте). */
+    hasUsers: cmsUsers.size > 0,
+    /** Задан ли секрет сессий. */
+    hasSecret: Boolean(cmsSessionSecret),
+    /** Логин → пароль (открытым текстом, из CMS_USERS). */
+    users: cmsUsers,
+    /** Секрет для HMAC-подписи cookie-сессии (CMS_SESSION_SECRET). */
+    sessionSecret: cmsSessionSecret,
+    /** Имя cookie сессии. */
+    cookieName: process.env.CMS_COOKIE_NAME?.trim() || "bars_cms",
+    /** Время жизни сессии, мс (по умолчанию 12 часов). */
+    sessionTtlMs: envNumber("CMS_SESSION_TTL_MS", 12 * 60 * 60 * 1000),
+    /**
+     * Ставить ли на cookie флаг Secure. По умолчанию да (прод за HTTPS).
+     * Для локального теста по http выставьте CMS_COOKIE_INSECURE=true.
+     */
+    cookieSecure: process.env.CMS_COOKIE_INSECURE !== "true",
+    /** Куда проксируем протокол Decap — локальный decap-server (git-режим). */
+    proxyTarget: process.env.CMS_PROXY_TARGET?.trim() || "http://127.0.0.1:8081/api/v1",
+    /** Команда пересборки сайта после правок в CMS. */
+    rebuildCmd: process.env.CMS_REBUILD_CMD?.trim() || "npm run build:11ty",
+    /** Задержка перед пересборкой (склеивает серию сохранений), мс. */
+    rebuildDebounceMs: envNumber("CMS_REBUILD_DEBOUNCE_MS", 3000),
+    /** Предел тела запроса к CMS: включает base64 картинок, поэтому щедрый. */
+    maxBodyBytes: envNumber("CMS_MAX_BODY_BYTES", 25 * 1024 * 1024),
+  },
 } as const;
