@@ -31,12 +31,11 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/tlkbars/repo
 
-# Node ≥ 22.18 исполняет TypeScript напрямую — сборка и node_modules
-# обработчику не нужны вообще.
-ExecStart=/usr/bin/node server/index.ts
-# На Node 20 (см. .nvmrc) нужен tsx из devDependencies — тогда вместо строки
-# выше используйте:
-# ExecStart=/usr/bin/node --import tsx server/index.ts
+# По умолчанию — через tsx (работает на Node 20, см. .nvmrc). tsx ставится
+# из devDependencies (npm ci --include=dev).
+ExecStart=/usr/bin/node --import tsx server/index.ts
+# На Node ≥ 22.18 TypeScript исполняется нативно — можно без tsx:
+# ExecStart=/usr/bin/node server/index.ts
 
 Environment=NODE_ENV=production
 # Слушаем только localhost: наружу порт публикует nginx, а не сам обработчик.
