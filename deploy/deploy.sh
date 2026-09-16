@@ -28,7 +28,10 @@ git add -A
 git commit -m "cms: авто-фиксация перед деплоем" || true
 
 echo "→ 2/5 тянем код с GitHub (контент CMS при конфликте — серверный)"
-git pull --rebase -X theirs origin main
+# --empty=drop: коммиты CMS, которые после наложения стали пустыми, отбрасываем
+# без паузы. -X theirs: любые пересечения по контенту решаем в пользу сервера.
+git fetch origin main
+git rebase --empty=drop -X theirs origin/main
 
 echo "→ 3/5 пересборка сайта"
 npm run build
