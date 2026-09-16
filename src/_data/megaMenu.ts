@@ -3,19 +3,20 @@ import uslugi from "./uslugi.js";
 
 /**
  * Названия/иконки/URL торговых услуг — единый источник в _data/uslugi.ts
- * (torgovlyaServices, те же 10, что на витрине /uslugi/torgovlya/). В меню
- * показываем 7 ключевых услуг в порядке логики процесса; остальные доступны
- * по кнопке «Посмотреть все услуги». Так названия в меню, на витрине, в
- * хлебных крошках и перелинковке не расходятся.
+ * (torgovlyaServices, те же 8, что на витрине /uslugi/torgovlya/). В меню
+ * показываем их в порядке логики процесса; кнопка «Посмотреть все услуги»
+ * ведёт на витрину. Так названия в меню, на витрине, в хлебных крошках и
+ * перелинковке не расходятся.
  */
 const TRADE_MENU_SLUGS = [
   "poisk-postavshchika",
   "vykup-tovara",
-  "proverka-zavoda",
+  "sertifikaciya",
   "vozvrat-nds",
   "kontrol-proizvodstva",
   "inspekciya",
   "peregovory",
+  "upakovka-markirovka",
 ];
 
 const bySlug = new Map(uslugi.torgovlyaServices.map((s) => [s.slug, s]));

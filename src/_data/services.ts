@@ -5,8 +5,8 @@ import type { ServicesData } from "./types.js";
  * шаблоне: иконки, URL, перелинковка. Тексты не хардкодятся — здесь только
  * ссылки на i18n-словарь (i18nBase → ветка uslugi.torgovlya.<slug>).
  *
- * «Поиск поставщика» — эталонная страница; по её образцу добавляются остальные
- * 9 торговых услуг (тем же конфигом + ветка текстов в i18n).
+ * «Поиск поставщика» — эталонная страница; по её образцу сделаны остальные
+ * 7 торговых услуг (тем же конфигом + ветка текстов в i18n).
  *
  * Опциональные ссылки (articleUrl/caseUrl) намеренно НЕ заданы, пока статья/кейс
  * не написаны — соответствующие блоки перелинковки не выводятся (без ссылок на
@@ -113,7 +113,7 @@ const services: ServicesData = {
     heroIcon: "factory",
     requestUrl: "/kontakty/",
     related: [
-      { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
+      { icon: "scan-search", labelKey: "uslugi.torgovlya.services.inspection", url: `${BASE}/inspekciya/` },
       { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
     ],
     fullCycleUrl: "/torgovlya/",
@@ -147,7 +147,7 @@ const services: ServicesData = {
     requestUrl: "/kontakty/",
     related: [
       { icon: "landmark", labelKey: "uslugi.torgovlya.services.buyout", url: `${BASE}/vykup-tovara/` },
-      { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
+      { icon: "messages-square", labelKey: "uslugi.torgovlya.services.negotiations", url: `${BASE}/peregovory/` },
     ],
     fullCycleUrl: "/torgovlya/",
     // Перелинковка на кейс поиска производителя мониторов (в тексте и в блоке
@@ -185,8 +185,8 @@ const services: ServicesData = {
     heroIcon: "camera",
     requestUrl: "/kontakty/",
     related: [
-      { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
       { icon: "scan-search", labelKey: "uslugi.torgovlya.services.inspection", url: `${BASE}/inspekciya/` },
+      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
     ],
     fullCycleUrl: "/torgovlya/",
     // Перелинковка на кейс LVT (контроль перед отгрузкой поймал 20% брака) —
@@ -201,18 +201,7 @@ const services: ServicesData = {
     requestUrl: "/kontakty/",
     related: [
       { icon: "camera", labelKey: "uslugi.torgovlya.services.control", url: `${BASE}/kontrol-proizvodstva/` },
-      { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
-    ],
-    fullCycleUrl: "/torgovlya/",
-  },
-  "audit-proizvodstva": {
-    slug: "audit-proizvodstva",
-    i18nBase: "uslugi.torgovlya.audit",
-    heroIcon: "factory",
-    requestUrl: "/kontakty/",
-    related: [
-      { icon: "shield-check", labelKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/proverka-zavoda/` },
-      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
+      { icon: "package", labelKey: "uslugi.torgovlya.services.packaging", url: `${BASE}/upakovka-markirovka/` },
     ],
     fullCycleUrl: "/torgovlya/",
   },
@@ -248,18 +237,6 @@ const services: ServicesData = {
       { icon: "package", labelKey: "uslugi.torgovlya.services.packaging", url: `${BASE}/upakovka-markirovka/` },
     ],
     fullCycleUrl: "/torgovlya/",
-  },
-  "proverka-zavoda": {
-    slug: "proverka-zavoda",
-    i18nBase: "uslugi.torgovlya.proverka",
-    heroIcon: "shield-check",
-    requestUrl: "/kontakty/",
-    related: [
-      { icon: "search", labelKey: "uslugi.torgovlya.services.search", url: `${BASE}/poisk-postavshchika/` },
-      { icon: "camera", labelKey: "uslugi.torgovlya.services.control", url: `${BASE}/kontrol-proizvodstva/` },
-    ],
-    fullCycleUrl: "/torgovlya/",
-    // Кейса/статьи пока нет → соответствующие блоки скрыты.
   },
 };
 

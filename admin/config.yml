@@ -52,7 +52,6 @@ collections:
         options: &service_options
           - { label: "— нет —", value: "" }
           - { label: "Поиск поставщика", value: "poisk-postavshchika" }
-          - { label: "Аудит производства", value: "audit-proizvodstva" }
           - { label: "Переговоры", value: "peregovory" }
           - { label: "Контроль производства", value: "kontrol-proizvodstva" }
           - { label: "Инспекция", value: "inspekciya" }
@@ -60,7 +59,6 @@ collections:
           - { label: "Сертификация", value: "sertifikaciya" }
           - { label: "Выкуп товара", value: "vykup-tovara" }
           - { label: "Возврат НДС", value: "vozvrat-nds" }
-          - { label: "Проверка завода", value: "proverka-zavoda" }
           - { label: "Напольные покрытия", value: "napolnye-pokrytiya" }
           - { label: "Запчасти", value: "zapchasti" }
           - { label: "Электроника", value: "elektronika" }
@@ -122,7 +120,6 @@ collections:
         file: "photos/uslugi.json"
         fields:
           - { label: "Поиск поставщика — hero (4:3)", name: "usluga-poisk-postavshchika-hero-4x3", widget: "image", required: false }
-          - { label: "Аудит производства — hero (4:3)", name: "usluga-audit-proizvodstva-hero-4x3", widget: "image", required: false }
           - { label: "Переговоры — hero (4:3)", name: "usluga-peregovory-hero-4x3", widget: "image", required: false }
           - { label: "Контроль производства — hero (4:3)", name: "usluga-kontrol-proizvodstva-hero-4x3", widget: "image", required: false }
           - { label: "Инспекция — hero (4:3)", name: "usluga-inspekciya-hero-4x3", widget: "image", required: false }
@@ -130,14 +127,12 @@ collections:
           - { label: "Сертификация — hero (4:3)", name: "usluga-sertifikaciya-hero-4x3", widget: "image", required: false }
           - { label: "Выкуп товара — hero (4:3)", name: "usluga-vykup-tovara-hero-4x3", widget: "image", required: false }
           - { label: "Возврат НДС — hero (4:3)", name: "usluga-vozvrat-nds-hero-4x3", widget: "image", required: false }
-          - { label: "Проверка завода — hero (4:3)", name: "usluga-proverka-zavoda-hero-4x3", widget: "image", required: false }
           - { label: "Автодоставка — hero (4:3)", name: "usluga-avto-hero-4x3", widget: "image", required: false }
           - { label: "ЖД-доставка — hero (4:3)", name: "usluga-zhd-hero-4x3", widget: "image", required: false }
           - { label: "Морская доставка — hero (4:3)", name: "usluga-more-hero-4x3", widget: "image", required: false }
           - { label: "Авиадоставка — hero (4:3)", name: "usluga-avia-hero-4x3", widget: "image", required: false }
           - { label: "Таможенное оформление — hero (4:3)", name: "usluga-tamozhennoe-oformlenie-hero-4x3", widget: "image", required: false }
           - { label: "Сборные грузы — hero (4:3)", name: "usluga-sbornye-gruzy-hero-4x3", widget: "image", required: false }
-          - { label: "Проверка завода — фото процесса (16:9)", name: "usluga-proverka-zavoda-process-16x9", widget: "image", required: false }
           - { label: "Поиск поставщика — фото процесса (16:9)", name: "usluga-poisk-postavshchika-process-16x9", widget: "image", required: false }
           - { label: "Переговоры — фото процесса (16:9)", name: "usluga-peregovory-process-16x9", widget: "image", required: false }
           - { label: "Возврат НДС — фото процесса (16:9)", name: "usluga-vozvrat-nds-process-16x9", widget: "image", required: false }

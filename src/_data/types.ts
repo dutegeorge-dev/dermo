@@ -348,7 +348,7 @@ export interface UslugiData {
   goroda: UslugiEntry[];
   /** Дополнительные услуги логистики (хаб dop-uslugi). */
   dopUslugi: UslugiEntry[];
-  /** Торговые услуги (10). */
+  /** Торговые услуги (8). */
   torgovlyaServices: UslugiEntry[];
 }
 
@@ -865,7 +865,6 @@ export interface UslugiDict {
   torgovlya: UslugiPageText & {
     services: {
       search: string;
-      audit: string;
       negotiations: string;
       control: string;
       inspection: string;
@@ -873,22 +872,17 @@ export interface UslugiDict {
       certification: string;
       buyout: string;
       vat: string;
-      factoryCheck: string;
     };
     /** Эталонная страница торговой услуги «Поиск поставщика». */
     poisk: ServicePageText;
     /** Страница торговой услуги «Выкуп товара». */
     vykup: ServicePageText;
-    /** Страница торговой услуги «Проверка завода». */
-    proverka: ServicePageText;
     /** Страница торговой услуги «Возврат экспортного НДС». */
     vozvrat: ServicePageText;
     /** Страница торговой услуги «Контроль производства». */
     kontrol: ServicePageText;
     /** Страница торговой услуги «Инспекция товара». */
     inspekciya: ServicePageText;
-    /** Страница торговой услуги «Аудит поставщика». */
-    audit: ServicePageText;
     /** Страница торговой услуги «Переговоры». */
     peregovory: ServicePageText;
     /** Страница торговой услуги «Упаковка и маркировка». */
@@ -1211,7 +1205,6 @@ export interface Dictionary {
     fullCycle: {
       title: string;
       s1: { title: string; text: string };
-      s2: { title: string; text: string };
       s3: { title: string; text: string };
       s4: { title: string; text: string };
       s5: { title: string; text: string };
@@ -1248,7 +1241,6 @@ export interface Dictionary {
       s2: { title: string; text: string };
       s3: { title: string; text: string };
       s4: { title: string; text: string };
-      s5: { title: string; text: string };
       s6: { title: string; text: string };
     };
     cta3: string;

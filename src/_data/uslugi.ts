@@ -58,10 +58,9 @@ const uslugi: UslugiData = {
     { slug: "sbornye-gruzy", icon: "package", nameKey: "logiExtra.consolidation", url: `${DELIVERY}/sbornye-gruzy/` },
   ],
 
-  // Торговые услуги (10) — простые карточки витрины /uslugi/torgovlya/.
+  // Торговые услуги (8) — простые карточки витрины /uslugi/torgovlya/.
   torgovlyaServices: [
     { slug: "poisk-postavshchika", icon: "search", nameKey: "uslugi.torgovlya.services.search", url: `${BASE}/torgovlya/poisk-postavshchika/` },
-    { slug: "audit-proizvodstva", icon: "factory", nameKey: "uslugi.torgovlya.services.audit", url: `${BASE}/torgovlya/audit-proizvodstva/` },
     { slug: "peregovory", icon: "messages-square", nameKey: "uslugi.torgovlya.services.negotiations", url: `${BASE}/torgovlya/peregovory/` },
     { slug: "kontrol-proizvodstva", icon: "camera", nameKey: "uslugi.torgovlya.services.control", url: `${BASE}/torgovlya/kontrol-proizvodstva/` },
     { slug: "inspekciya", icon: "scan-search", nameKey: "uslugi.torgovlya.services.inspection", url: `${BASE}/torgovlya/inspekciya/` },
@@ -69,7 +68,6 @@ const uslugi: UslugiData = {
     { slug: "sertifikaciya", icon: "badge-check", nameKey: "uslugi.torgovlya.services.certification", url: `${BASE}/torgovlya/sertifikaciya/` },
     { slug: "vykup-tovara", icon: "landmark", nameKey: "uslugi.torgovlya.services.buyout", url: `${BASE}/torgovlya/vykup-tovara/` },
     { slug: "vozvrat-nds", icon: "receipt", nameKey: "uslugi.torgovlya.services.vat", url: `${BASE}/torgovlya/vozvrat-nds/` },
-    { slug: "proverka-zavoda", icon: "shield-check", nameKey: "uslugi.torgovlya.services.factoryCheck", url: `${BASE}/torgovlya/proverka-zavoda/` },
   ],
 };
 

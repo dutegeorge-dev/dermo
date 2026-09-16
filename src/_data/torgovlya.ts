@@ -34,14 +34,12 @@ const torgovlya: TorgovlyaData = {
   // как самостоятельная услуга. Тексты переиспользуются из веток fullCycle/separate.
   services: [
     { icon: "search", titleKey: "torgovlya.fullCycle.s1.title", textKey: "torgovlya.fullCycle.s1.text", url: "/uslugi/torgovlya/poisk-postavshchika/" },
-    { icon: "factory", titleKey: "torgovlya.fullCycle.s2.title", textKey: "torgovlya.fullCycle.s2.text", url: "/uslugi/torgovlya/audit-proizvodstva/" },
     { icon: "globe", titleKey: "torgovlya.fullCycle.s3.title", textKey: "torgovlya.fullCycle.s3.text", url: "/uslugi/torgovlya/peregovory/" },
     { icon: "shield-check", titleKey: "torgovlya.fullCycle.s4.title", textKey: "torgovlya.fullCycle.s4.text", url: "/uslugi/torgovlya/kontrol-proizvodstva/" },
     { icon: "package-check", titleKey: "torgovlya.separate.s2.title", textKey: "torgovlya.separate.s2.text", url: "/uslugi/torgovlya/inspekciya/" },
     { icon: "package", titleKey: "torgovlya.fullCycle.s5.title", textKey: "torgovlya.fullCycle.s5.text", url: "/uslugi/torgovlya/upakovka-markirovka/" },
     { icon: "landmark", titleKey: "torgovlya.separate.s1.title", textKey: "torgovlya.separate.s1.text", url: "/uslugi/torgovlya/vykup-tovara/" },
     { icon: "calculator", titleKey: "torgovlya.separate.s3.title", textKey: "torgovlya.separate.s3.text", url: "/uslugi/torgovlya/vozvrat-nds/" },
-    { icon: "badge-check", titleKey: "torgovlya.separate.s5.title", textKey: "torgovlya.separate.s5.text", url: "/uslugi/torgovlya/proverka-zavoda/" },
   ],
 
   // Раздел 7 ТЗ: этапы работы (процесс закупки, 7 шагов 01–07).

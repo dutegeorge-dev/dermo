@@ -281,10 +281,6 @@ const en: Dictionary = {
         title: "Finding the manufacturer",
         text: "We look for the factory itself, not a middleman. We check licenses, capacity, export history.",
       },
-      s2: {
-        title: "Production audit",
-        text: "We visit the factory before placing the order: equipment, samples, real capacity.",
-      },
       s3: {
         title: "Negotiations in Chinese",
         text: "Price, payment terms, timelines, packaging, labeling — in person, with nothing lost in translation.",
@@ -371,10 +367,6 @@ const en: Dictionary = {
         title: "Supplier search",
         text: "We'll find the factory and give you a price — without the full purchasing cycle.",
       },
-      s5: {
-        title: "Factory check",
-        text: "A legal check of the Chinese counterparty (licenses, whether it's real, history) before you've paid.",
-      },
       s6: {
         title: "Certification",
         text: "We'll obtain EAEU technical-regulation certificates and permits as a standalone service.",
@@ -408,7 +400,7 @@ const en: Dictionary = {
         badge: "On request",
         lead: "CNC lathes and milling machines, press brakes, laser cutting.",
         b1: "Equipment selection to fit your task and budget",
-        b2: "Factory and equipment check before the order",
+        b2: "Production control and inspection before shipment",
         b3: "Support with delivery, documents, certification",
         link: "More about equipment",
       },
@@ -1758,7 +1750,7 @@ const en: Dictionary = {
           {
             id: "postavka",
             title: "Turnkey supply — what's included",
-            intro: "We handle exactly the supply of equipment: selection for the task, supplier and production verification, buyout, official import with documents and delivery to your warehouse. Since equipment is an expensive and complex purchase, it's especially important to check it before shipment: for that we have factory checks, inspection and production control (separate services, dovetailed with the supply).",
+            intro: "We handle exactly the supply of equipment: selection for the task, supplier and production verification, buyout, official import with documents and delivery to your warehouse. Since equipment is an expensive and complex purchase, it's especially important to check it before shipment: for that we have inspection and production control (separate services, dovetailed with the supply).",
             closing: "A machine is an expensive purchase, and here a check before payment and before shipment especially pays off: better to be sure of the equipment on-site than to sort it out once it's in Russia.",
           },
         ],
@@ -1781,7 +1773,7 @@ const en: Dictionary = {
           { q: "What equipment do you ship?", a: "Metalworking machines, packaging and food equipment, other production lines — we select to your request, including non-standard." },
           { q: "Can you find an analog of a European machine?", a: "Yes, it's a separate area. When European equipment is unavailable or expensive, we pick a Chinese analog for your task and specs and bring it in legally." },
           { q: "Do you do commissioning and servicing?", a: "We handle equipment supply: selection, verification, official import and delivery. We don't do commissioning or servicing." },
-          { q: "How can I be sure the equipment is of good quality?", a: "Equipment is an expensive purchase, so we recommend a factory check and inspection before shipment — these are separate services we dovetail with the supply." },
+          { q: "How can I be sure the equipment is of good quality?", a: "Equipment is an expensive purchase, so we recommend production control and inspection before shipment — these are separate services we dovetail with the supply." },
           { q: "By which method do you deliver equipment?", a: "By rail or sea in a container — this is optimal for heavy, oversized cargo. We dovetail it with customs clearance." },
         ],
         relatedTitle: "Often ordered together",
@@ -1796,12 +1788,11 @@ const en: Dictionary = {
     torgovlya: {
       title: "Trade services",
       description:
-        "Sourcing services in China: supplier search, production audit and control, negotiations, inspection, packaging and labeling, certification, product buyout, VAT refund, factory check.",
+        "Sourcing services in China: supplier search, negotiations, production control, inspection, packaging and labeling, certification, product buyout, VAT refund.",
       subtitle:
         "From factory search to shipment — each service can be ordered separately.",
       services: {
         search: "Supplier search",
-        audit: "Production audit",
         negotiations: "Negotiations",
         control: "Production control",
         inspection: "Inspection",
@@ -1809,7 +1800,6 @@ const en: Dictionary = {
         certification: "Certification",
         buyout: "Product buyout",
         vat: "Export VAT refund",
-        factoryCheck: "Factory check",
       },
       poisk: {
         metaTitle: "Turnkey supplier search in China — vetting and comparison | BARS TLC",
@@ -2101,124 +2091,6 @@ const en: Dictionary = {
           button: "Submit a request",
         },
       },
-      proverka: {
-        metaTitle: "Factory check in China with a site visit — supplier audit | BARS TLC",
-        metaDescription:
-          "We personally visit the factory in China before the order: we verify real production, a photo report from the line, the export license and accounts for official import. Team in Guangzhou.",
-        hero: {
-          title: "Factory check in China",
-          subtitle:
-            "We visit the production site in person before you place the order — we verify whether it's a real factory and whether it's suitable for official import into Russia.",
-          photoCaption: "Photo: production line / our employee at the factory",
-        },
-        chtoEto: {
-          title: "What this service is",
-          paragraphs: [
-            "A factory check is a visit by our employee to the supplier before the order is placed, to make sure that behind the nice website and catalog stands a real production, not an office with a couple of managers. We come to the address, look at the line with our own eyes, take a photo report and deliver a verdict on the supplier's reliability.",
-            "Most competitors offer a remote check — by documents and photo requests 'without leaving Moscow.' We work differently: we have a team in Guangzhou, and we physically go to the factory. Often it's exactly on-site that a 'factory' turns out to be a reseller trading company with no production of its own. From photos and chat, you can't see this.",
-          ],
-        },
-        zachem: {
-          title: "Why check the factory before the order",
-          intro: "Checking the goods after manufacturing is fine, but late: the money is already with the supplier. A check before the order removes risks that would otherwise surface when changing anything is already expensive:",
-          pains: [
-            {
-              lead: "The 'factory' turns out to be a reseller.",
-              text: "At the address — an office with a few staff, while the production is someone else's or doesn't exist at all. Higher price, lower accountability, quality control impossible.",
-            },
-            {
-              lead: "Production can't handle your volume or quality.",
-              text: "There's a line, but the capacity and equipment don't match what was promised verbally.",
-            },
-            {
-              lead: "The factory isn't suitable for official import.",
-              text: "No export license, can't accept payment from Russia, document problems — and the legal shipment falls through after the prepayment.",
-            },
-            {
-              lead: "The supplier is unreliable as a company.",
-              text: "Problems with the business license, registration, bank accounts — things visible only on a check, not from a catalog.",
-            },
-          ],
-          closing: "It's cheaper to find out the factory isn't who it claims to be before the money transfer — not after, when the goods are already paid for.",
-        },
-        kakDelaem: {
-          title: "How we check the factory",
-          photoCaption: "Photo: shop-floor inspection / negotiations with the supplier at the factory",
-          steps: [
-            {
-              title: "Preliminary document check",
-              text: "Before the visit we check the company through open sources and China's state registers: business license, registration, charter capital, legal representative, real line of business.",
-            },
-            {
-              title: "In-person visit to production",
-              text: "Our employee goes to the factory and looks at the line live — whether it's real production or a showcase office.",
-            },
-            {
-              title: "Photo report from the production line",
-              text: "We photograph the shop floor, equipment, products, warehouse — you get visual confirmation, not words.",
-            },
-            {
-              title: "Tough questions — face to face",
-              text: "On-site we ask the supplier direct questions they usually dodge in chat: real capacity, timelines, who owns the production, how they handle export.",
-            },
-            {
-              title: "Suitability check for official import",
-              text: "Separately we check what's critical for a legal shipment to Russia: whether there's an export license, which banks payment from Russia goes through, whether the documents and accounts are in order.",
-            },
-            {
-              title: "Reliability verdict",
-              text: "We bring it all into a conclusion: whether it's a real factory, whether you can work with it, whether it's suitable for official import — and help place and agree the order while personally on-site.",
-            },
-          ],
-        },
-        chtoPoluchaete: {
-          title: "What you get",
-          items: [
-            "A clear answer: real production or a reseller.",
-            "A photo report from the production line — visual confirmation of capacity.",
-            "A verdict on the supplier's reliability as a company (license, registration, accounts).",
-            "Confirmation that the factory is suitable for official import (export license, payment from Russia).",
-            "An order placed and agreed with our employee personally present on-site.",
-          ],
-        },
-        faqTitle: "Frequently asked questions",
-        faq: [
-          {
-            q: "Why is a factory visit better than a remote check?",
-            a: "Remotely you see only what the supplier is willing to show. On-site it's immediately clear whether it's real production or a showcase office with no line of its own — from photos and chat you often can't tell.",
-          },
-          {
-            q: "Why check the factory before the order rather than the goods after?",
-            a: "Checking the goods after manufacturing is also needed, but by then the money is already with the supplier. A visit before the order removes the risk of running into a reseller or a factory unsuitable for official import while you haven't paid anything yet.",
-          },
-          {
-            q: "What's included in the photo report?",
-            a: "Footage of the shop floor, equipment, products and warehouse — what confirms the factory's real capacity and goes into the reliability conclusion.",
-          },
-          {
-            q: "Do you check whether the factory is suitable for official import?",
-            a: "Yes. Separately we look at the export license, which banks payment from Russia goes through and the state of the documents — without this, a legal shipment can fall through after the prepayment.",
-          },
-          {
-            q: "Can you help place the order right away?",
-            a: "Yes. While at the factory, we help agree and formalize the order — specs, terms and arrangements are fixed on-site.",
-          },
-          {
-            q: "How much does the check cost and how long does it take?",
-            a: "The cost depends on the factory's distance from Guangzhou — the farther the visit, the higher the price; we calculate individually for the specific address. Timelines — from 1 day after agreement. Submit a request with the supplier's address for a precise estimate.",
-          },
-        ],
-        relatedTitle: "Often ordered together",
-        fullCycle: {
-          label: "Need the full cycle?",
-          text: "Turnkey purchasing: from factory search to shipment and delivery to Russia.",
-        },
-        cta: {
-          title: "Find out whether it's a real factory before you transfer any money",
-          subtitle: "Give us the supplier's contacts — we'll visit the production, check it live and send a photo report with a verdict.",
-          button: "Submit a request",
-        },
-      },
       vozvrat: {
         metaTitle: "Export VAT refund in China on product buyout | BARS TLC",
         metaDescription:
@@ -2434,10 +2306,6 @@ const en: Dictionary = {
             a: "In light cases we keep it on schedule and push remotely. In hard ones — we go to the factory in person and have the uncomfortable conversation with the supplier on-site: it works where chat no longer helps.",
           },
           {
-            q: "Is this the same service as a factory check?",
-            a: "No. A factory check is before the order (whether it's a real manufacturer). Production control is during the manufacturing of an already-placed order.",
-          },
-          {
             q: "Is production control a one-off check or ongoing supervision?",
             a: "It's supervision of the whole order from launch to completion. If you need a one-off check of a batch before shipment — that's a separate service, inspection.",
           },
@@ -2519,66 +2387,6 @@ const en: Dictionary = {
         cta: {
           title: "Check the batch while it's still at the factory",
           subtitle: "Send the specs and the supplier's contacts — we'll visit the factory, check the batch by sampling and give a report with a conclusion.",
-          button: "Submit a request",
-        },
-      },
-      audit: {
-        metaTitle: "Supplier audit in China — remote online check | BARS TLC",
-        metaDescription:
-          "We remotely check a Chinese supplier: documents, registers, financial reliability, video call with production, a report. Team in Guangzhou.",
-        hero: {
-          title: "Supplier audit in China",
-          subtitle:
-            "We check the reliability of a Chinese supplier remotely — by documents, registers and video call — without a visit and faster than an on-site inspection.",
-          photoCaption: "Photo: working with registers and documents, a video call with the factory",
-        },
-        chtoEto: {
-          title: "What this service is",
-          paragraphs: [
-            "A supplier audit is a check of the counterparty without visiting the factory: through open sources, China's state registers, company documents and a video call with production. It suits situations where you need to quickly assess a counterparty's reliability before starting work, while a factory visit is still excessive.",
-            "The check is run by our team in China: access to Chinese registers and the language let us see what an outsider foreigner can't — the real registration, licenses and litigation history of the company.",
-          ],
-        },
-        chtoProveryaem: {
-          title: "What we check",
-          items: [
-            { lead: "Registration and legality.", text: "Date and number of registration, legal representative, charter capital, active licenses — whether the company exists and does what it claims." },
-            { lead: "Financial reliability.", text: "Signs of stability, how well the company matches its declared scale." },
-            { lead: "Litigation history.", text: "The presence of ongoing lawsuits and disputes in China." },
-            { lead: "Foreign-trade activity.", text: "Data on export volumes and sales markets — whether the supplier really works for export." },
-            { lead: "Video call with production.", text: "By arrangement — a video stream or video call with the line, warehouse and premises." },
-          ],
-          closing: "The audit closes documentary and financial risks — what's visible from papers and registers.",
-        },
-        kakDelaem: {
-          title: "How the audit works",
-          steps: [
-            { title: "We clarify the supplier and your questions", text: "We take the company data and a list of what matters to find out specifically for you." },
-            { title: "We check registers and open sources", text: "We verify registration, licenses, litigation history, export activity." },
-            { title: "We contact the supplier and, with consent, go to video", text: "We ask the supplier your questions and, by arrangement, hold a video call with production." },
-            { title: "We prepare a report", text: "We bring the results into a report with a risk assessment and a conclusion on the advisability of cooperation." },
-          ],
-        },
-        kogda: {
-          title: "When an audit is enough, and when a visit is needed",
-          intro: "Honestly about the method's scope: a remote audit reliably reveals documentary and financial risks and is often enough for trading companies. But remotely you can't fully assess real production capacity and operational processes — a video call shows only what the supplier is willing to show.",
-          closing: `If you work with a manufacturer and a large order is at stake, an audit is the first filter, not a substitute for a visit. When the documents are in order and it makes sense to go further, it's safer to add an <a href="/uslugi/torgovlya/proverka-zavoda/" class="font-medium text-cyan-dark">on-site factory check →</a>`,
-        },
-        faqTitle: "Frequently asked questions",
-        faq: [
-          { q: "How is an audit different from a factory visit?", a: "Remotely we check documents, registers, finances and litigation history, but we see production only by video call. A visit lets us assess real capacity live. An audit is a fast first filter; a visit — for manufacturers and large orders." },
-          { q: "When is an audit enough?", a: "Often — when working with a trading company or for an initial screening of unreliable counterparties by documents and finances. To assess real production, a visit is recommended." },
-          { q: "Can production be seen online?", a: "Yes, by arrangement with the supplier a video stream or video call with the line and warehouses is possible. But this shows only what the supplier is willing to show." },
-          { q: "What will I get as a result?", a: "A report with a check of registration, licenses, litigation history and export activity and a conclusion on the supplier's reliability." },
-        ],
-        relatedTitle: "Often ordered together",
-        fullCycle: {
-          label: "Need the full cycle?",
-          text: "Turnkey purchasing: from factory search to shipment and delivery to Russia.",
-        },
-        cta: {
-          title: "Check the supplier without visiting the factory",
-          subtitle: "Give us the company data — we'll check the registers and documents, go to a video call and give a reliability report.",
           button: "Submit a request",
         },
       },
