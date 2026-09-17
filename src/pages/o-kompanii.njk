@@ -7,10 +7,12 @@ pagination:
 permalink: "{{ '/o-kompanii/' | localizedUrl(listLang) }}"
 titleKey: oKompanii.meta.title
 descriptionKey: oKompanii.meta.description
-sitemap: true
+sitemap: false
 ---
 {#
   Уникальная статичная страница «О компании» (/o-kompanii/).
+  Скрыта: нет в навигации и в sitemap.xml, ссылок на неё по сайту нет —
+  открывается только по прямому адресу.
   Тексты — из i18n-словаря: dict.oKompanii (см. _data/i18n/ru.ts).
   Принцип честности: НЕТ цифр «N лет / N клиентов / N поставок» — опора на
   личный опыт руководителя (с 2008) и прозрачность.

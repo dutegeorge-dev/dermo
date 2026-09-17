@@ -972,7 +972,6 @@ export interface Dictionary {
     services: string;
     cases: string;
     blog: string;
-    about: string;
     contacts: string;
   };
   cta: {
@@ -1106,7 +1105,6 @@ export interface Dictionary {
       p1: string;
       p2: string;
       p3: string;
-      link: string;
     };
     wings: {
       title: string;

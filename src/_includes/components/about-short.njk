@@ -1,5 +1,6 @@
 {#
-  «Кто мы» — короткий рассказ о компании + ссылка на /o-kompanii/.
+  «Кто мы» — короткий рассказ о компании. Ссылки на /o-kompanii/ нет: страница
+  скрыта, на неё нигде не ссылаемся.
   Слева заголовок и абзацы, справа — акцентный блок-плейсхолдер.
   Тексты — из словаря (home.about.*). Светлый фон.
 #}
@@ -15,12 +16,6 @@
           <p>{{ "home.about.p2" | t(locale) }}</p>
           <p>{{ "home.about.p3" | t(locale) }}</p>
         </div>
-        <a
-          href="{{ '/o-kompanii/' | localizedUrl(locale) }}"
-          class="mt-8 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
-        >
-          {{ "home.about.link" | t(locale) }}
-        </a>
       </div>
 
       {# Фото компании — заглушка 4:3 (заменяется через Decap: glavnaya-kompaniya-4x3.jpg). #}

@@ -14,7 +14,6 @@ const en: Dictionary = {
     services: "Services",
     cases: "Cases",
     blog: "Blog",
-    about: "About",
     contacts: "Contacts",
   },
   cta: {
@@ -138,7 +137,6 @@ const en: Dictionary = {
       p1: "BARS TLC is a trade and logistics company that handles both of an importer's tasks in one place: finding and buying goods in China and bringing them to Russia legally, with a full set of documents.",
       p2: "Our model is different from ordinary intermediaries. The team is physically based in Guangzhou and works with factories directly — we control the goods on the Chinese side rather than passing your money down a chain of agents. On the Russian side, we take on customs clearance and support the shipment with documents.",
       p3: "This lets the client get the factory price without intermediary markups and official shipping with no risk of additional charges or claims from the tax authorities.",
-      link: "More about the company →",
     },
     wings: {
       title: "One company — two directions",
