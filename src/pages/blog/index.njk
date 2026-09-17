@@ -8,7 +8,7 @@ pagination:
   alias: listLang
   addAllPagesToCollections: true
 permalink: "{{ '/blog/' | localizedUrl(listLang) }}"
-sitemap: true
+sitemap: false # блог временно скрыт — вернуть true вместе с пунктом меню
 eleventyComputed:
   title: "{{ 'content.blogTitle' | t(listLang) }}"
   description: "{{ 'content.blogLead' | t(listLang) }}"

@@ -51,6 +51,8 @@ eleventyExcludeFromCollections: true
 
       {# Пока ждёте ответа — что почитать по теме расчёта. #}
       <div class="mt-12 grid gap-4 text-left sm:grid-cols-2">
+        {# Карточка статьи блога — скрыта вместе с блогом. #}
+        {#
         <a
           href="{{ '/blog/kod-tn-ved/' | localizedUrl(locale) }}"
           class="group rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-cyan"
@@ -63,6 +65,7 @@ eleventyExcludeFromCollections: true
             От чего зависят пошлина и НДС и почему код согласуют с декларантом.
           </span>
         </a>
+        #}
         <a
           href="{{ '/uslugi/dostavka/sbornye-gruzy/' | localizedUrl(locale) }}"
           class="group rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-cyan"

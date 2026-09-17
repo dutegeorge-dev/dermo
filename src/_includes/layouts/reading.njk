@@ -186,12 +186,18 @@ layout: layouts/base.njk
         {# Обратная связка услуга → полезный материал (статья/кейс). Приоритет —
            явная ссылка svc.relatedContentUrl (заголовок из library.byUrl), иначе
            авто-связка со статьёй блога по related_service (library.byService). #}
+        {# Авто-связка (library.byService) ведёт только в блог — на время, пока блог
+           скрыт, ветка закомментирована. Явные ссылки (relatedContentUrl) ведут на
+           кейсы и работают как раньше. #}
         {% set relArt = null %}
         {% if svc and svc.relatedContentUrl and library.byUrl[svc.relatedContentUrl] %}
           {% set relArt = library.byUrl[svc.relatedContentUrl] %}
-        {% elif service and library.byService[service] %}
+        {% endif %}
+        {#
+        {% if not relArt and service and library.byService[service] %}
           {% set relArt = library.byService[service] %}
         {% endif %}
+        #}
         {% if relArt %}
           <div class="mt-8">
             <a
