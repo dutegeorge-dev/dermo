@@ -86,6 +86,17 @@ const en: Dictionary = {
     zh: "中文",
     switch: "Select language",
   },
+  // Shipment gallery at the bottom of /logistika/ and /torgovlya/ (3:4 photos).
+  gallery: {
+    title: "Photos from our shipments",
+    lead: "Shots from factories, warehouses and loading bays — what our team in China sees.",
+    alt1: "Cargo secured with lashing straps inside a container",
+    alt2: "Forklift loading boxes into a container",
+    alt3: "Oversized modular house on a low-bed trailer",
+    alt4: "Flooring samples from the factory",
+    alt5: "Monitors at the supplier's warehouse",
+    alt6: "Assembly line at a factory in China",
+  },
   content: {
     toc: "Contents",
     orderText: "Don't want to handle it yourself?",
@@ -618,7 +629,7 @@ const en: Dictionary = {
         {
           icon: "badge-check",
           title: "We prepare the permits in advance.",
-          desc: `EAEU technical-regulation certificates, state-registration certificates (SGR), notifications, Chestny Znak — we know what your product needs before shipping. For <a href="/uslugi/dostavka/tovary/napolnye-pokrytiya/" class="link-inline">flooring</a>, for example, our EAEU certificates are already in place. Cargo doesn't get stuck over a missing piece of paper.`,
+          desc: `EAEU technical-regulation certificates, state-registration certificates (SGR), notifications, Chestny Znak — we know what your product needs before shipping. For flooring, for example, our EAEU certificates are already in place. Cargo doesn't get stuck over a missing piece of paper.`,
         },
         {
           icon: "shield-check",
@@ -717,7 +728,7 @@ const en: Dictionary = {
         {
           icon: "layers",
           title: "Commercial categories.",
-          desc: `<a href="/uslugi/dostavka/tovary/napolnye-pokrytiya/" class="link-inline">Flooring</a>, <a href="/uslugi/dostavka/tovary/zapchasti/" class="link-inline">spare parts</a> and <a href="/uslugi/dostavka/tovary/oborudovanie/" class="link-inline">equipment</a>, <a href="/uslugi/dostavka/tovary/elektronika/" class="link-inline">electronics</a>, <a href="/uslugi/dostavka/tovary/tekstil/" class="link-inline">textiles</a> and other goods that can be imported and cleared legally.`,
+          desc: `Flooring, spare parts and equipment, electronics, textiles and other goods that can be imported and cleared legally.`,
         },
       ],
     },
@@ -800,7 +811,7 @@ const en: Dictionary = {
         },
         {
           q: "Does my product need certificates?",
-          a: `It depends on the category. Many goods require <a href="/uslugi/dostavka/tovary/napolnye-pokrytiya/" class="link-inline">EAEU technical-regulation certificates</a>, SGR or notifications. We determine the list before shipment and prepare the documents in advance so the cargo doesn't get stuck at customs.`,
+          a: `It depends on the category. Many goods require EAEU technical-regulation certificates, SGR or notifications. We determine the list before shipment and prepare the documents in advance so the cargo doesn't get stuck at customs.`,
         },
         {
           q: "How is the price formed?",

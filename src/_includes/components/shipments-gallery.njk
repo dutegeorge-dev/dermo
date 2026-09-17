@@ -1,0 +1,24 @@
+{#
+  Галерея отправок — вертикальные фото 3:4 с реальных поставок.
+  Снимки — плейсхолдеры из uploads (otpravki-<N>-3x4.jpg), заменяются через
+  Decap («Фото → Отправки»). Шесть кадров: на десктопе одна строка, на планшете
+  две по три, на мобайле по два.
+  Используется внизу /logistika/ и /torgovlya/. Включать только из шаблона
+  страницы: шорткод `image` асинхронный и в include из layout не исполняется.
+#}
+<section class="bg-surface">
+  <div class="container section">
+    <div class="max-w-2xl">
+      <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "gallery.title" | t(locale) }}</h2>
+      <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "gallery.lead" | t(locale) }}</p>
+    </div>
+
+    <div class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      {% for n in range(1, 7) %}
+        <figure class="overflow-hidden rounded-xl border border-slate-200 bg-surface-alt">
+          {% image "/assets/img/uploads/otpravki-" + n + "-3x4.jpg", ("gallery.alt" + n) | t(locale), "(min-width: 1024px) 12rem, (min-width: 640px) 30vw, 45vw", "aspect-[3/4] w-full object-cover" %}
+        </figure>
+      {% endfor %}
+    </div>
+  </div>
+</section>

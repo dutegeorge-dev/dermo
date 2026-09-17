@@ -345,7 +345,13 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 13. Контакты и скорость ответа ───────────────────────────────────── #}
+  {# ── 13. Кейсы — переиспользуем компонент главной ─────────────────────── #}
+  {% include "components/cases.njk" %}
+
+  {# ── 14. Галерея отправок — вертикальные фото с поставок ──────────────── #}
+  {% include "components/shipments-gallery.njk" %}
+
+  {# ── 15. Контакты и скорость ответа ───────────────────────────────────── #}
   <section id="kontakty-blok" class="container section scroll-mt-24">
     <div class="container-narrow !px-0">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.contacts.title }}</h2>

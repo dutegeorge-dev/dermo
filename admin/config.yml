@@ -205,6 +205,16 @@ collections:
           - { label: "Направление 1 (16:10)", name: "torgovlya-napravlenie-1-16x10", widget: "image", required: false }
           - { label: "Направление 2 (16:10)", name: "torgovlya-napravlenie-2-16x10", widget: "image", required: false }
           - { label: "Направление 3 (16:10)", name: "torgovlya-napravlenie-3-16x10", widget: "image", required: false }
+      - name: "otpravki"
+        label: "Галерея отправок (внизу «Логистики» и «Торговли»)"
+        file: "photos/otpravki.json"
+        fields:
+          - { label: "Отправка 1 — вертикальное фото (3:4)", name: "otpravki-1-3x4", widget: "image", required: false }
+          - { label: "Отправка 2 — вертикальное фото (3:4)", name: "otpravki-2-3x4", widget: "image", required: false }
+          - { label: "Отправка 3 — вертикальное фото (3:4)", name: "otpravki-3-3x4", widget: "image", required: false }
+          - { label: "Отправка 4 — вертикальное фото (3:4)", name: "otpravki-4-3x4", widget: "image", required: false }
+          - { label: "Отправка 5 — вертикальное фото (3:4)", name: "otpravki-5-3x4", widget: "image", required: false }
+          - { label: "Отправка 6 — вертикальное фото (3:4)", name: "otpravki-6-3x4", widget: "image", required: false }
       - name: "kontakty"
         label: "Контакты"
         file: "photos/kontakty.json"

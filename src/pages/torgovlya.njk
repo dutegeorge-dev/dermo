@@ -326,10 +326,13 @@ sitemap: true
                     </li>
                   {% endfor %}
                 </ul>
+                {# Ссылка на товарную услугу — скрыта. Снять обёртку, чтобы вернуть. #}
+                {#
                 <a href="{{ dir.url | localizedUrl(locale) }}" class="mt-1 inline-flex items-center gap-1.5 text-base font-medium text-cyan-dark transition-colors hover:text-cyan">
                   {{ dir.linkKey | t(locale) }}
                   {{ icon("arrow-right", "h-4 w-4") }}
                 </a>
+                #}
               </div>
             </div>
           </article>
@@ -373,9 +376,6 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 12. Кейсы (плейсхолдеры) — переиспользуем компонент главной ───── #}
-  {% include "components/cases.njk" %}
-
   {# ── 13. FAQ — аккордеон (дизайн /logistika/) + микроразметка FAQPage ── #}
   <section id="faq" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
@@ -404,7 +404,13 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 14. Контакты — «Как с нами связаться» (дизайн /logistika/) ──────── #}
+  {# ── 14. Кейсы — переиспользуем компонент главной ────────────────────── #}
+  {% include "components/cases.njk" %}
+
+  {# ── 15. Галерея отправок — вертикальные фото с поставок ──────────────── #}
+  {% include "components/shipments-gallery.njk" %}
+
+  {# ── 16. Контакты — «Как с нами связаться» (дизайн /logistika/) ──────── #}
   <section id="kontakty-blok" class="container section scroll-mt-24">
     <div class="container-narrow !px-0">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ "torgovlya.contacts.title" | t(locale) }}</h2>

@@ -1045,6 +1045,17 @@ export interface Dictionary {
     switch: string;
   };
   /** Контент: блог и кейсы (витрины, оглавление, перелинковка). */
+  /** Галерея отправок внизу /logistika/ и /torgovlya/. */
+  gallery: {
+    title: string;
+    lead: string;
+    alt1: string;
+    alt2: string;
+    alt3: string;
+    alt4: string;
+    alt5: string;
+    alt6: string;
+  };
   content: {
     /** Заголовок оглавления (sticky-TOC читательского шаблона). */
     toc: string;

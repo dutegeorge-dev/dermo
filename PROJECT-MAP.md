@@ -264,6 +264,7 @@ base.njk  (весь <head>, SEO, Organization JSON-LD, аналитика, cooki
 | `icon.njk` | Макрос `icon(name, class)` — Lucide-иконки инлайновым SVG (`currentColor`), цепочка `if/elif` по ~55 именам. |
 | `brand-icon.njk` | Макрос `brandIcon(name, class)` — глифы логотипов Telegram и Макса одним цветом (`currentColor`), контуры из официальных SVG. |
 | `messengers.njk` | Макрос `messengers(size, ringOffset, grow, long)` — пара кнопок «Telegram» и «Макс» (разные сервисы, разные ссылки: `site.telegram` и `site.max`). Импортируется **с контекстом**. |
+| `shipments-gallery.njk` | Галерея отправок: шесть вертикальных фото 3:4 из uploads (`otpravki-<N>-3x4.jpg`, замена через Decap → «Галерея отправок»). Внизу `/logistika/` и `/torgovlya/`; подключать только из шаблона страницы — шорткод `image` асинхронный. |
 | `logo.njk` | Макрос `logo(variant, logoSrc, full)` — фирменный знак + надпись «ТЛК БАРС» (PNG из макета). Файлы `-on-brand` — версии для ультрамаринового фона; `full=true` даёт надпись с тагланом (подвал). |
 | `schema-organization.njk` | JSON-LD `Organization` (на каждой странице через base). |
 | `schema-breadcrumbs.njk` | JSON-LD `BreadcrumbList`. |

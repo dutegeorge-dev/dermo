@@ -85,6 +85,17 @@ const zh: Dictionary = {
     zh: "中文",
     switch: "选择语言",
   },
+  // /logistika/ 与 /torgovlya/ 页面底部的发货相册（3:4 竖版照片）。
+  gallery: {
+    title: "我们的发货照片",
+    lead: "来自工厂、仓库和装货现场的照片——我们在中国的团队亲眼所见。",
+    alt1: "集装箱内用绑带固定的货物",
+    alt2: "叉车将纸箱装入集装箱",
+    alt3: "低平板拖车上的超大模块化房屋",
+    alt4: "工厂提供的地板样品",
+    alt5: "供应商仓库中的显示器",
+    alt6: "中国工厂的装配线",
+  },
   content: {
     toc: "目录",
     orderText: "不想自己处理？",
@@ -617,7 +628,7 @@ const zh: Dictionary = {
         {
           icon: "badge-check",
           title: "提前备妥许可文件。",
-          desc: `EAEU 技术法规证书、国家注册证书（SGR）、通报（notification）、Chestny Znak——我们在发货前就知道您的商品需要什么。例如<a href="/uslugi/dostavka/tovary/napolnye-pokrytiya/" class="link-inline">地板</a>，我们的 EAEU 证书已经办妥。货物不会因缺一张纸而滞留。`,
+          desc: `EAEU 技术法规证书、国家注册证书（SGR）、通报（notification）、Chestny Znak——我们在发货前就知道您的商品需要什么。例如地板，我们的 EAEU 证书已经办妥。货物不会因缺一张纸而滞留。`,
         },
         {
           icon: "shield-check",
@@ -716,7 +727,7 @@ const zh: Dictionary = {
         {
           icon: "layers",
           title: "商业品类。",
-          desc: `<a href="/uslugi/dostavka/tovary/napolnye-pokrytiya/" class="link-inline">地板</a>、<a href="/uslugi/dostavka/tovary/zapchasti/" class="link-inline">配件</a>与<a href="/uslugi/dostavka/tovary/oborudovanie/" class="link-inline">设备</a>、<a href="/uslugi/dostavka/tovary/elektronika/" class="link-inline">电子产品</a>、<a href="/uslugi/dostavka/tovary/tekstil/" class="link-inline">纺织品</a>以及其他可合法进口并办理的商品。`,
+          desc: `地板、配件与设备、电子产品、纺织品以及其他可合法进口并办理的商品。`,
         },
       ],
     },
@@ -799,7 +810,7 @@ const zh: Dictionary = {
         },
         {
           q: "我的商品需要证书吗？",
-          a: `取决于品类。许多商品需要<a href="/uslugi/dostavka/tovary/napolnye-pokrytiya/" class="link-inline">EAEU 技术法规证书</a>、SGR 或通报。我们在发货前确定清单并提前备好单据，以免货物卡在海关。`,
+          a: `取决于品类。许多商品需要EAEU 技术法规证书、SGR 或通报。我们在发货前确定清单并提前备好单据，以免货物卡在海关。`,
         },
         {
           q: "价格如何构成？",
