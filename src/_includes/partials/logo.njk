@@ -5,26 +5,30 @@
   Если задан — вместо фирменного знака рендерим картинку на белой плитке (произвольный
   логотип может быть тёмным, на ультрамарине он иначе не читается).
   full — надпись с тагланом «торгово-логистическая компания» (подвал, где есть место).
+  mark — показывать ли знак. В шапке он выключен: на ультрамарине знак теряет
+  контраст (его белая обводка рассчитана на светлый фон), поэтому там одни буквы.
   Файлы -on-brand — версии для ультрамаринового фона: надпись белая, знак с фирменной
   белой обводкой, которая отделяет его от синего.
   (Логотип не прогоняем через eleventy-img: шорткод async, а логотип выводится в
   партиалах внутри layout, где async-шорткод не исполняется; для лого это не нужно.)
 #}
-{% macro logo(variant="light", logoSrc="", full=false) %}
+{% macro logo(variant="light", logoSrc="", full=false, mark=true) %}
 {% set tone = "-on-brand" if variant == "light" else "" %}
 {% set text = "logo-lettering" if full else "logo-wordmark" %}
 <span class="inline-flex items-center gap-1.5 sm:gap-2.5">
-  {% if logoSrc %}
+  {% if mark %}
+    {% if logoSrc %}
   <span class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-white">
     <img src="{{ logoSrc }}" alt="" loading="lazy" decoding="async" width="44" height="44" class="h-full w-full object-contain p-0.5" />
   </span>
-  {% else %}
+    {% else %}
   <img src="/assets/img/logo-mark{{ tone }}.png" alt="" width="240" height="217" class="{{ 'h-10 w-auto sm:h-11' if full else 'h-7 w-auto sm:h-9' }}" />
+    {% endif %}
   {% endif %}
   {% if full %}
   <img src="/assets/img/logo-lettering{{ tone }}.png" alt="ООО ТЛК БАРС — торгово-логистическая компания" width="760" height="127" class="h-5 w-auto sm:h-6" />
   {% else %}
-  <img src="/assets/img/logo-wordmark{{ tone }}.png" alt="ООО ТЛК БАРС" width="640" height="58" class="h-[11px] w-auto sm:h-4" />
+  <img src="/assets/img/logo-wordmark{{ tone }}.png" alt="ООО ТЛК БАРС" width="640" height="58" class="{{ 'h-[11px] w-auto sm:h-4' if mark else 'h-4 w-auto sm:h-5' }}" />
   {% endif %}
 </span>
 {% endmacro %}
