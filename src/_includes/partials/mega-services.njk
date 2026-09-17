@@ -72,7 +72,10 @@
           </div>
         </div>
 
-        {# Кнопка на витрину со всеми услугами доставки — внизу крыла. #}
+        {# Кнопка на витрину со всеми услугами доставки — временно скрыта.
+           Чтобы вернуть: снять обёртку-комментарий ниже. Данные (megaMenu.logistics.allUrl)
+           и ключ словаря mega.allServices на месте. #}
+        {#
         <div class="mt-auto pt-6">
           <a
             href="{{ megaMenu.logistics.allUrl | localizedUrl(locale) }}"
@@ -82,6 +85,7 @@
             {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover/all:translate-x-1") }}
           </a>
         </div>
+        #}
       </div>
 
       {# ── Правое крыло: ТОРГОВЛЯ ──────────────────────────────────── #}
@@ -113,8 +117,9 @@
           {% endfor %}
         </ul>
 
-        {# Кнопка на витрину со всеми услугами — прижата к низу крыла (mt-auto),
-           но не ближе pt-6 к списку, когда крыло не растянуто. #}
+        {# Кнопка на витрину со всеми услугами торговли — временно скрыта.
+           Чтобы вернуть: снять обёртку-комментарий ниже. #}
+        {#
         <div class="mt-auto pt-6">
           <a
             href="{{ megaMenu.trade.allUrl | localizedUrl(locale) }}"
@@ -124,6 +129,7 @@
             {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover/all:translate-x-1") }}
           </a>
         </div>
+        #}
       </div>
 
     </div>
