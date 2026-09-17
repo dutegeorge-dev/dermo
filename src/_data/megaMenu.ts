@@ -3,20 +3,17 @@ import uslugi from "./uslugi.js";
 
 /**
  * Названия/иконки/URL торговых услуг — единый источник в _data/uslugi.ts
- * (torgovlyaServices, те же 8, что на витрине /uslugi/torgovlya/). В меню
- * показываем их в порядке логики процесса; кнопка «Посмотреть все услуги»
- * ведёт на витрину. Так названия в меню, на витрине, в хлебных крошках и
- * перелинковке не расходятся.
+ * (torgovlyaServices). В меню показываем не все, а четыре ключевые, в порядке
+ * логики процесса — меню должно быть коротким. Остальные услуги никуда не
+ * делись: они на витрине /uslugi/torgovlya/, куда ведёт «Посмотреть все
+ * услуги», и в хлебных крошках своих страниц. Так названия в меню, на витрине
+ * и в перелинковке не расходятся.
  */
 const TRADE_MENU_SLUGS = [
   "poisk-postavshchika",
   "vykup-tovara",
-  "sertifikaciya",
-  "vozvrat-nds",
   "kontrol-proizvodstva",
   "inspekciya",
-  "peregovory",
-  "upakovka-markirovka",
 ];
 
 const bySlug = new Map(uslugi.torgovlyaServices.map((s) => [s.slug, s]));
@@ -37,8 +34,10 @@ const dopUslugiLinks: MegaLink[] = uslugi.dopUslugi.map((s) => ({
  * Данные мега-меню «Услуги». Рендерится из этой структуры (partials/mega-services.njk),
  * без хардкода списков в шаблоне. Тексты — по ключам словаря (i18n), иконки — Lucide.
  *
- * Левое крыло (Логистика) — шире: трое подгрупп с кликабельными хабами.
+ * Левое крыло (Логистика) — шире: две подгруппы с кликабельными хабами.
  * Правое крыло (Торговля) — уже: список услуг с иконками.
+ * Разбивки «По товару» и «По городу» в меню нет — она делала его высоким;
+ * эти страницы доступны с витрины /uslugi/dostavka/ и из хлебных крошек.
  */
 const megaMenu: MegaMenu = {
   logistics: {
@@ -60,39 +59,14 @@ const megaMenu: MegaMenu = {
         ],
       },
       {
-        // Доп. услуги логистики — закреплены внизу колонки 1 (pinBottom), в одну
-        // колонку (singleCol). Источник пунктов — uslugi.dopUslugi, заголовок
-        // ведёт на хаб /uslugi/dostavka/dop-uslugi/.
+        // Доп. услуги логистики — вторая колонка, в один столбец (singleCol):
+        // названия длинные и в два столбца переносятся. Источник пунктов —
+        // uslugi.dopUslugi, заголовок ведёт на хаб /uslugi/dostavka/dop-uslugi/.
         titleKey: "logiExtra.groupTitle",
         url: uslugi.dopUslugiUrl,
-        column: 1,
+        column: 2,
         singleCol: true,
-        pinBottom: true,
         items: dopUslugiLinks,
-      },
-      {
-        titleKey: "mega.byGoods",
-        url: "/uslugi/dostavka/tovary/",
-        column: 2,
-        items: [
-          { titleKey: "goods.flooring", url: "/uslugi/dostavka/tovary/napolnye-pokrytiya/" },
-          { titleKey: "goods.electronics", url: "/uslugi/dostavka/tovary/elektronika/" },
-          { titleKey: "goods.parts", url: "/uslugi/dostavka/tovary/zapchasti/" },
-          { titleKey: "goods.textile", url: "/uslugi/dostavka/tovary/tekstil/" },
-          { titleKey: "goods.equipment", url: "/uslugi/dostavka/tovary/oborudovanie/" },
-        ],
-      },
-      {
-        titleKey: "mega.byCity",
-        url: "/uslugi/dostavka/goroda/",
-        column: 2,
-        items: [
-          { titleKey: "city.moscow", url: "/uslugi/dostavka/goroda/moskva/" },
-          { titleKey: "city.spb", url: "/uslugi/dostavka/goroda/sankt-peterburg/" },
-          { titleKey: "city.ekb", url: "/uslugi/dostavka/goroda/ekaterinburg/" },
-          { titleKey: "city.nsk", url: "/uslugi/dostavka/goroda/novosibirsk/" },
-          { titleKey: "city.kazan", url: "/uslugi/dostavka/goroda/kazan/" },
-        ],
       },
     ],
     allUrl: uslugi.dostavkaUrl,
