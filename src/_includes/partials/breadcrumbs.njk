@@ -1,16 +1,16 @@
 {%- set crumbs = page.url | breadcrumbs(title) -%}
 {% if crumbs.length > 1 %}
-  {# Хлебные крошки на ультрамариновом фоне — продолжение синей зоны хедера/hero
-     (без отдельной серой плашки). Светлый полупрозрачный текст, активный — ярче. #}
-  <nav class="bg-brand text-white/70" aria-label="Хлебные крошки">
+  {# Хлебные крошки на белом — продолжение светлой шапки. Синяя зона страницы
+     начинается ниже, с hero, поэтому отдельной плашки крошкам не нужно. #}
+  <nav class="bg-white text-muted" aria-label="Хлебные крошки">
     <ol class="container flex flex-wrap items-center gap-2 py-3 text-sm">
       {% for crumb in crumbs %}
         <li class="flex items-center gap-2">
           {% if crumb.last %}
-            <span aria-current="page" class="text-white">{{ crumb.name }}</span>
+            <span aria-current="page" class="text-ink">{{ crumb.name }}</span>
           {% else %}
-            <a href="{{ crumb.url }}" class="transition-colors hover:text-cyan">{{ crumb.name }}</a>
-            <span class="text-white/40" aria-hidden="true">/</span>
+            <a href="{{ crumb.url }}" class="transition-colors hover:text-brand">{{ crumb.name }}</a>
+            <span class="text-slate-300" aria-hidden="true">/</span>
           {% endif %}
         </li>
       {% endfor %}

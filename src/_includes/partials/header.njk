@@ -2,6 +2,8 @@
   Двухъярусный sticky-хедер ТЛК БАРС.
   Ярус 1 (utility) — переключатель языка, «Рассчитать», телефон, время работы,
   Telegram и Макс (две отдельные ссылки — это разные мессенджеры).
+  Оба яруса светлые: фирменный знак с белой обводкой читается на белом, а не на
+  ультрамарине; синяя зона начинается ниже — с hero и хлебных крошек.
   Ярус 2 (navbar) — логотип, меню (5 пунктов), янтарная CTA. «Услуги» → мега-меню.
   Тексты — из словаря (t), без хардкода. Поведение — header.ts (прогрессивное улучшение).
 #}
@@ -12,37 +14,37 @@
 
 <header data-header class="sticky top-0 z-40">
   {# ── Ярус 1: utility-полоса (скрывается при скролле) ───────────────── #}
-  <div class="utility-bar bg-brand-dark text-white">
+  <div class="utility-bar border-b border-slate-200 bg-surface-alt text-muted">
     <div class="container flex h-9 items-center justify-between gap-4 text-xs">
       {# Переключатель языка #}
       <nav class="flex items-center gap-1" aria-label="{{ 'a11y.utilityNav' | t(locale) }}">
         {% for loc in locales %}
           {% if loc == locale %}
-            <span class="px-1 font-medium text-cyan" aria-current="true">{{ ("lang." + loc) | t(locale) }}</span>
+            <span class="px-1 font-medium text-brand" aria-current="true">{{ ("lang." + loc) | t(locale) }}</span>
           {% else %}
-            <a href="{{ page.url | localizedUrl(loc) }}" class="px-1 text-white/70 transition-colors hover:text-cyan" hreflang="{{ loc }}">{{ ("lang." + loc) | t(locale) }}</a>
+            <a href="{{ page.url | localizedUrl(loc) }}" class="px-1 text-muted transition-colors hover:text-brand" hreflang="{{ loc }}">{{ ("lang." + loc) | t(locale) }}</a>
           {% endif %}
-          {% if not loop.last %}<span class="text-white/30" aria-hidden="true">·</span>{% endif %}
+          {% if not loop.last %}<span class="text-slate-300" aria-hidden="true">·</span>{% endif %}
         {% endfor %}
       </nav>
 
       {# Сервисы: Рассчитать · телефон · время работы · Telegram и Макс #}
-      <div class="flex items-center gap-3 text-white/80">
-        <a href="{{ site.calculateUrl | localizedUrl(locale) }}" class="hidden items-center gap-1.5 transition-colors hover:text-cyan sm:inline-flex">
+      <div class="flex items-center gap-3">
+        <a href="{{ site.calculateUrl | localizedUrl(locale) }}" class="hidden items-center gap-1.5 transition-colors hover:text-brand sm:inline-flex">
           {{ icon("calculator", "h-4 w-4") }}
           <span>{{ "cta.calculate" | t(locale) }}</span>
         </a>
-        <span class="hidden h-3 w-px bg-white/20 sm:block" aria-hidden="true"></span>
-        <a href="tel:{{ site.phoneHref }}" class="inline-flex items-center gap-1.5 transition-colors hover:text-cyan" aria-label="{{ 'a11y.phoneRu' | t(locale) }}">
-          {{ icon("phone", "h-3.5 w-3.5 text-cyan") }}
+        <span class="hidden h-3 w-px bg-slate-300 sm:block" aria-hidden="true"></span>
+        <a href="tel:{{ site.phoneHref }}" class="inline-flex items-center gap-1.5 transition-colors hover:text-brand" aria-label="{{ 'a11y.phoneRu' | t(locale) }}">
+          {{ icon("phone", "h-3.5 w-3.5 text-brand") }}
           <span>{{ site.phone }}</span>
         </a>
-        <span class="hidden text-white/30 md:inline" aria-hidden="true">·</span>
+        <span class="hidden text-slate-300 md:inline" aria-hidden="true">·</span>
         <span class="hidden md:inline">{{ site.workingHoursShort }}</span>
-        <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.telegram' | t(locale) }}">
+        <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-brand" aria-label="{{ 'a11y.telegram' | t(locale) }}">
           {{ brandIcon("telegram", "h-4 w-4") }}
         </a>
-        <a href="{{ site.max }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.max' | t(locale) }}">
+        <a href="{{ site.max }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-brand" aria-label="{{ 'a11y.max' | t(locale) }}">
           {{ brandIcon("max", "h-4 w-4") }}
         </a>
       </div>
@@ -50,11 +52,11 @@
   </div>
 
   {# ── Ярус 2: основная навигация (sticky-якорь) ─────────────────────── #}
-  <div class="navbar bg-brand text-white">
+  <div class="navbar border-b border-slate-200 bg-white text-ink">
     <div class="container relative flex h-16 items-center justify-between gap-6">
       {# Логотип #}
-      <a href="{{ '/' | localizedUrl(locale) }}" class="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-brand" aria-label="{{ site.legalName }}">
-        {{ logo("light", company.logo) }}
+      <a href="{{ '/' | localizedUrl(locale) }}" class="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-white" aria-label="{{ site.legalName }}">
+        {{ logo("dark", company.logo) }}
       </a>
 
       {# Десктоп-навигация #}
@@ -66,7 +68,7 @@
                 <button
                   type="button"
                   data-mega-toggle
-                  class="inline-flex h-16 items-center gap-1 rounded-md px-3 text-[15px] font-medium text-white transition-colors hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+                  class="inline-flex h-16 items-center gap-1 rounded-md px-3 text-[15px] font-medium text-ink transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
                   aria-haspopup="true"
                   aria-expanded="false"
                 >
@@ -79,7 +81,7 @@
               <li>
                 <a
                   href="{{ item.url | localizedUrl(locale) }}"
-                  class="relative inline-flex items-center rounded-md px-3 py-2 text-[15px] font-medium text-white transition-colors hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan after:absolute after:inset-x-3 after:-bottom-0.5 after:h-0.5 after:origin-left after:scale-x-0 after:bg-cyan after:transition-transform hover:after:scale-x-100{% if (item.url | localizedUrl(locale)) == page.url %} text-cyan after:scale-x-100{% endif %}"
+                  class="relative inline-flex items-center rounded-md px-3 py-2 text-[15px] font-medium text-ink transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan after:absolute after:inset-x-3 after:-bottom-0.5 after:h-0.5 after:origin-left after:scale-x-0 after:bg-brand after:transition-transform hover:after:scale-x-100{% if (item.url | localizedUrl(locale)) == page.url %} text-brand after:scale-x-100{% endif %}"
                   {% if (item.url | localizedUrl(locale)) == page.url %}aria-current="page"{% endif %}
                 >
                   {{ item.titleKey | t(locale) }}
@@ -92,7 +94,7 @@
 
       {# Десктоп CTA (янтарная) #}
       <div class="hidden lg:flex">
-        <a href="{{ '/kontakty/' | localizedUrl(locale) }}" class="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
+        <a href="{{ '/kontakty/' | localizedUrl(locale) }}" class="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           {{ "cta.request" | t(locale) }}
         </a>
       </div>
@@ -105,7 +107,7 @@
         <button
           type="button"
           data-menu-toggle
-          class="inline-flex h-11 w-11 items-center justify-center rounded-lg text-white transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+          class="inline-flex h-11 w-11 items-center justify-center rounded-lg text-ink transition-colors hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
           aria-expanded="false"
           aria-controls="mobile-panel"
           aria-label="{{ 'a11y.openMenu' | t(locale) }}"
