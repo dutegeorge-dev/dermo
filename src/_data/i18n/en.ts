@@ -612,22 +612,22 @@ const en: Dictionary = {
       button: "Calculate",
     },
     safety: {
-      title: "How a shipment works: documents, money, price",
+      title: "How a shipment works: documents and money",
       items: [
         {
           icon: "clipboard-list",
           title: "We determine the exact HS code before the shipment begins.",
-          desc: "The wrong code is the most common cause of fines and delays at customs. We request the description, photos and specifications and select the code in advance. That's why the estimate takes 1–2 days, not an hour.",
+          desc: "We request the description, photos and specifications and select the code in advance. That's why the estimate takes 1–2 days, not an hour.",
         },
         {
           icon: "scale",
           title: "We declare at the actual value.",
-          desc: "No understatement. Full payment of duty and VAT. It's more expensive than cargo — but it's the only way that will withstand an audit 3 years later.",
+          desc: "No understatement. Full payment of duty and VAT.",
         },
         {
           icon: "building-2",
           title: "A contract with a Russian legal entity, payment in roubles.",
-          desc: "Payment goes to the company's bank account inside the Russian legal framework — no transfers to personal cards or accounts abroad.",
+          desc: "Payment goes to the company's bank account inside the Russian legal framework.",
         },
         {
           icon: "receipt",
@@ -637,12 +637,12 @@ const en: Dictionary = {
         {
           icon: "badge-check",
           title: "We prepare the permits in advance.",
-          desc: "EAEU technical-regulation certificates, state-registration certificates (SGR), notifications, Chestny Znak — we work out the list before shipping so the cargo isn't held up over a missing piece of paper.",
+          desc: "EAEU technical-regulation certificates, state-registration certificates (SGR), notifications, Chestny Znak — we work out the list before shipping.",
         },
         {
           icon: "shield",
           title: "We insure the cargo and answer for it ourselves.",
-          desc: "We receive, ship and clear it with our own people — there is always someone to ask, no «that's the subcontractor's side».",
+          desc: "We run two companies of our own: an exporter in China and an importer in Russia. We receive, ship and clear the cargo ourselves.",
         },
       ],
     },
@@ -677,7 +677,7 @@ const en: Dictionary = {
       title: "You understand what you're paying for before signing the contract",
       intro:
         "Most companies give a final figure. We show the structure: logistics cost, customs duty, VAT, our commission — as separate lines. It's not just honest — it lets you manage the cost of your shipment.",
-      structureTitle: "What the cost consists of",
+      structureTitle: "What the price consists of",
       structure: [
         { icon: "truck", text: "Logistics (route, method, weight/volume)" },
         {
@@ -721,17 +721,17 @@ const en: Dictionary = {
         {
           icon: "building-2",
           title: "Legal entities only.",
-          desc: "We work under a contract with organizations and sole proprietors, with official payment to a corporate account. We don't ship private parcels or single-box deliveries.",
+          desc: "We work under a contract with organizations and sole proprietors, with official payment to a corporate account.",
         },
         {
           icon: "package",
           title: "From 1 m³.",
-          desc: "We take consolidated cargo from a cubic meter and full containers — from a small batch to planned large-volume shipments.",
+          desc: "We take consolidated cargo from a cubic meter and full containers.",
         },
         {
           icon: "layers",
           title: "Commercial categories.",
-          desc: `Flooring, spare parts and equipment, electronics, textiles and other goods that can be imported and cleared legally.`,
+          desc: "Any category of goods that can be imported and cleared legally.",
         },
       ],
     },

@@ -155,9 +155,9 @@ sitemap: true
   #}
 
 
-  {# ── 4. Как устроена поставка: документы, деньги, цена ────────────────────
-     Слияние трёх прежних блоков (безопасность + гарантии/оплата + стоимость):
-     они трижды повторяли договор комиссии и расчёт за 1–2 дня. #}
+  {# ── 4. Как устроена поставка: документы и деньги ─────────────────────────
+     Слияние прежних блоков «безопасность» и «гарантии/оплата»: они дважды
+     повторяли договор комиссии. Цена вынесена в отдельный блок ниже. #}
   <section id="bezopasnost" class="container section scroll-mt-24">
     <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.safety.title }}</h2>
     <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -172,11 +172,15 @@ sitemap: true
       {% endfor %}
     </div>
 
-    {# Слева — из чего складывается цена, справа — фото-слот с поставки. #}
-    <div class="mt-8 grid items-start gap-8 lg:grid-cols-2">
-      <div class="rounded-xl border border-slate-200 bg-white p-6">
-        <h3 class="text-lg font-semibold text-ink">{{ L.cost.structureTitle }}</h3>
-        <ul class="mt-4 space-y-3">
+  </section>
+
+  {# ── 5. Из чего складывается цена — отдельным блоком, со своим фоном ───── #}
+  <section id="stoimost" class="scroll-mt-24 bg-surface-alt">
+    <div class="container section">
+      <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.cost.structureTitle }}</h2>
+      {# items-stretch: карточка и фото одной высоты, без «ступеньки» под списком. #}
+      <div class="mt-8 grid items-stretch gap-8 lg:grid-cols-2">
+        <ul class="space-y-3 rounded-xl border border-slate-200 bg-white p-6">
           {% for c in L.cost.structure %}
             <li class="flex items-start gap-3">
               {{ icon(c.icon, "mt-0.5 h-5 w-5 shrink-0 text-cyan") }}
@@ -184,10 +188,11 @@ sitemap: true
             </li>
           {% endfor %}
         </ul>
-      </div>
-      <div class="relative aspect-[4/3] overflow-hidden rounded-xl border border-slate-200 bg-surface-alt">
-        <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-8 w-8 text-slate-300") }}</span>
-        {% image "/assets/img/uploads/logistika-postavka-4x3.jpg", L.safety.title, "(min-width: 1024px) 34rem, 90vw", "relative h-full w-full object-cover" %}
+        {# Фото с поставки — слот под загрузку (Decap: «Логистика»). #}
+        <div class="relative min-h-[15rem] overflow-hidden rounded-xl border border-slate-200 bg-surface-alt">
+          <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-8 w-8 text-slate-300") }}</span>
+          {% image "/assets/img/uploads/logistika-postavka-4x3.jpg", L.cost.structureTitle, "(min-width: 1024px) 34rem, 90vw", "relative h-full w-full object-cover" %}
+        </div>
       </div>
     </div>
   </section>
