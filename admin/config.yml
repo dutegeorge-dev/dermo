@@ -216,7 +216,7 @@ collections:
           - { label: "Способ 2 — железная дорога (16:10)", name: "logistika-sposob-2-16x10", widget: "image", required: false }
           - { label: "Способ 3 — авто (16:10)", name: "logistika-sposob-3-16x10", widget: "image", required: false }
           - { label: "Способ 4 — авиа (16:10)", name: "logistika-sposob-4-16x10", widget: "image", required: false }
-          - { label: "Как устроена поставка — фото с погрузки (4:3)", name: "logistika-postavka-4x3", widget: "image", required: false }
+          - { label: "Из чего складывается цена — документы/расчёт (4:3)", name: "logistika-postavka-4x3", widget: "image", required: false }
           - { label: "Команда в Гуанчжоу — блок «Торговля» (16:9)", name: "logistika-komanda-16x9", widget: "image", required: false }
       - name: "otpravki"
         label: "Галерея отправок (внизу «Логистики» и «Торговли»)"
