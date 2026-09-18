@@ -376,7 +376,13 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 13. FAQ — аккордеон (дизайн /logistika/) + микроразметка FAQPage ── #}
+  {# ── 12. Кейсы — переиспользуем компонент главной ────────────────────── #}
+  {% include "components/cases.njk" %}
+
+  {# ── 13. Галерея отправок — вертикальные фото с поставок ──────────────── #}
+  {% include "components/shipments-gallery.njk" %}
+
+  {# ── 14. FAQ — аккордеон (дизайн /logistika/) + микроразметка FAQPage ── #}
   <section id="faq" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <div class="container-narrow !px-0">
@@ -404,13 +410,7 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 14. Кейсы — переиспользуем компонент главной ────────────────────── #}
-  {% include "components/cases.njk" %}
-
-  {# ── 15. Галерея отправок — вертикальные фото с поставок ──────────────── #}
-  {% include "components/shipments-gallery.njk" %}
-
-  {# ── 16. Контакты — «Как с нами связаться» (дизайн /logistika/) ──────── #}
+  {# ── 15. Контакты — «Как с нами связаться» (дизайн /logistika/) ──────── #}
   <section id="kontakty-blok" class="container section scroll-mt-24">
     <div class="container-narrow !px-0">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ "torgovlya.contacts.title" | t(locale) }}</h2>
@@ -438,7 +438,7 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 15. Финальный CTA (дизайн /logistika/) ───────────────────────────── #}
+  {# ── 16. Финальный CTA (дизайн /logistika/) ───────────────────────────── #}
   {{ ctaBand(("torgovlya.ctaFinal.button" | t(locale)), requestUrl, text=("torgovlya.ctaFinal.subtitle" | t(locale)), title=("torgovlya.ctaFinal.title" | t(locale)), tone="final") }}
 
   {# JSON-LD FAQPage — микроразметка для поисковой выдачи. #}

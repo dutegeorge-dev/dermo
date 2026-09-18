@@ -1049,6 +1049,8 @@ export interface Dictionary {
   gallery: {
     title: string;
     lead: string;
+    /** Подпись в aria-label кнопки фото («открыть крупнее»). */
+    zoom: string;
     alt1: string;
     alt2: string;
     alt3: string;

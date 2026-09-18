@@ -316,7 +316,13 @@ sitemap: true
   </section>
   {% endif %}
 
-  {# ── 12. FAQ (аккордеон + микроразметка FAQPage) ──────────────────────── #}
+  {# ── 12. Кейсы — переиспользуем компонент главной ─────────────────────── #}
+  {% include "components/cases.njk" %}
+
+  {# ── 13. Галерея отправок — вертикальные фото с поставок ──────────────── #}
+  {% include "components/shipments-gallery.njk" %}
+
+  {# ── 14. FAQ (аккордеон + микроразметка FAQPage) ──────────────────────── #}
   <section id="faq" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <div class="container-narrow !px-0">
@@ -344,12 +350,6 @@ sitemap: true
       </div>
     </div>
   </section>
-
-  {# ── 13. Кейсы — переиспользуем компонент главной ─────────────────────── #}
-  {% include "components/cases.njk" %}
-
-  {# ── 14. Галерея отправок — вертикальные фото с поставок ──────────────── #}
-  {% include "components/shipments-gallery.njk" %}
 
   {# ── 15. Контакты и скорость ответа ───────────────────────────────────── #}
   <section id="kontakty-blok" class="container section scroll-mt-24">
@@ -379,7 +379,7 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 14. Финальный CTA ────────────────────────────────────────────────── #}
+  {# ── 16. Финальный CTA ────────────────────────────────────────────────── #}
   {{ ctaBand(L.finalCta.button, requestUrl, text=L.finalCta.subtitle, title=L.finalCta.title, tone="final") }}
 
 </main>

@@ -5,6 +5,7 @@
   две по три, на мобайле по два.
   Используется внизу /logistika/ и /torgovlya/. Включать только из шаблона
   страницы: шорткод `image` асинхронный и в include из layout не исполняется.
+  Каждое фото — кнопка: клик открывает просмотр крупно (assets/ts/gallery.ts).
 #}
 <section class="bg-surface">
   <div class="container section">
@@ -13,11 +14,17 @@
       <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "gallery.lead" | t(locale) }}</p>
     </div>
 
-    <div class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+    {# Клик по фото открывает его крупно — лайтбокс в assets/ts/gallery.ts. #}
+    <div data-gallery class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
       {% for n in range(1, 7) %}
-        <figure class="overflow-hidden rounded-xl border border-slate-200 bg-surface-alt">
-          {% image "/assets/img/uploads/otpravki-" + n + "-3x4.jpg", ("gallery.alt" + n) | t(locale), "(min-width: 1024px) 12rem, (min-width: 640px) 30vw, 45vw", "aspect-[3/4] w-full object-cover" %}
-        </figure>
+        <button
+          type="button"
+          data-gallery-item
+          class="group block overflow-hidden rounded-xl border border-slate-200 bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2"
+          aria-label="{{ ("gallery.alt" + n) | t(locale) }} — {{ "gallery.zoom" | t(locale) }}"
+        >
+          {% image "/assets/img/uploads/otpravki-" + n + "-3x4.jpg", ("gallery.alt" + n) | t(locale), "(min-width: 1024px) 12rem, (min-width: 640px) 30vw, 45vw", "aspect-[3/4] w-full object-cover transition-transform duration-300 group-hover:scale-105" %}
+        </button>
       {% endfor %}
     </div>
   </div>

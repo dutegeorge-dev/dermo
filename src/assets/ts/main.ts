@@ -17,6 +17,9 @@ import "./cookie";
 // Sticky-оглавление + scroll-spy читательского шаблона — см. ./toc.ts.
 import { initToc } from "./toc";
 
+// Лайтбокс галереи отправок (/logistika/, /torgovlya/) — см. ./gallery.ts.
+import { initGallery } from "./gallery";
+
 // Калькулятор доставки и таможенных платежей (/calculator/) — см. ./calculator.ts.
 import { initCalculator } from "./calculator";
 
@@ -137,6 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initToc();
   initCalculator();
   initContactGoals();
+  initGallery();
 });
 
 export {};

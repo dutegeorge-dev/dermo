@@ -90,6 +90,7 @@ const en: Dictionary = {
   gallery: {
     title: "Photos from our shipments",
     lead: "Shots from factories, warehouses and loading bays — what our team in China sees.",
+    zoom: "open larger",
     alt1: "Cargo secured with lashing straps inside a container",
     alt2: "Forklift loading boxes into a container",
     alt3: "Oversized modular house on a low-bed trailer",
