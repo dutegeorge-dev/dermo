@@ -205,6 +205,9 @@ collections:
           - { label: "Направление 1 (16:10)", name: "torgovlya-napravlenie-1-16x10", widget: "image", required: false }
           - { label: "Направление 2 (16:10)", name: "torgovlya-napravlenie-2-16x10", widget: "image", required: false }
           - { label: "Направление 3 (16:10)", name: "torgovlya-napravlenie-3-16x10", widget: "image", required: false }
+          - { label: "Производство — цех завода (16:10)", name: "torgovlya-proizvodstvo-1-16x10", widget: "image", required: false }
+          - { label: "Производство — инспекция партии (16:10)", name: "torgovlya-proizvodstvo-2-16x10", widget: "image", required: false }
+          - { label: "Образец-эталон (4:3)", name: "torgovlya-obrazec-4x3", widget: "image", required: false }
       - name: "logistika"
         label: "Страница «Логистика»"
         file: "photos/logistika.json"

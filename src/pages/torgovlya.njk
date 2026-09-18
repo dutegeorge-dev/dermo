@@ -40,23 +40,14 @@ sitemap: true
         <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85 md:text-xl">
           {{ "torgovlya.hero.subtitle" | t(locale) }}
         </p>
-        {# Две кнопки — не дубль формы: Telegram (фирменные цвета) + белая кнопка
-           на статью блога «Наши направления». #}
+        {# Тот же набор, что в hero главной и «Логистики». #}
         <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          {{ messengers("lg", "ring-offset-brand") }}
           <a
-            href="{{ site.telegram }}"
-            rel="nofollow noopener"
-            target="_blank"
-            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
-          >
-            {{ icon("send", "h-5 w-5") }}
-            {{ "cta.telegramWrite" | t(locale) }}
-          </a>
-          <a
-            href="{{ '/uslugi/torgovlya/' | localizedUrl(locale) }}"
+            href="{{ '/kejsy/' | localizedUrl(locale) }}"
             class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-medium text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
           >
-            {{ "torgovlya.hero.secondary" | t(locale) }}
+            {{ "home.hero.secondary" | t(locale) }}
             {{ icon("arrow-right", "h-4 w-4") }}
           </a>
         </div>
@@ -109,7 +100,10 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 2. Реальность Alibaba — боль с акцентом «до 40%» ──────────────── #}
+  {# ── 2. Почему прямой завод дешевле ───────────────────────────────────
+     Слияние прежних блоков «Реальность Alibaba», «Что нужно для прямой работы»
+     и «Офис в Гуанчжоу»: все три раскрывали один аргумент — прямой завод
+     дешевле, но добраться до него сложно, а мы добрались. #}
   <section class="bg-surface">
     <div class="container section">
       <div class="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
@@ -117,7 +111,6 @@ sitemap: true
           <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.alibaba.title" | t(locale) }}</h2>
           <div class="mt-6 space-y-4 text-base leading-relaxed text-muted md:text-lg">
             <p>{{ "torgovlya.alibaba.p1" | t(locale) }}</p>
-            <p>{{ "torgovlya.alibaba.p2" | t(locale) }}</p>
             <p>{{ "torgovlya.alibaba.p3" | t(locale) }}</p>
           </div>
         </div>
@@ -127,75 +120,50 @@ sitemap: true
           <span class="mx-auto mt-4 block max-w-xs text-lg font-light leading-relaxed text-white/90">{{ "torgovlya.alibaba.accentLabel" | t(locale) }}</span>
         </div>
       </div>
-    </div>
-  </section>
 
-  {# ── 3. Что нужно для прямой работы с заводом + «у нас это есть» ───── #}
-  <section class="bg-surface-alt">
-    <div class="container section">
-      <div class="max-w-2xl">
-        <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.direct.title" | t(locale) }}</h2>
-        <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "torgovlya.direct.subtitle" | t(locale) }}</p>
-      </div>
-
-      <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <h3 class="mt-14 text-2xl font-light tracking-tight text-ink md:text-3xl">{{ "torgovlya.direct.title" | t(locale) }}</h3>
+      <p class="mt-3 max-w-2xl text-base leading-relaxed text-muted md:text-lg">{{ "torgovlya.direct.subtitle" | t(locale) }}</p>
+      <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {% for point in torgovlya.directPoints %}
           <div class="flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm">
             <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan/15">
               {{ icon(point.icon, "h-7 w-7 text-cyan") }}
             </span>
-            <h3 class="mt-5 text-lg font-medium text-ink">{{ point.titleKey | t(locale) }}</h3>
+            <h4 class="mt-5 text-lg font-medium text-ink">{{ point.titleKey | t(locale) }}</h4>
             <p class="mt-2 text-sm leading-relaxed text-muted">{{ point.textKey | t(locale) }}</p>
           </div>
         {% endfor %}
       </div>
 
-      <div class="mt-10 rounded-2xl bg-brand p-8 text-white md:p-10">
+      {# «У нас это есть» + куда именно выезжаем. #}
+      <div class="mt-8 rounded-2xl bg-brand p-8 text-white md:p-10">
         <p class="max-w-3xl text-lg font-light leading-relaxed md:text-xl">{{ "torgovlya.direct.closing" | t(locale) }}</p>
+        <p class="mt-6 text-sm font-medium uppercase tracking-wide text-white/70">{{ "torgovlya.guangzhou.provincesLabel" | t(locale) }}</p>
+        <ul class="mt-3 flex flex-wrap gap-2">
+          {% for prov in torgovlya.provinces %}
+            <li class="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-1.5 text-base font-medium text-white">
+              {{ icon("map-pin", "h-4 w-4 text-cyan") }}
+              {{ prov | t(locale) }}
+            </li>
+          {% endfor %}
+        </ul>
       </div>
-    </div>
-  </section>
 
-  {# → CTA-1 (после блока «что нужно для прямой работы») — единый дизайн /logistika/ #}
-  {{ ctaBand(("cta.calculate" | t(locale)), calcUrl, text=("torgovlya.cta1" | t(locale)), tone="inline") }}
-
-  {# ── 4. Офис в Гуанчжоу + выезды в провинции ──────────────────────── #}
-  <section class="bg-surface-alt">
-    <div class="container section">
-      <div class="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
-        <div>
-          <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.guangzhou.title" | t(locale) }}</h2>
-          <div class="mt-6 space-y-4 text-base leading-relaxed text-muted md:text-lg">
-            <p>{{ "torgovlya.guangzhou.p1" | t(locale) }}</p>
-            <p>{{ "torgovlya.guangzhou.p2" | t(locale) }}</p>
-          </div>
-
-          <p class="mt-8 text-sm font-medium uppercase tracking-wide text-muted">{{ "torgovlya.guangzhou.provincesLabel" | t(locale) }}</p>
-          <ul class="mt-3 flex flex-wrap gap-2">
-            {% for prov in torgovlya.provinces %}
-              <li class="inline-flex items-center gap-1.5 rounded-full bg-cyan/10 px-4 py-1.5 text-base font-medium text-ink">
-                {{ icon("map-pin", "h-4 w-4 text-cyan") }}
-                {{ prov | t(locale) }}
-              </li>
-            {% endfor %}
-          </ul>
+      {# Что даёт выезд на завод + фото команды в Китае. #}
+      <div class="mt-8 grid items-stretch gap-8 lg:grid-cols-2">
+        <div class="space-y-5">
+          {% for benefit in torgovlya.guangzhouBenefits %}
+            <div class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm">
+              {{ icon("badge-check", "mt-0.5 h-6 w-6 shrink-0 text-cyan") }}
+              <span class="text-base leading-relaxed text-muted">{{ benefit | t(locale) }}</span>
+            </div>
+          {% endfor %}
         </div>
-
-        {# Фото офиса/команды в Китае — заглушка 4:3 (заменяется через Decap:
-           torgovlya-komanda-4x3.jpg). #}
-        <figure class="w-full overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-          {% image "/assets/img/uploads/torgovlya-komanda-4x3.jpg", "Офис и команда ТЛК БАРС в Китае", "(min-width: 1024px) 30rem, 90vw", "aspect-[4/3] w-full object-cover" %}
-        </figure>
-      </div>
-
-      {# «Что даёт выезд на завод» — отдельные светлые карточки под основным рядом. #}
-      <div class="mt-10 grid gap-5 sm:grid-cols-3">
-        {% for benefit in torgovlya.guangzhouBenefits %}
-          <div class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm">
-            {{ icon("badge-check", "mt-0.5 h-6 w-6 shrink-0 text-cyan") }}
-            <span class="text-base leading-relaxed text-muted">{{ benefit | t(locale) }}</span>
-          </div>
-        {% endfor %}
+        {# Фото команды в Китае — заменяется через Decap (torgovlya-komanda-4x3). #}
+        <div class="relative min-h-[18rem] overflow-hidden rounded-2xl border border-slate-200 bg-surface-alt shadow-sm">
+          <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-8 w-8 text-slate-300") }}</span>
+          {% image "/assets/img/uploads/torgovlya-komanda-4x3.jpg", "Офис и команда ТЛК БАРС в Китае", "(min-width: 1024px) 30rem, 90vw", "relative h-full w-full object-cover" %}
+        </div>
       </div>
     </div>
   </section>
@@ -285,21 +253,40 @@ sitemap: true
           </a>
         </li>
       </ol>
+
+      {# Пара кадров с производства — разбивает длинную сетку этапов. #}
+      <div class="mt-8 grid gap-5 sm:grid-cols-2">
+        <div class="relative min-h-[14rem] overflow-hidden rounded-2xl border border-slate-200 bg-surface">
+          <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-8 w-8 text-slate-300") }}</span>
+          {% image "/assets/img/uploads/torgovlya-proizvodstvo-1-16x10.jpg", "Цех завода-партнёра в Китае", "(min-width: 640px) 30rem, 100vw", "relative h-full w-full object-cover" %}
+        </div>
+        <div class="relative min-h-[14rem] overflow-hidden rounded-2xl border border-slate-200 bg-surface">
+          <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-8 w-8 text-slate-300") }}</span>
+          {% image "/assets/img/uploads/torgovlya-proizvodstvo-2-16x10.jpg", "Инспекция партии перед отгрузкой", "(min-width: 640px) 30rem, 100vw", "relative h-full w-full object-cover" %}
+        </div>
+      </div>
     </div>
   </section>
 
   {# ── 7. Ответственность за качество (тёмный акцент, образец-эталон) ── #}
   <section class="bg-brand text-white">
     <div class="container section">
-      <div class="max-w-3xl">
-        <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
-          {{ icon("shield-check", "h-7 w-7 text-cyan") }}
-        </span>
-        <h2 class="mt-6 text-3xl font-light tracking-tight md:text-4xl">{{ "torgovlya.quality.title" | t(locale) }}</h2>
-        <div class="mt-6 space-y-4 text-lg font-light leading-relaxed text-white/85">
-          <p>{{ "torgovlya.quality.p1" | t(locale) }}</p>
-          <p>{{ "torgovlya.quality.p2" | t(locale) }}</p>
-          <p>{{ "torgovlya.quality.p3" | t(locale) }}</p>
+      <div class="grid items-center gap-10 lg:grid-cols-[1.15fr_1fr]">
+        <div>
+          <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
+            {{ icon("shield-check", "h-7 w-7 text-cyan") }}
+          </span>
+          <h2 class="mt-6 text-3xl font-light tracking-tight md:text-4xl">{{ "torgovlya.quality.title" | t(locale) }}</h2>
+          <div class="mt-6 space-y-4 text-lg font-light leading-relaxed text-white/85">
+            <p>{{ "torgovlya.quality.p1" | t(locale) }}</p>
+            <p>{{ "torgovlya.quality.p2" | t(locale) }}</p>
+            {# <p>{{ "torgovlya.quality.p3" | t(locale) }}</p> #}
+          </div>
+        </div>
+
+        <div class="relative min-h-[16rem] overflow-hidden rounded-2xl border border-white/15 bg-white/5 lg:min-h-[20rem]">
+          <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-8 w-8 text-white/30") }}</span>
+          {% image "/assets/img/uploads/torgovlya-obrazec-4x3.jpg", "Образец-эталон, утверждённый клиентом до запуска партии", "(min-width: 1024px) 28rem, 90vw", "relative h-full w-full object-cover" %}
         </div>
       </div>
     </div>
@@ -365,7 +352,7 @@ sitemap: true
         <div class="mt-6 space-y-4 text-base leading-relaxed text-muted md:text-lg">
           <p>{{ "torgovlya.partnership.p1" | t(locale) }}</p>
           <p>{{ "torgovlya.partnership.p2" | t(locale) }}</p>
-          <p>{{ "torgovlya.partnership.p3" | t(locale) }}</p>
+          {# <p>{{ "torgovlya.partnership.p3" | t(locale) }}</p> #}
         </div>
       </div>
     </div>

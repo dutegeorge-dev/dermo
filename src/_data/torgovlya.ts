@@ -109,11 +109,14 @@ const torgovlya: TorgovlyaData = {
   faq: [
     { questionKey: "torgovlya.faq.q1.q", answerKey: "torgovlya.faq.q1.a" },
     { questionKey: "torgovlya.faq.q2.q", answerKey: "torgovlya.faq.q2.a" },
-    { questionKey: "torgovlya.faq.q3.q", answerKey: "torgovlya.faq.q3.a" },
+    // q3 «Кто платит за образцы» — есть в блоке «Как устроена работа» (шаг 03).
+    // { questionKey: "torgovlya.faq.q3.q", answerKey: "torgovlya.faq.q3.a" },
     { questionKey: "torgovlya.faq.q4.q", answerKey: "torgovlya.faq.q4.a" },
     { questionKey: "torgovlya.faq.q5.q", answerKey: "torgovlya.faq.q5.a" },
-    { questionKey: "torgovlya.faq.q6.q", answerKey: "torgovlya.faq.q6.a" },
-    { questionKey: "torgovlya.faq.q7.q", answerKey: "torgovlya.faq.q7.a" },
+    // q6 «Возврат экспортного НДС» — услуга убрана из меню и из плиток.
+    // { questionKey: "torgovlya.faq.q6.q", answerKey: "torgovlya.faq.q6.a" },
+    // q7 «Вы гарантируете качество» — дословно повторяет блок про образец-эталон.
+    // { questionKey: "torgovlya.faq.q7.q", answerKey: "torgovlya.faq.q7.a" },
     { questionKey: "torgovlya.faq.q8.q", answerKey: "torgovlya.faq.q8.a" },
   ],
 };

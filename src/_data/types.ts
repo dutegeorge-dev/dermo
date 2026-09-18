@@ -1245,7 +1245,9 @@ export interface Dictionary {
       title: string;
       p1: string;
       p2: string;
-      p3: string;
+      // p3 больше не выводится (см. torgovlya.njk) — оставлен опциональным,
+      // чтобы переводы можно было вернуть без правки типа.
+      p3?: string;
     };
     separate: {
       title: string;
@@ -1292,7 +1294,8 @@ export interface Dictionary {
       title: string;
       p1: string;
       p2: string;
-      p3: string;
+      // p3 («нам неинтересны разовые сделки») скрыт в шаблоне.
+      p3?: string;
     };
     logistics: {
       title: string;
