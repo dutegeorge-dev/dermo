@@ -37,15 +37,11 @@ sitemap: true
       <div>
         <h1 class="max-w-2xl text-3xl font-light leading-tight tracking-tight sm:text-4xl md:text-5xl">{{ L.hero.h1 }}</h1>
         <p class="mt-6 max-w-xl text-lg font-light leading-relaxed text-white/85 md:text-xl">{{ L.hero.subtitle }}</p>
-        {# Две кнопки — не дубль формы: Telegram (фирменные цвета) + белая кнопка
-           на статью блога «Способы доставки». #}
+        {# Тот же набор, что в hero главной: два мессенджера + переход в кейсы. #}
         <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-telegram px-6 py-3 text-base font-medium text-white transition-colors hover:bg-telegram-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
-            {{ icon("send", "h-5 w-5") }}
-            {{ "cta.telegramWrite" | t(locale) }}
-          </a>
-          <a href="{{ '/uslugi/dostavka/' | localizedUrl(locale) }}" class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-medium text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
-            {{ L.hero.ctaSecondary }}
+          {{ messengers("lg", "ring-offset-brand") }}
+          <a href="{{ '/kejsy/' | localizedUrl(locale) }}" class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-medium text-ink transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand">
+            {{ "home.hero.secondary" | t(locale) }}
             {{ icon("arrow-right", "h-4 w-4") }}
           </a>
         </div>
@@ -60,7 +56,14 @@ sitemap: true
     <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.methods.title }}</h2>
     <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {% for m in L.methods.items %}
-        <a href="{{ m.url | localizedUrl(locale) }}" class="group flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-cyan">
+        <a href="{{ m.url | localizedUrl(locale) }}" class="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition-colors hover:border-cyan">
+          {# Фото способа доставки — слот под загрузку (Decap: «Логистика»).
+             Пока файла нет, шорткод `image` возвращает пустоту и видна подложка. #}
+          <span class="relative block aspect-[16/10] w-full overflow-hidden bg-surface-alt">
+            <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-7 w-7 text-slate-300") }}</span>
+            {% image "/assets/img/uploads/logistika-sposob-" + loop.index + "-16x10.jpg", m.title, "(min-width: 1024px) 18rem, (min-width: 640px) 45vw, 90vw", "relative h-full w-full object-cover" %}
+          </span>
+          <span class="flex flex-1 flex-col p-6">
           {{ icon(m.icon, "h-8 w-8 text-cyan") }}
           <h3 class="mt-4 text-base font-semibold text-ink">{{ m.title }}</h3>
           <p class="mt-2 text-2xl font-semibold text-cyan">{{ m.time }}</p>
@@ -68,6 +71,7 @@ sitemap: true
           <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-cyan-dark">
             {{ "home.cases.more" | t(locale) }}
             {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover:translate-x-1") }}
+          </span>
           </span>
         </a>
       {% endfor %}
@@ -78,14 +82,18 @@ sitemap: true
     </p>
   </section>
 
-  {# ── 3. Карго vs белая доставка ───────────────────────────────────────── #}
+  {# ── 3. Сравнительная таблица «карго / белая» — скрыта: на телефоне она
+     шире экрана и колонка «Карго» не видна. Смысл остался в блоке анти-кейсов
+     ниже и в FAQ. Снять обёртку, чтобы вернуть. #}
+  {#
+  ( ── 3. Карго vs белая доставка ───────────────────────────────────────── )
   <section id="kargo" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <h2 class="max-w-3xl text-2xl font-semibold tracking-tight md:text-3xl">{{ L.cargo.title }}</h2>
       <p class="mt-4 max-w-3xl text-base text-muted">{{ L.cargo.intro }}</p>
 
-      {# Сравнительная таблица с цветовым кодом ✓/✗. На мобайле остаётся таблицей —
-         контейнер прокручивается по горизонтали (min-width у таблицы). #}
+      ( Сравнительная таблица с цветовым кодом ✓/✗. На мобайле остаётся таблицей —
+         контейнер прокручивается по горизонтали (min-width у таблицы). )
       <div class="mt-8 overflow-x-auto rounded-xl border border-slate-200">
         <table class="w-full min-w-[44rem] border-collapse text-left">
           <caption class="sr-only">{{ L.cargo.title }}</caption>
@@ -123,6 +131,8 @@ sitemap: true
       </div>
     </div>
   </section>
+  #}
+
 
   {# Анти-кейсы — отдельный блок на белом фоне (отделён от таблицы карго) #}
   <section id="anti-kejsy" class="container section scroll-mt-24">
@@ -138,13 +148,18 @@ sitemap: true
     <p class="mt-5 max-w-3xl text-sm italic text-muted">{{ L.cargo.antiNote }}</p>
   </section>
 
-  {# → CTA-1 (после блока карго) #}
+  {# Промежуточная CTA-полоса — скрыта, на странице остался финальный CTA. #}
+  {#
+  ( → CTA-1 (после блока карго) )
   {{ ctaBand(L.ctaInline1.button, calcUrl, text=L.ctaInline1.text, tone="inline") }}
+  #}
 
-  {# ── 4. Как мы обеспечиваем безопасность ──────────────────────────────── #}
+
+  {# ── 4. Как устроена поставка: документы, деньги, цена ────────────────────
+     Слияние трёх прежних блоков (безопасность + гарантии/оплата + стоимость):
+     они трижды повторяли договор комиссии и расчёт за 1–2 дня. #}
   <section id="bezopasnost" class="container section scroll-mt-24">
     <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.safety.title }}</h2>
-    <p class="mt-3 max-w-3xl text-base text-muted">{{ L.safety.subtitle }}</p>
     <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {% for s in L.safety.items %}
         <div class="flex flex-col rounded-xl border border-slate-200 bg-white p-6">
@@ -152,14 +167,35 @@ sitemap: true
             {{ icon(s.icon, "h-6 w-6 text-cyan") }}
           </span>
           <h3 class="mt-4 text-base font-semibold text-ink">{{ s.title }}</h3>
-          {# desc может содержать перелинковку (<a>) — рендерим как safe. #}
           <p class="mt-2 text-sm text-muted">{{ s.desc | safe }}</p>
         </div>
       {% endfor %}
     </div>
+
+    {# Слева — из чего складывается цена, справа — фото-слот с поставки. #}
+    <div class="mt-8 grid items-start gap-8 lg:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 class="text-lg font-semibold text-ink">{{ L.cost.structureTitle }}</h3>
+        <ul class="mt-4 space-y-3">
+          {% for c in L.cost.structure %}
+            <li class="flex items-start gap-3">
+              {{ icon(c.icon, "mt-0.5 h-5 w-5 shrink-0 text-cyan") }}
+              <span class="text-sm text-ink">{{ c.text }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="relative aspect-[4/3] overflow-hidden rounded-xl border border-slate-200 bg-surface-alt">
+        <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-8 w-8 text-slate-300") }}</span>
+        {% image "/assets/img/uploads/logistika-postavka-4x3.jpg", L.safety.title, "(min-width: 1024px) 34rem, 90vw", "relative h-full w-full object-cover" %}
+      </div>
+    </div>
   </section>
 
-  {# ── 5. Гарантии и оплата ─────────────────────────────────────────────── #}
+  {# ── 5–6. Прежние блоки «Гарантии и оплата» и «Прозрачная стоимость» —
+     скрыты: их пункты перенесены в блок выше, врезка про цену тоже. #}
+  {#
+  ( ── 5. Гарантии и оплата ─────────────────────────────────────────────── )
   <section id="garantii" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.payment.title }}</h2>
@@ -180,7 +216,7 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 6. Прозрачная стоимость ──────────────────────────────────────────── #}
+  ( ── 6. Прозрачная стоимость ──────────────────────────────────────────── )
   <section id="stoimost" class="container section scroll-mt-24">
     <h2 class="max-w-3xl text-2xl font-semibold tracking-tight md:text-3xl">{{ L.cost.title }}</h2>
     <p class="mt-4 max-w-3xl text-base text-muted">{{ L.cost.intro }}</p>
@@ -204,11 +240,20 @@ sitemap: true
       </div>
     </div>
   </section>
+  #}
 
-  {# → CTA-2 (после блока стоимости) #}
+
+  {# Вторая промежуточная CTA-полоса — скрыта. #}
+  {#
+  ( → CTA-2 (после блока стоимости) )
   {{ ctaBand(L.ctaInline2.button, calcUrl, text=L.ctaInline2.text, tone="inline") }}
+  #}
 
-  {# ── 7. Почему не агент-одиночка ──────────────────────────────────────── #}
+
+  {# ── 7. «Половина компаний — агенты» — скрыт: об этом же говорит цитата
+     руководителя ниже, только живее. #}
+  {#
+  ( ── 7. Почему не агент-одиночка ──────────────────────────────────────── )
   <section id="ne-agent" class="container section scroll-mt-24">
     <div class="container-narrow !px-0">
       <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.notAgent.title }}</h2>
@@ -216,6 +261,8 @@ sitemap: true
       <p class="mt-4 text-base text-muted">{{ L.notAgent.p2 }}</p>
     </div>
   </section>
+  #}
+
 
   {# ── 8. Цитата руководителя ───────────────────────────────────────────── #}
   <section class="bg-brand text-white">
@@ -243,7 +290,6 @@ sitemap: true
   {# ── 9. Для кого мы ───────────────────────────────────────────────────── #}
   <section id="dlya-kogo" class="container section scroll-mt-24">
     <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">{{ L.audience.title }}</h2>
-    <p class="mt-4 max-w-3xl text-base text-muted">{{ L.audience.intro }}</p>
     <div class="mt-8 grid gap-5 sm:grid-cols-3">
       {% for a in L.audience.items %}
         <div class="flex flex-col rounded-xl border border-slate-200 bg-white p-6">
@@ -270,6 +316,8 @@ sitemap: true
         <p class="mt-4 text-base text-muted">{{ L.trade.intro2 }}</p>
       </div>
 
+      {# Шесть плиток «что мы делаем до отгрузки» скрыты: они дословно
+         повторяют страницу «Торговля», куда ведёт кнопка ниже.
       <h3 class="mt-10 text-lg font-semibold text-ink">{{ L.trade.servicesTitle }}</h3>
       <div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {% for t in L.trade.services %}
@@ -284,8 +332,14 @@ sitemap: true
           </div>
         {% endfor %}
       </div>
+      #}
 
-      {# → CTA-3 (переход на /torgovlya/) — главный переход блока #}
+      {# Фото команды в Гуанчжоу — слот под загрузку. #}
+      <div class="relative mt-8 aspect-[16/9] max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-surface-alt">
+        <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-8 w-8 text-slate-300") }}</span>
+        {% image "/assets/img/uploads/logistika-komanda-16x9.jpg", L.trade.title, "(min-width: 768px) 48rem, 90vw", "relative h-full w-full object-cover" %}
+      </div>
+
       <div class="mt-8">
         <a href="{{ tradeUrl }}" class="btn-accent px-6 py-3 text-base">
           {{ L.trade.cta }}

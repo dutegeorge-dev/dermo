@@ -435,7 +435,6 @@ export interface Logistika {
   ctaInline1: { text: string; button: string };
   safety: {
     title: string;
-    subtitle: string;
     items: LogiCard[];
   };
   payment: {

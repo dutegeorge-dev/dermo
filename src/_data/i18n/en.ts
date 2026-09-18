@@ -603,16 +603,16 @@ const en: Dictionary = {
           desc: "The money went to an individual's card or an opaque firm — if something goes wrong there's no one to turn to, and no one controls the cargo.",
         },
       ],
+      // Строка-итог вместо снятой таблицы «карго / белая».
       antiNote:
-        "These aren't scare stories but the most common situations — exactly what a well-built official scheme is for.",
+        "With official delivery you get a customs declaration for every shipment, VAT you can reclaim and a full document pack for selling in Russia.",
     },
     ctaInline1: {
       text: "Not sure which scheme suits your goods? We'll calculate and advise.",
       button: "Calculate",
     },
     safety: {
-      title: "How we ensure the shipment is secure",
-      subtitle: "Each point is a concrete action, not an abstract promise.",
+      title: "How a shipment works: documents, money, price",
       items: [
         {
           icon: "clipboard-list",
@@ -625,24 +625,24 @@ const en: Dictionary = {
           desc: "No understatement. Full payment of duty and VAT. It's more expensive than cargo — but it's the only way that will withstand an audit 3 years later.",
         },
         {
-          icon: "file-text",
-          title: "We work under a commission agreement.",
-          desc: "You see all costs separately: purchase, logistics, customs payments, our commission. It's impossible to inflate or hide anything — every line is backed by a document.",
+          icon: "building-2",
+          title: "A contract with a Russian legal entity, payment in roubles.",
+          desc: "Payment goes to the company's bank account inside the Russian legal framework — no transfers to personal cards or accounts abroad.",
+        },
+        {
+          icon: "receipt",
+          title: "A commission agreement with a cost breakdown.",
+          desc: "Purchase, logistics, customs payments and commission as separate lines. Every line is backed by a document.",
         },
         {
           icon: "badge-check",
           title: "We prepare the permits in advance.",
-          desc: `EAEU technical-regulation certificates, state-registration certificates (SGR), notifications, Chestny Znak — we know what your product needs before shipping. For flooring, for example, our EAEU certificates are already in place. Cargo doesn't get stuck over a missing piece of paper.`,
-        },
-        {
-          icon: "shield-check",
-          title: "We don't work with goods that can't be imported legally.",
-          desc: "If goods can't be cleared officially, we'll say so honestly rather than invent a workaround.",
+          desc: "EAEU technical-regulation certificates, state-registration certificates (SGR), notifications, Chestny Znak — we work out the list before shipping so the cargo isn't held up over a missing piece of paper.",
         },
         {
           icon: "shield",
-          title: "We insure cargo.",
-          desc: "Financial protection against unforeseen situations en route.",
+          title: "We insure the cargo and answer for it ourselves.",
+          desc: "We receive, ship and clear it with our own people — there is always someone to ask, no «that's the subcontractor's side».",
         },
       ],
     },
@@ -816,14 +816,15 @@ const en: Dictionary = {
           q: "Does my product need certificates?",
           a: `It depends on the category. Many goods require EAEU technical-regulation certificates, SGR or notifications. We determine the list before shipment and prepare the documents in advance so the cargo doesn't get stuck at customs.`,
         },
-        {
-          q: "How is the price formed?",
-          a: "From separate line items: logistics, customs duty, VAT, certification (if needed) and our fixed commission. All items are visible in the commission agreement.",
-        },
-        {
-          q: "Can VAT be refunded?",
-          a: "Yes, if you're a VAT payer on the general tax regime: the VAT paid at customs is claimed as a deduction. This is one of the key advantages of official shipping over cargo.",
-        },
+        // Removed as duplicates — see the Russian file for the reason.
+        // {
+        //   q: "How is the price formed?",
+        //   a: "From separate line items: logistics, customs duty, VAT, certification (if needed) and our fixed commission. All items are visible in the commission agreement.",
+        // },
+        // {
+        //   q: "Can VAT be refunded?",
+        //   a: "Yes, if you're a VAT payer on the general tax regime: the VAT paid at customs is claimed as a deduction. This is one of the key advantages of official shipping over cargo.",
+        // },
         {
           q: "What's needed to get an estimate?",
           a: "A description of the goods with photos and specifications, the batch value, the departure and destination points, and the weight and volume. We prepare the estimate in 1–2 business days.",
