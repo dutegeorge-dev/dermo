@@ -315,7 +315,9 @@ const en: Dictionary = {
     services: {
       title: "What we take on — from search to shipment",
       intro:
-        "This is the full turnkey purchasing cycle. But each service can also be ordered separately — if you've already found a supplier or handle part of the work yourself. Click a service to read more.",
+        // Previous wording, inviting a click (some tiles no longer link anywhere):
+        // "This is the full turnkey purchasing cycle. But each service can also be ordered separately — if you've already found a supplier or handle part of the work yourself. Click a service to read more.",
+        "This is the full turnkey purchasing cycle. But each service can also be ordered separately — if you've already found a supplier or handle part of the work yourself.",
       more: "Learn more",
       allLink: "All services",
     },
