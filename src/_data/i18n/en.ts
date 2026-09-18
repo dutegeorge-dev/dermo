@@ -708,7 +708,8 @@ const en: Dictionary = {
       p2: "BARS has its own operating company in Guangzhou and its own legal entity in Russia. We receive the cargo ourselves, ship it ourselves, clear customs ourselves. No invisible subcontractors in the chain.",
     },
     quote: {
-      text: "I've been doing business with China for more than 18 years. In that time I've seen it all: factories that send defects on the third batch, intermediaries posing as manufacturers, cargo schemes that fall apart at the first tax audit. That's exactly why we built a system where every stage — from receiving goods in China to documents in Russia — is closed by our own people. Not agents. Not subcontractors. Ours.",
+      text:
+        "I have been doing business with China for more than 18 years. In that time I have seen it all: factories that ship defects, intermediaries, grey schemes. That is why we built a system where every stage — from receiving the goods in China to the documents in Russia — is handled by our own people.",
       author: "Evgeny Fotin",
       role: "director",
       photoAlt: "Photo of the company director",
