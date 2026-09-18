@@ -346,9 +346,10 @@ sitemap: true
 
             <div class="mt-4 space-y-4">
               <div>
-                <label class="field-label" for="calc-contact">Телефон, Telegram или Макс</label>
-                <input class="field-input min-h-[44px]" id="calc-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ · @логин в Telegram / Макс" data-validate="contact" autocomplete="off" />
-                <p class="field-error hidden" data-error-for="contact">Укажите корректный телефон или логин Telegram / Макс.</p>
+                {# Было: «Телефон, Telegram или Макс» — Макс скрыт до регистрации аккаунта. #}
+                <label class="field-label" for="calc-contact">Телефон или Telegram</label>
+                <input class="field-input min-h-[44px]" id="calc-contact" name="contact" type="text" placeholder="+7 (___) ___-__-__ · @логин в Telegram" data-validate="contact" autocomplete="off" />
+                <p class="field-error hidden" data-error-for="contact">Укажите корректный телефон или логин Telegram.</p>
               </div>
 
               <div>
@@ -528,7 +529,7 @@ sitemap: true
     </div>
   </section>
 
-  {# Не ctaBand: у полосы одна кнопка, а мессенджеров два — Telegram и Макс. #}
+  {# Не ctaBand: у полосы одна кнопка, а блок мессенджеров — отдельный макрос. #}
   <section class="py-6 md:py-8">
     <div class="container">
       <div class="flex flex-col items-start gap-4 rounded-xl border border-cyan/40 bg-surface-alt px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">

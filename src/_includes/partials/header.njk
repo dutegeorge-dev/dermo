@@ -1,7 +1,7 @@
 {#
   Двухъярусный sticky-хедер ТЛК БАРС.
   Ярус 1 (utility) — переключатель языка, «Рассчитать», телефон, время работы,
-  Telegram и Макс (две отдельные ссылки — это разные мессенджеры).
+  Telegram (ссылка на Макс временно закомментирована).
   Ярус 2 (navbar) — логотип, меню (5 пунктов), янтарная CTA. «Услуги» → мега-меню.
   Тексты — из словаря (t), без хардкода. Поведение — header.ts (прогрессивное улучшение).
 #}
@@ -26,7 +26,7 @@
         {% endfor %}
       </nav>
 
-      {# Сервисы: Рассчитать · телефон · время работы · Telegram и Макс #}
+      {# Сервисы: Рассчитать · телефон · время работы · Telegram #}
       <div class="flex items-center gap-3 text-white/80">
         <a href="{{ site.calculateUrl | localizedUrl(locale) }}" class="hidden items-center gap-1.5 transition-colors hover:text-cyan sm:inline-flex">
           {{ icon("calculator", "h-4 w-4") }}
@@ -42,9 +42,11 @@
         <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.telegram' | t(locale) }}">
           {{ brandIcon("telegram", "h-4 w-4") }}
         </a>
-        <a href="{{ site.max }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.max' | t(locale) }}">
-          {{ brandIcon("max", "h-4 w-4") }}
+        {# Макс временно скрыт (аккаунт ещё не зарегистрирован) — вернуть = снять комментарий.
+        <a href="{{ site.max }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="({ 'a11y.max' | t(locale) })">
+          ({ brandIcon("max", "h-4 w-4") })
         </a>
+        #}
       </div>
     </div>
   </div>

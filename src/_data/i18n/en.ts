@@ -89,14 +89,14 @@ const en: Dictionary = {
   // Shipment gallery at the bottom of /logistika/ and /torgovlya/ (3:4 photos).
   gallery: {
     title: "Photos from our shipments",
-    lead: "Shots from factories, warehouses and loading bays — what our team in China sees.",
+    lead: "Inspection, measurements and loading — shots from real client shipments.",
     zoom: "open larger",
-    alt1: "Cargo secured with lashing straps inside a container",
-    alt2: "Forklift loading boxes into a container",
-    alt3: "Oversized modular house on a low-bed trailer",
-    alt4: "Flooring samples from the factory",
-    alt5: "Monitors at the supplier's warehouse",
-    alt6: "Assembly line at a factory in China",
+    alt1: "Measuring linoleum thickness during batch inspection",
+    alt2: "Loading rolls of artificial turf",
+    alt3: "Container loaded with rolls for a client",
+    alt4: "Pallets of goods inside a container before departure",
+    alt5: "Night loading of a container at a warehouse in China",
+    alt6: "Loaded container secured before departure",
   },
   content: {
     toc: "Contents",
@@ -126,8 +126,8 @@ const en: Dictionary = {
       note: "We'll reply within one business day",
       cargoLabel: "What you're shipping or need to source",
       cargoError: "Please specify the product or task.",
-      contactLabel: "Phone, Telegram or MAX",
-      contactError: "Please enter a valid phone number or Telegram / MAX username.",
+      contactLabel: "Phone or Telegram",
+      contactError: "Please enter a valid phone number or Telegram username.",
       success: "Request sent! We'll get in touch within one business day.",
     },
     trust: {
@@ -235,8 +235,8 @@ const en: Dictionary = {
       note: "We'll reply within one business day",
       cargoLabel: "What you need to source",
       cargoError: "Please specify what you need to source.",
-      contactLabel: "Phone, Telegram or MAX",
-      contactError: "Please enter a valid phone number or Telegram / MAX username.",
+      contactLabel: "Phone or Telegram",
+      contactError: "Please enter a valid phone number or Telegram username.",
       success: "Request sent! We'll get in touch within one business day.",
     },
     alibaba: {
@@ -495,7 +495,7 @@ const en: Dictionary = {
     consentSuffix: ".",
     consentError: "Please confirm your consent to the processing of personal data.",
     sending: "Sending…",
-    sendError: "Could not send the request. Please try again or message us on Telegram or MAX.",
+    sendError: "Could not send the request. Please try again or message us on Telegram.",
   },
   cookie: {
     aria: "Cookie usage notice",
@@ -684,7 +684,7 @@ const en: Dictionary = {
           icon: "landmark",
           text: "Customs duty (depends on the HS code and the value of the goods)",
         },
-        { icon: "percent", text: "VAT 20% (refundable if you're a VAT payer)" },
+        { icon: "percent", text: "VAT 22% (refundable if you're a VAT payer)" },
         {
           icon: "badge-check",
           text: "Certification and permits (if required)",
@@ -739,9 +739,9 @@ const en: Dictionary = {
     trade: {
       title: "No team in China? We have one — and we're ready to work for you",
       intro1:
-        "Shipping is the final stage. But business with China starts earlier: find the factory, not a middleman. Inspect production before you've paid. Agree the price in Chinese, not through a translator in a chat. Oversee packaging and labeling while the goods are still at the factory.",
+        "Shipping is the final stage. But business with China starts earlier: find the factory, place the order, agree the price, oversee packaging and labeling, check the goods for defects.",
       intro2:
-        "Our director lives in China and has done business with it for more than 18 years. Our team knows how to tell a real factory from a trading agent that calls itself a factory.",
+        "Our team is ready to handle any task you delegate — or to supervise the whole deal end to end.",
       servicesTitle: "What we do before shipment",
       services: [
         {

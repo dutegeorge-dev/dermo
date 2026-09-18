@@ -25,6 +25,8 @@ const site: SiteConfig = {
   // Telegram и Макс — разные мессенджеры и разные ссылки. Одной кнопкой
   // «Telegram / Макс» их выводить нельзя: клик уводил бы в один из двух.
   telegram: "https://t.me/tlkbars",
+  // Ссылка сохранена, но нигде не выводится: кнопки и упоминания Макса
+  // закомментированы, пока аккаунт не зарегистрирован.
   max: "https://max.ru/tlkbars",
   email: "info@tlkbars.ru",
   privacyEmail: "barslogistics@yandex.com",

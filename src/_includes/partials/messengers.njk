@@ -1,5 +1,6 @@
 {#
-  Пара кнопок мессенджеров: Telegram и Макс.
+  Кнопки мессенджеров. Сейчас выводится только Telegram: кнопка Макса
+  закомментирована ниже, пока аккаунт в Максе не зарегистрирован.
   Это два разных сервиса с разными ссылками, поэтому одной кнопкой
   «Telegram / Макс» их выводить нельзя — клик уводил бы в один из двух.
 
@@ -27,13 +28,15 @@
   {{ brandIcon("telegram", iconSize) }}
   {{ ("cta.telegramWrite" if long else "cta.telegram") | t(locale) }}
 </a>
+{# Макс временно скрыт (аккаунт ещё не зарегистрирован) — вернуть = снять комментарий.
 <a
   href="{{ site.max }}"
   rel="nofollow noopener"
   target="_blank"
   class="{{ base }} bg-max hover:bg-max-hover focus-visible:ring-max"
 >
-  {{ brandIcon("max", iconSize) }}
-  {{ ("cta.maxWrite" if long else "cta.max") | t(locale) }}
+  ({ brandIcon("max", iconSize) })
+  ({ ("cta.maxWrite" if long else "cta.max") | t(locale) })
 </a>
+#}
 {% endmacro %}

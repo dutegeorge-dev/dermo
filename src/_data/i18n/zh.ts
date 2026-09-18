@@ -88,14 +88,14 @@ const zh: Dictionary = {
   // /logistika/ 与 /torgovlya/ 页面底部的发货相册（3:4 竖版照片）。
   gallery: {
     title: "我们的发货照片",
-    lead: "来自工厂、仓库和装货现场的照片——我们在中国的团队亲眼所见。",
+    lead: "验货、测量与装柜——来自客户真实发货的照片。",
     zoom: "查看大图",
-    alt1: "集装箱内用绑带固定的货物",
-    alt2: "叉车将纸箱装入集装箱",
-    alt3: "低平板拖车上的超大模块化房屋",
-    alt4: "工厂提供的地板样品",
-    alt5: "供应商仓库中的显示器",
-    alt6: "中国工厂的装配线",
+    alt1: "验收时测量地板革厚度",
+    alt2: "装载人造草坪卷材",
+    alt3: "为客户装满卷材的集装箱",
+    alt4: "发运前集装箱内的托盘货物",
+    alt5: "中国仓库的夜间装柜",
+    alt6: "装载完毕并固定好的集装箱",
   },
   content: {
     toc: "目录",
@@ -125,8 +125,8 @@ const zh: Dictionary = {
       note: "我们将在一个工作日内回复",
       cargoLabel: "您要运输或需要采购什么",
       cargoError: "请填写商品或需求。",
-      contactLabel: "电话、Telegram 或 MAX",
-      contactError: "请填写正确的电话或 Telegram / MAX 账号。",
+      contactLabel: "电话或 Telegram",
+      contactError: "请填写正确的电话或 Telegram 账号。",
       success: "需求已提交！我们将在一个工作日内与您联系。",
     },
     trust: {
@@ -234,8 +234,8 @@ const zh: Dictionary = {
       note: "我们将在一个工作日内回复",
       cargoLabel: "您需要采购什么",
       cargoError: "请填写您需要采购的内容。",
-      contactLabel: "电话、Telegram 或 MAX",
-      contactError: "请填写正确的电话或 Telegram / MAX 账号。",
+      contactLabel: "电话或 Telegram",
+      contactError: "请填写正确的电话或 Telegram 账号。",
       success: "需求已提交！我们将在一个工作日内与您联系。",
     },
     alibaba: {
@@ -494,7 +494,7 @@ const zh: Dictionary = {
     consentSuffix: "。",
     consentError: "请确认您同意处理个人数据。",
     sending: "正在发送…",
-    sendError: "提交失败。请重试，或通过 Telegram 或 MAX 联系我们。",
+    sendError: "提交失败。请重试，或通过 Telegram 联系我们。",
   },
   cookie: {
     aria: "Cookie 使用提示",
@@ -683,7 +683,7 @@ const zh: Dictionary = {
           icon: "landmark",
           text: "关税（取决于 HS 编码和商品价值）",
         },
-        { icon: "percent", text: "增值税 20%（若您是增值税纳税人可抵扣）" },
+        { icon: "percent", text: "增值税 22%（若您是增值税纳税人可抵扣）" },
         {
           icon: "badge-check",
           text: "认证与许可文件（如需要）",
@@ -738,9 +738,9 @@ const zh: Dictionary = {
     trade: {
       title: "您在中国没有团队？我们有——而且愿意为您代劳",
       intro1:
-        "运输是最后一环。但对华生意从更早就开始：找工厂而非中间商。在付款前查验生产。用中文谈价，而不是在聊天里靠翻译。趁货还在厂里就盯好包装与贴标。",
+        "运输是最后一环。但对华生意从更早就开始：找工厂、下订单、谈价格、盯好包装与贴标、检查有无次品。",
       intro2:
-        "我们的负责人常住中国，做对华生意已 18 年多。我们的团队懂得如何分辨真工厂与自称工厂的贸易代理。",
+        "我们的团队可以承接您交办的任何事项，也可以全程把关整笔交易。",
       servicesTitle: "发货前我们做什么",
       services: [
         {
