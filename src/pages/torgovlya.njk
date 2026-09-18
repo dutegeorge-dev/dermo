@@ -214,9 +214,11 @@ sitemap: true
         </a>
       </div>
 
-      {# Четыре актуальные услуги — сетка 2×2 (см. torgovlya.services). #}
-      <div class="mt-10 grid gap-5 sm:grid-cols-2">
+      {# Шесть услуг — сетка 3×2. Услуга без url рендерится обычным блоком:
+         карточка на месте, но никуда не ведёт и без «Подробнее». #}
+      <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {% for service in torgovlya.services %}
+          {% if service.url %}
           <a
             href="{{ service.url | localizedUrl(locale) }}"
             class="group flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
@@ -231,6 +233,15 @@ sitemap: true
               {{ icon("arrow-right", "h-4 w-4") }}
             </span>
           </a>
+          {% else %}
+          <div class="flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm">
+            <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan/15">
+              {{ icon(service.icon, "h-7 w-7 text-cyan") }}
+            </span>
+            <h3 class="mt-5 text-lg font-medium text-ink">{{ service.titleKey | t(locale) }}</h3>
+            <p class="mt-2 flex-1 text-sm leading-relaxed text-muted">{{ service.textKey | t(locale) }}</p>
+          </div>
+          {% endif %}
         {% endfor %}
       </div>
     </div>

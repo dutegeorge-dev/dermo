@@ -32,15 +32,16 @@ const torgovlya: TorgovlyaData = {
   // списком, каждая карточка — ссылка на свою страницу /uslugi/<slug>/.
   // «Сертификация» как этап полного цикла убрана (правка 4) и остаётся здесь
   // как самостоятельная услуга. Тексты переиспользуются из веток fullCycle/separate.
-  // Четыре актуальные услуги — те же, что остались в мега-меню. Остальные
-  // закомментированы, а не удалены: вернуть = снять комментарий. Страницы услуг
-  // живы и доступны с витрины /uslugi/torgovlya/.
+  // Шесть услуг, сетка 3×2. Переговоры и упаковка остаются в списке, но без
+  // url — плитка без ссылки: рассказываем про услугу, на страницу не ведём.
+  // Возврат экспортного НДС закомментирован, а не удалён: вернуть = снять
+  // комментарий. Все страницы живы и доступны с витрины /uslugi/torgovlya/.
   services: [
     { icon: "search", titleKey: "torgovlya.fullCycle.s1.title", textKey: "torgovlya.fullCycle.s1.text", url: "/uslugi/torgovlya/poisk-postavshchika/" },
-    // { icon: "globe", titleKey: "torgovlya.fullCycle.s3.title", textKey: "torgovlya.fullCycle.s3.text", url: "/uslugi/torgovlya/peregovory/" },
+    { icon: "globe", titleKey: "torgovlya.fullCycle.s3.title", textKey: "torgovlya.fullCycle.s3.text" },
     { icon: "shield-check", titleKey: "torgovlya.fullCycle.s4.title", textKey: "torgovlya.fullCycle.s4.text", url: "/uslugi/torgovlya/kontrol-proizvodstva/" },
     { icon: "package-check", titleKey: "torgovlya.separate.s2.title", textKey: "torgovlya.separate.s2.text", url: "/uslugi/torgovlya/inspekciya/" },
-    // { icon: "package", titleKey: "torgovlya.fullCycle.s5.title", textKey: "torgovlya.fullCycle.s5.text", url: "/uslugi/torgovlya/upakovka-markirovka/" },
+    { icon: "package", titleKey: "torgovlya.fullCycle.s5.title", textKey: "torgovlya.fullCycle.s5.text" },
     { icon: "landmark", titleKey: "torgovlya.separate.s1.title", textKey: "torgovlya.separate.s1.text", url: "/uslugi/torgovlya/vykup-tovara/" },
     // { icon: "calculator", titleKey: "torgovlya.separate.s3.title", textKey: "torgovlya.separate.s3.text", url: "/uslugi/torgovlya/vozvrat-nds/" },
   ],
