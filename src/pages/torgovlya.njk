@@ -106,64 +106,77 @@ sitemap: true
      дешевле, но добраться до него сложно, а мы добрались. #}
   <section class="bg-surface">
     <div class="container section">
-      <div class="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
-        <div>
-          <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.alibaba.title" | t(locale) }}</h2>
-          <div class="mt-6 space-y-4 text-base leading-relaxed text-muted md:text-lg">
+      <div class="grid overflow-hidden rounded-2xl border border-slate-200 bg-surface-alt lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
+        <div class="p-7 md:p-10 lg:p-12">
+          <span class="inline-flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-cyan-dark">
+            <span class="h-px w-8 bg-cyan"></span>
+            {{ "torgovlya.direct.title" | t(locale) }}
+          </span>
+          <h2 class="mt-5 max-w-2xl text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.alibaba.title" | t(locale) }}</h2>
+          <div class="mt-6 max-w-2xl space-y-4 text-base leading-relaxed text-muted md:text-lg">
             <p>{{ "torgovlya.alibaba.p1" | t(locale) }}</p>
             <p>{{ "torgovlya.alibaba.p3" | t(locale) }}</p>
           </div>
         </div>
-        {# Компактный акцентный блок: крупная цифра + подпись, по центру колонки. #}
-        <div class="rounded-2xl bg-brand px-8 py-16 text-center text-white shadow-lg md:px-12">
-          <span class="block text-6xl font-light leading-none tracking-tight text-cyan md:text-7xl">{{ "torgovlya.alibaba.accentValue" | t(locale) }}</span>
-          <span class="mx-auto mt-4 block max-w-xs text-lg font-light leading-relaxed text-white/90">{{ "torgovlya.alibaba.accentLabel" | t(locale) }}</span>
+        {# Крупный вывод продолжает вводный текст и визуально открывает раздел. #}
+        <div class="relative flex min-h-64 items-center overflow-hidden bg-brand px-7 py-12 text-white md:px-10 lg:min-h-full">
+          <span aria-hidden="true" class="absolute -right-16 -top-16 h-52 w-52 rounded-full border border-white/15"></span>
+          <span aria-hidden="true" class="absolute -bottom-24 -left-12 h-64 w-64 rounded-full border border-cyan/30"></span>
+          <div class="relative">
+            <span class="block text-6xl font-light leading-none tracking-tight text-cyan md:text-7xl">{{ "torgovlya.alibaba.accentValue" | t(locale) }}</span>
+            <span class="mt-5 block max-w-sm text-lg font-light leading-relaxed text-white/90">{{ "torgovlya.alibaba.accentLabel" | t(locale) }}</span>
+          </div>
         </div>
       </div>
 
-      <h3 class="mt-14 text-2xl font-light tracking-tight text-ink md:text-3xl">{{ "torgovlya.direct.title" | t(locale) }}</h3>
-      <p class="mt-3 max-w-2xl text-base leading-relaxed text-muted md:text-lg">{{ "torgovlya.direct.subtitle" | t(locale) }}</p>
-      <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="mt-14 max-w-3xl md:mt-16">
+        <h3 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ "torgovlya.direct.title" | t(locale) }}</h3>
+        <p class="mt-4 text-base leading-relaxed text-muted md:text-lg">{{ "torgovlya.direct.subtitle" | t(locale) }}</p>
+      </div>
+      <div class="mt-8 grid gap-4 md:grid-cols-2">
         {% for point in torgovlya.directPoints %}
-          <div class="flex h-full flex-col rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm">
-            <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan/15">
-              {{ icon(point.icon, "h-7 w-7 text-cyan") }}
+          <div class="flex h-full gap-5 rounded-xl border border-slate-200 bg-surface p-6 transition-colors hover:border-cyan/60 md:p-7">
+            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan/10">
+              {{ icon(point.icon, "h-6 w-6 text-cyan") }}
             </span>
-            <h4 class="mt-5 text-lg font-medium text-ink">{{ point.titleKey | t(locale) }}</h4>
-            <p class="mt-2 text-sm leading-relaxed text-muted">{{ point.textKey | t(locale) }}</p>
+            <div>
+              <h4 class="text-lg font-semibold text-ink">{{ point.titleKey | t(locale) }}</h4>
+              <p class="mt-2 text-sm leading-relaxed text-muted">{{ point.textKey | t(locale) }}</p>
+            </div>
           </div>
         {% endfor %}
       </div>
 
-      {# «У нас это есть» + куда именно выезжаем. #}
-      <div class="mt-8 rounded-2xl bg-brand p-8 text-white md:p-10">
-        <p class="max-w-3xl text-lg font-light leading-relaxed md:text-xl">{{ "torgovlya.direct.closing" | t(locale) }}</p>
-        <p class="mt-6 text-sm font-medium uppercase tracking-wide text-white/70">{{ "torgovlya.guangzhou.provincesLabel" | t(locale) }}</p>
-        <ul class="mt-3 flex flex-wrap gap-2">
-          {% for prov in torgovlya.provinces %}
-            <li class="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-1.5 text-base font-medium text-white">
-              {{ icon("map-pin", "h-4 w-4 text-cyan") }}
-              {{ prov | t(locale) }}
-            </li>
-          {% endfor %}
-        </ul>
-      </div>
-
-      {# Что даёт выезд на завод + фото команды в Китае. #}
-      <div class="mt-8 grid items-stretch gap-8 lg:grid-cols-2">
-        <div class="space-y-5">
-          {% for benefit in torgovlya.guangzhouBenefits %}
-            <div class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm">
-              {{ icon("badge-check", "mt-0.5 h-6 w-6 shrink-0 text-cyan") }}
-              <span class="text-base leading-relaxed text-muted">{{ benefit | t(locale) }}</span>
-            </div>
-          {% endfor %}
+      {# Команда и география собраны в один выразительный блок вместо двух полос. #}
+      <div class="mt-10 grid overflow-hidden rounded-2xl bg-brand text-white shadow-lg lg:grid-cols-2">
+        <div class="flex flex-col justify-center p-7 md:p-10 lg:p-12">
+          <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
+            {{ icon("map-pin", "h-6 w-6 text-cyan") }}
+          </span>
+          <p class="mt-6 max-w-xl text-lg font-light leading-relaxed md:text-xl">{{ "torgovlya.direct.closing" | t(locale) }}</p>
+          <p class="mt-8 text-xs font-medium uppercase tracking-widest text-white/60">{{ "torgovlya.guangzhou.provincesLabel" | t(locale) }}</p>
+          <ul class="mt-4 flex flex-wrap gap-2">
+            {% for prov in torgovlya.provinces %}
+              <li class="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white">
+                {{ prov | t(locale) }}
+              </li>
+            {% endfor %}
+          </ul>
         </div>
-        {# Фото команды в Китае — заменяется через Decap (torgovlya-komanda-4x3). #}
-        <div class="relative min-h-[18rem] overflow-hidden rounded-2xl border border-slate-200 bg-surface-alt shadow-sm">
+        <div class="relative min-h-[20rem] overflow-hidden bg-surface-alt lg:min-h-[28rem]">
           <span class="absolute inset-0 flex items-center justify-center">{{ icon("camera", "h-8 w-8 text-slate-300") }}</span>
           {% image "/assets/img/uploads/torgovlya-komanda-4x3.jpg", "Офис и команда ТЛК БАРС в Китае", "(min-width: 1024px) 30rem, 90vw", "relative h-full w-full object-cover" %}
         </div>
+      </div>
+
+      {# Конкретные преимущества выезда завершают историю коротким резюме. #}
+      <div class="mt-5 grid gap-4 md:grid-cols-3">
+        {% for benefit in torgovlya.guangzhouBenefits %}
+          <div class="flex items-start gap-3 rounded-xl border border-slate-200 bg-surface p-5">
+            {{ icon("badge-check", "mt-0.5 h-5 w-5 shrink-0 text-cyan") }}
+            <span class="text-sm leading-relaxed text-muted">{{ benefit | t(locale) }}</span>
+          </div>
+        {% endfor %}
       </div>
     </div>
   </section>
