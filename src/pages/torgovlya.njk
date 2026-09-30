@@ -100,19 +100,12 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 2. Почему прямой завод дешевле ───────────────────────────────────
-     Слияние прежних блоков «Реальность Alibaba», «Что нужно для прямой работы»
-     и «Офис в Гуанчжоу»: все три раскрывали один аргумент — прямой завод
-     дешевле, но добраться до него сложно, а мы добрались. #}
+  {# ── 2. Почему прямой завод дешевле ─────────────────────────────────── #}
   <section class="bg-surface">
     <div class="container section">
       <div class="grid overflow-hidden rounded-2xl border border-slate-200 bg-surface-alt lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
         <div class="p-7 md:p-10 lg:p-12">
-          <span class="inline-flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-cyan-dark">
-            <span class="h-px w-8 bg-cyan"></span>
-            {{ "torgovlya.direct.title" | t(locale) }}
-          </span>
-          <h2 class="mt-5 max-w-2xl text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.alibaba.title" | t(locale) }}</h2>
+          <h2 class="max-w-2xl text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "torgovlya.alibaba.title" | t(locale) }}</h2>
           <div class="mt-6 max-w-2xl space-y-4 text-base leading-relaxed text-muted md:text-lg">
             <p>{{ "torgovlya.alibaba.p1" | t(locale) }}</p>
             <p>{{ "torgovlya.alibaba.p3" | t(locale) }}</p>
@@ -129,26 +122,8 @@ sitemap: true
         </div>
       </div>
 
-      <div class="mt-14 max-w-3xl md:mt-16">
-        <h3 class="text-2xl font-light tracking-tight text-ink md:text-3xl">{{ "torgovlya.direct.title" | t(locale) }}</h3>
-        <p class="mt-4 text-base leading-relaxed text-muted md:text-lg">{{ "torgovlya.direct.subtitle" | t(locale) }}</p>
-      </div>
-      <div class="mt-8 grid gap-4 md:grid-cols-2">
-        {% for point in torgovlya.directPoints %}
-          <div class="flex h-full gap-5 rounded-xl border border-slate-200 bg-surface p-6 transition-colors hover:border-cyan/60 md:p-7">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan/10">
-              {{ icon(point.icon, "h-6 w-6 text-cyan") }}
-            </span>
-            <div>
-              <h4 class="text-lg font-medium text-ink">{{ point.titleKey | t(locale) }}</h4>
-              <p class="mt-2 text-sm leading-relaxed text-muted">{{ point.textKey | t(locale) }}</p>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-
       {# Команда и география собраны в один выразительный блок вместо двух полос. #}
-      <div class="mt-10 grid overflow-hidden rounded-2xl bg-brand text-white shadow-lg lg:grid-cols-2">
+      <div class="mt-14 grid overflow-hidden rounded-2xl bg-brand text-white shadow-lg md:mt-16 lg:grid-cols-2">
         <div class="flex flex-col justify-center p-7 md:p-10 lg:p-12">
           <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
             {{ icon("map-pin", "h-6 w-6 text-cyan") }}

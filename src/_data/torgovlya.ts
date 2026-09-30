@@ -7,14 +7,6 @@ import type { TorgovlyaData } from "./types.js";
  * Меняется состав/порядок секций — отражается на странице без правок шаблона.
  */
 const torgovlya: TorgovlyaData = {
-  // Раздел 4 ТЗ: что нужно для прямой работы с заводом (4 пункта).
-  directPoints: [
-    { icon: "map-pin", titleKey: "torgovlya.direct.p1.title", textKey: "torgovlya.direct.p1.text" },
-    { icon: "globe", titleKey: "torgovlya.direct.p2.title", textKey: "torgovlya.direct.p2.text" },
-    { icon: "shield-check", titleKey: "torgovlya.direct.p3.title", textKey: "torgovlya.direct.p3.text" },
-    { icon: "handshake", titleKey: "torgovlya.direct.p4.title", textKey: "torgovlya.direct.p4.text" },
-  ],
-
   // Раздел 5 ТЗ: Гуанчжоу + выезды в провинции.
   provinces: [
     "torgovlya.guangzhou.prov1",
