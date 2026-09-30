@@ -1,4 +1,4 @@
-# Обработчик заявок с форм сайта (→ Bitrix24 CRM + Telegram) и шлюз админки CMS.
+# Обработчик заявок с форм сайта (→ amoCRM + Telegram) и шлюз админки CMS.
 #
 # Кроме заявок этот сервис обслуживает вход в админку (логин/пароль из .env),
 # проксирует протокол Decap на локальный decap-server (служба bars-cms) и после
@@ -12,7 +12,7 @@
 #   systemctl status bars-lead
 #   journalctl -u bars-lead -f          # логи заявок
 #
-# Секреты (BITRIX_WEBHOOK_URL, TELEGRAM_BOT_TOKEN) обработчик читает сам из
+# Секреты (AMOCRM_ACCESS_TOKEN, TELEGRAM_BOT_TOKEN) обработчик читает сам из
 # .env в WorkingDirectory — в юните их дублировать не нужно.
 #
 # ⚠️ Пути ниже указаны под раскладку «репозиторий в /var/www/tlkbars/repo»
@@ -20,7 +20,7 @@
 # WorkingDirectory и ReadWritePaths.
 
 [Unit]
-Description=ТЛК БАРС — обработчик заявок (Bitrix24 + Telegram)
+Description=ТЛК БАРС — обработчик заявок (amoCRM + Telegram)
 Documentation=https://github.com/dutegeorge-dev/dermo
 After=network-online.target
 Wants=network-online.target

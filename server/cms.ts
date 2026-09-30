@@ -98,7 +98,18 @@ export async function proxyCms(bodyText: string): Promise<CmsProxyResult> {
     };
   }
 
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[cms] неполный ответ decap-server: ${message}`);
+    return {
+      status: 502,
+      contentType: "application/json; charset=utf-8",
+      body: JSON.stringify({ error: "CMS-бэкенд вернул неполный ответ. Повторите запрос." }),
+    };
+  }
 
   if (response.ok) {
     try {
@@ -111,9 +122,19 @@ export async function proxyCms(bodyText: string): Promise<CmsProxyResult> {
     }
   }
 
+  // decap-server иногда отвечает JSON с application/octet-stream. Браузерный
+  // backend Decap ожидает JSON, поэтому нормализуем тип по фактическому телу.
+  let contentType = response.headers.get("content-type") ?? "application/json; charset=utf-8";
+  try {
+    JSON.parse(text);
+    contentType = "application/json; charset=utf-8";
+  } catch {
+    // Не-JSON ответы передаём с исходным типом.
+  }
+
   return {
     status: response.status,
-    contentType: response.headers.get("content-type") ?? "application/json; charset=utf-8",
+    contentType,
     body: text,
   };
 }

@@ -22,6 +22,14 @@ interface AmoProblem {
   validation_errors?: unknown;
 }
 
+interface ComplexLeadResult {
+  id?: number;
+  contact_id?: number | null;
+  company_id?: number | null;
+  request_id?: string | string[];
+  merged?: boolean;
+}
+
 interface ComplexLeadResponse {
   _embedded?: { leads?: Array<{ id?: number; request_id?: string }> };
 }
@@ -92,8 +100,13 @@ async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
 
 /** Создаёт сделку со связанным контактом и возвращает ID сделки. */
 export async function createLead(data: AmoLeadData): Promise<number> {
-  const response = await withRetry(() => callApi("/api/v4/leads/complex", [data.lead])) as ComplexLeadResponse;
-  const id = Number(response._embedded?.leads?.[0]?.id);
+  const response = await withRetry(() => callApi("/api/v4/leads/complex", [data.lead])) as
+    | ComplexLeadResult[]
+    | ComplexLeadResponse;
+  // `leads/complex` в актуальном API возвращает массив результатов напрямую.
+  // Формат с `_embedded.leads` оставляем как совместимый запасной вариант.
+  const result = Array.isArray(response) ? response[0] : response._embedded?.leads?.[0];
+  const id = Number(result?.id);
   if (!Number.isSafeInteger(id) || id <= 0) {
     throw new AmoCrmError(`Неожиданный ответ leads/complex: ${JSON.stringify(response)}`, "BAD_RESULT");
   }

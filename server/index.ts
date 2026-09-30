@@ -355,12 +355,23 @@ async function handleCmsProxy(
     return;
   }
 
-  const result = await proxyCms(body);
-  res.writeHead(result.status, {
-    "content-type": result.contentType,
-    "cache-control": "no-store",
-  });
-  res.end(result.body);
+  try {
+    const result = await proxyCms(body);
+    res.writeHead(result.status, {
+      "content-type": result.contentType,
+      "content-length": Buffer.byteLength(result.body),
+      "cache-control": "no-store",
+    });
+    res.end(result.body);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[cms] ошибка прокси: ${message}`);
+    if (!res.headersSent) {
+      sendJson(res, 502, { error: "CMS-бэкенд временно недоступен. Повторите запрос." });
+    } else {
+      res.destroy();
+    }
+  }
 }
 
 const server = http.createServer((req, res) => {
