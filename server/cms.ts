@@ -69,18 +69,24 @@ export function scheduleRebuild(): void {
   }, config.cms.rebuildDebounceMs);
 }
 
-/** Ответ прокси клиенту. */
-export interface CmsProxyResult {
-  status: number;
-  contentType: string;
-  body: string;
-}
-
 /**
- * Пробрасывает тело запроса на локальный decap-server и возвращает его ответ.
+ * Пробрасывает тело запроса на локальный decap-server и возвращает поток ответа.
  * Если действие меняло файлы и ответ успешный — планирует пересборку.
+ *
+ * Ответ намеренно не преобразуется через `response.text()`: getMedia кодирует
+ * всю медиатеку в base64 и на реальном сайте может вернуть десятки мегабайт.
+ * Поток не создаёт вторую полную копию JSON в памяти процесса bars-lead.
  */
-export async function proxyCms(bodyText: string): Promise<CmsProxyResult> {
+export async function proxyCms(bodyText: string): Promise<Response> {
+  const startedAt = Date.now();
+  let action = "unknown";
+  try {
+    const parsed = JSON.parse(bodyText) as { action?: unknown };
+    if (typeof parsed.action === "string") action = parsed.action;
+  } catch {
+    // Валидацию тела выполнит decap-server; имя нужно только для диагностики.
+  }
+
   let response: Response;
   try {
     response = await fetch(config.cms.proxyTarget, {
@@ -91,50 +97,19 @@ export async function proxyCms(bodyText: string): Promise<CmsProxyResult> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[cms] decap-server недоступен: ${message}`);
-    return {
-      status: 502,
-      contentType: "application/json; charset=utf-8",
-      body: JSON.stringify({ error: "CMS-бэкенд недоступен. Проверьте службу decap-server." }),
-    };
-  }
-
-  let text: string;
-  try {
-    text = await response.text();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[cms] неполный ответ decap-server: ${message}`);
-    return {
-      status: 502,
-      contentType: "application/json; charset=utf-8",
-      body: JSON.stringify({ error: "CMS-бэкенд вернул неполный ответ. Повторите запрос." }),
-    };
+    return Response.json(
+      { error: "CMS-бэкенд недоступен. Проверьте службу decap-server." },
+      { status: 502 },
+    );
   }
 
   if (response.ok) {
-    try {
-      const action = (JSON.parse(bodyText) as { action?: unknown }).action;
-      if (typeof action === "string" && MUTATING_ACTIONS.has(action)) {
-        scheduleRebuild();
-      }
-    } catch {
-      // Тело не разобралось — не наша забота, просто не планируем пересборку.
-    }
+    if (MUTATING_ACTIONS.has(action)) scheduleRebuild();
   }
 
-  // decap-server иногда отвечает JSON с application/octet-stream. Браузерный
-  // backend Decap ожидает JSON, поэтому нормализуем тип по фактическому телу.
-  let contentType = response.headers.get("content-type") ?? "application/json; charset=utf-8";
-  try {
-    JSON.parse(text);
-    contentType = "application/json; charset=utf-8";
-  } catch {
-    // Не-JSON ответы передаём с исходным типом.
-  }
-
-  return {
-    status: response.status,
-    contentType,
-    body: text,
-  };
+  const bytes = response.headers.get("content-length") ?? "неизвестно";
+  console.log(
+    `[cms] ${action}: ответ ${response.status}, ${bytes} байт, заголовки за ${Date.now() - startedAt} мс`,
+  );
+  return response;
 }

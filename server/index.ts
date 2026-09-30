@@ -12,6 +12,8 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 import { config, maskSecrets } from "./config.ts";
 import {
@@ -356,16 +358,30 @@ async function handleCmsProxy(
   }
 
   try {
-    const result = await proxyCms(body);
-    res.writeHead(result.status, {
-      "content-type": result.contentType,
-      "content-length": Buffer.byteLength(result.body),
+    const upstream = await proxyCms(body);
+    const responseHeaders: Record<string, string> = {
+      // Протокол decap-server всегда JSON, хотя некоторые версии ошибочно
+      // маркируют большие ответы как application/octet-stream.
+      "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-    });
-    res.end(result.body);
+    };
+    const contentLength = upstream.headers.get("content-length");
+    if (contentLength) responseHeaders["content-length"] = contentLength;
+    res.writeHead(upstream.status, responseHeaders);
+
+    if (!upstream.body) {
+      res.end();
+      return;
+    }
+    // `Response.body` реализует AsyncIterable в Node, а Readable.from избегает
+    // несовместимости одноимённых DOM/Node типов ReadableStream в @types/node.
+    await pipeline(
+      Readable.from(upstream.body as unknown as AsyncIterable<Uint8Array>),
+      res,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[cms] ошибка прокси: ${message}`);
+    console.error(`[cms] поток ответа оборван: ${message}`);
     if (!res.headersSent) {
       sendJson(res, 502, { error: "CMS-бэкенд временно недоступен. Повторите запрос." });
     } else {
