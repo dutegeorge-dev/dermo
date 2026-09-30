@@ -1,5 +1,5 @@
 /**
- * Разбор и валидация заявки с сайта + сборка полей лида для Bitrix24.
+ * Разбор и валидация заявки с сайта + подготовка данных для amoCRM.
  *
  * Формы сайта (см. src/_includes/**) присылают: cargo, volume, contact,
  * consent, а также служебные page/locale/form/utm. Имя и e-mail опциональны —
@@ -270,7 +270,7 @@ function buildCalcBlock(calc: CalcResult): string[] {
   return lines;
 }
 
-/** Комментарий лида: всё, что не влезло в типизированные поля Bitrix24. */
+/** Комментарий лида: всё, что не влезло в типизированные поля amoCRM. */
 function buildComments(
   lead: LeadInput,
   meta: { ip: string; userAgent: string },
@@ -305,50 +305,67 @@ function buildComments(
   return lines.join("\n");
 }
 
-/** Поля лида в формате crm.lead.add. */
-export type LeadFields = Record<string, unknown>;
+/** Контакт, вложенный в сделку amoCRM. */
+export interface AmoContactPayload {
+  name: string;
+  custom_fields_values?: Array<{
+    field_code: "PHONE" | "EMAIL";
+    values: Array<{ value: string; enum_code: "WORK" }>;
+  }>;
+}
+
+/** Сделка для метода `POST /api/v4/leads/complex`. */
+export interface AmoLeadPayload {
+  name: string;
+  pipeline_id: number;
+  status_id: number;
+  created_by: 0;
+  _embedded: {
+    tags: Array<{ name: string }>;
+    contacts: AmoContactPayload[];
+  };
+}
+
+export interface AmoLeadData {
+  lead: AmoLeadPayload;
+  note: string;
+}
 
 /**
- * Собирает поля для `crm.lead.add`.
- * Множественные поля (PHONE/EMAIL) передаются массивом объектов
- * `{ VALUE, VALUE_TYPE }` — как того требует REST Bitrix24.
+ * Собирает сделку, связанный контакт и примечание для amoCRM.
+ * Телефон и e-mail хранятся в стандартных полях контакта, остальные данные
+ * формы и расчёт калькулятора сохраняются в примечании к сделке.
  */
-export function buildLeadFields(
+export function buildAmoLeadData(
   lead: LeadInput,
   meta: { ip: string; userAgent: string },
-  options: { sourceId: string; assignedById: string },
+  options: { pipelineId: number; statusId: number },
   calc?: CalcResult | null,
-): LeadFields {
-  const fields: LeadFields = {
-    TITLE: buildTitle(lead),
-    NAME: lead.name || undefined,
-    SOURCE_ID: options.sourceId,
-    SOURCE_DESCRIPTION: lead.page || "Сайт",
-    COMMENTS: buildComments(lead, meta, calc),
-    OPENED: "Y",
-  };
-
+): AmoLeadData {
+  const customFields: NonNullable<AmoContactPayload["custom_fields_values"]> = [];
   if (lead.phone) {
-    fields.PHONE = [{ VALUE: lead.phone, VALUE_TYPE: "WORK" }];
+    customFields.push({ field_code: "PHONE", values: [{ value: lead.phone, enum_code: "WORK" }] });
   }
   if (lead.email) {
-    fields.EMAIL = [{ VALUE: lead.email, VALUE_TYPE: "WORK" }];
-  }
-  if (lead.telegram) {
-    fields.IM = [{ VALUE: lead.telegram, VALUE_TYPE: "TELEGRAM" }];
-  }
-  if (options.assignedById) {
-    fields.ASSIGNED_BY_ID = options.assignedById;
+    customFields.push({ field_code: "EMAIL", values: [{ value: lead.email, enum_code: "WORK" }] });
   }
 
-  for (const [key, value] of Object.entries(lead.utm)) {
-    fields[key.toUpperCase()] = value;
-  }
+  const contact: AmoContactPayload = {
+    name: lead.name || lead.contact || "Контакт с сайта",
+  };
+  if (customFields.length > 0) contact.custom_fields_values = customFields;
 
-  // Bitrix24 не любит undefined в JSON — выбрасываем пустые ключи.
-  for (const key of Object.keys(fields)) {
-    if (fields[key] === undefined) delete fields[key];
-  }
-
-  return fields;
+  return {
+    lead: {
+      name: buildTitle(lead),
+      pipeline_id: options.pipelineId,
+      status_id: options.statusId,
+      created_by: 0,
+      _embedded: {
+        tags: [{ name: "Сайт" }, { name: `Форма: ${lead.form}` }],
+        contacts: [contact],
+      },
+    },
+    note: buildComments(lead, meta, calc),
+  };
 }

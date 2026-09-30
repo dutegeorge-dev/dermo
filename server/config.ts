@@ -22,42 +22,39 @@ function envNumber(key: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-/**
- * Нормализует вебхук Bitrix24 до базового вида
- * `https://<портал>/rest/<user_id>/<token>/`.
- *
- * Принимает как базовый URL, так и полную ссылку на метод с query-строкой —
- * ту самую, что Bitrix24 показывает в карточке входящего вебхука
- * (`.../rest/1/<token>/crm.lead.add.json?FIELDS[TITLE]=...`).
- */
-function normalizeWebhookBase(raw: string): string {
+/** Нормализует базовый URL аккаунта amoCRM. */
+function normalizeAmoBaseUrl(raw: string): string {
   const url = new URL(raw.trim());
-  const match = /^\/rest\/[^/]+\/[^/]+\//.exec(
-    url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`,
-  );
-
-  if (!match) {
-    throw new Error(
-      "BITRIX_WEBHOOK_URL не похож на вебхук Bitrix24: ожидается путь вида /rest/<user_id>/<token>/",
-    );
+  if (url.protocol !== "https:" || !url.hostname.endsWith(".amocrm.ru")) {
+    throw new Error("AMOCRM_BASE_URL должен иметь вид https://<аккаунт>.amocrm.ru");
   }
-
-  return `${url.origin}${match[0]}`;
+  return url.origin;
 }
 
-/** Скрывает секреты (токен вебхука Bitrix24, токен бота) в логах и ошибках. */
+/** Читает положительный числовой ID из окружения. */
+function envId(key: string): number | null {
+  const raw = process.env[key]?.trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${key} должен быть положительным целым числом`);
+  }
+  return parsed;
+}
+
+const amoBaseRaw = process.env.AMOCRM_BASE_URL?.trim() ?? "";
+const amoAccessToken = process.env.AMOCRM_ACCESS_TOKEN?.trim() ?? "";
+const amoPipelineId = envId("AMOCRM_PIPELINE_ID");
+const amoStatusId = envId("AMOCRM_STATUS_ID");
+
+/** Скрывает секреты amoCRM и Telegram в логах и ошибках. */
 export function maskSecrets(value: string): string {
-  return value
-    .replace(/(\/rest\/[^/]+\/)[^/]+/g, "$1***")
-    .replace(/(\/bot)\d+:[\w-]+/g, "$1***");
+  let masked = value.replace(/(\/bot)\d+:[\w-]+/g, "$1***");
+  if (amoAccessToken) masked = masked.replaceAll(amoAccessToken, "***");
+  return masked.replace(/(Authorization:\s*Bearer\s+)[^\s]+/gi, "$1***");
 }
 
-const webhookRaw = process.env.BITRIX_WEBHOOK_URL?.trim() ?? "";
-
-// Без вебхука обработчик всё равно поднимается: иначе `npm run dev` падал бы
-// у разработчика без доступа к CRM. Заявки в этом режиме не принимаются —
-// эндпоинт честно отвечает 503, а на старте выводится предупреждение.
-const webhookBase = webhookRaw ? normalizeWebhookBase(webhookRaw) : "";
+const amoBaseUrl = amoBaseRaw ? normalizeAmoBaseUrl(amoBaseRaw) : "";
 
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
 
@@ -122,21 +119,19 @@ export const config = {
   /** Путь эндпоинта курсов ЦБ (нужен калькулятору доставки). */
   ratesPath: process.env.RATES_PATH?.trim() || "/api/rates",
 
-  bitrix: {
-    /** Задан ли вебхук: без него заявки в CRM не уходят. */
-    configured: Boolean(webhookBase),
-    /** Базовый URL вебхука со слешем на конце. */
-    base: webhookBase,
-    /** Полный URL метода REST: `crm.lead.add` → `<base>crm.lead.add.json`. */
-    method(name: string): string {
-      return `${webhookBase}${name}.json`;
-    },
-    /** Источник лида (справочник CRM_STATUS SOURCE). */
-    sourceId: process.env.BITRIX_SOURCE_ID?.trim() || "WEB",
-    /** ID ответственного за лид (пусто — назначит Bitrix24 по своим правилам). */
-    assignedById: process.env.BITRIX_ASSIGNED_BY_ID?.trim() || "",
-    /** Таймаут запроса к Bitrix24, мс. */
-    timeoutMs: envNumber("BITRIX_TIMEOUT_MS", 10_000),
+  amocrm: {
+    /** Заданы ли все обязательные параметры интеграции. */
+    configured: Boolean(amoBaseUrl && amoAccessToken && amoPipelineId && amoStatusId),
+    /** Базовый URL аккаунта без завершающего слеша. */
+    baseUrl: amoBaseUrl,
+    /** Долгосрочный токен доступа (от 1 дня до 5 лет). */
+    accessToken: amoAccessToken,
+    /** Воронка, в которой создаются сделки с сайта. */
+    pipelineId: amoPipelineId,
+    /** Начальный этап «Новая заявка». */
+    statusId: amoStatusId,
+    /** Таймаут запроса к amoCRM, мс. */
+    timeoutMs: envNumber("AMOCRM_TIMEOUT_MS", 10_000),
   },
 
   telegram: {

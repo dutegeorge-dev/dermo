@@ -23,8 +23,7 @@ function line(label: string, value: string): string | null {
 
 /** Ссылка на карточку лида в портале. */
 function leadUrl(leadId: number): string {
-  const origin = new URL(config.bitrix.base).origin;
-  return `${origin}/crm/lead/details/${leadId}/`;
+  return `${config.amocrm.baseUrl}/leads/detail/${leadId}`;
 }
 
 /** Краткая сводка расчёта с калькулятора (полная версия — в карточке лида). */

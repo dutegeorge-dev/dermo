@@ -1,5 +1,5 @@
 /**
- * HTTP-обработчик заявок с форм сайта → Bitrix24 CRM.
+ * HTTP-обработчик заявок с форм сайта → amoCRM.
  *
  * Слушает порт 3000 (LEAD_PORT) и принимает:
  *   POST /api/lead  — заявка с формы (JSON или form-urlencoded);
@@ -22,9 +22,9 @@ import {
   verifyCredentials,
 } from "./auth.ts";
 import { proxyCms } from "./cms.ts";
-import { createLead } from "./bitrix.ts";
+import { createLead } from "./amocrm.ts";
 import { computeCalculation, type CalcRates } from "./calc.ts";
-import { buildLeadFields, parseLead, type RawPayload } from "./lead.ts";
+import { buildAmoLeadData, parseLead, type RawPayload } from "./lead.ts";
 import { getRates } from "./rates.ts";
 import { notifyTelegram } from "./telegram.ts";
 
@@ -184,11 +184,11 @@ async function handleLead(
 ): Promise<void> {
   const ip = clientIp(req);
 
-  if (!config.bitrix.configured) {
+  if (!config.amocrm.configured) {
     sendJson(
       res,
       503,
-      { ok: false, error: "Приём заявок не настроен: не задан BITRIX_WEBHOOK_URL." },
+      { ok: false, error: "Приём заявок не настроен: не заданы параметры amoCRM." },
       headers,
     );
     return;
@@ -236,15 +236,15 @@ async function handleLead(
   // нашей стороны. В CRM должен попасть наш расчёт, а не числа из браузера.
   const calc = lead.calc ? computeCalculation(lead.calc, await resolveRates(lead.calcRates)) : null;
 
-  const fields = buildLeadFields(
+  const crmData = buildAmoLeadData(
     lead,
     { ip, userAgent: String(req.headers["user-agent"] ?? "").slice(0, 300) },
-    { sourceId: config.bitrix.sourceId, assignedById: config.bitrix.assignedById },
+    { pipelineId: config.amocrm.pipelineId!, statusId: config.amocrm.statusId! },
     calc,
   );
 
   try {
-    const leadId = await createLead(fields);
+    const leadId = await createLead(crmData);
     console.log(
       `[lead] создан лид #${leadId} (форма ${lead.form}, ${lead.phone || lead.email || lead.telegram})`,
     );
@@ -253,8 +253,8 @@ async function handleLead(
     void notifyTelegram(lead, { leadId }, calc);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[lead] Bitrix24 отклонил заявку: ${maskSecrets(message)}`);
-    saveFailedLead({ at: new Date().toISOString(), ip, error: message, fields });
+    console.error(`[lead] amoCRM отклонила заявку: ${maskSecrets(message)}`);
+    saveFailedLead({ at: new Date().toISOString(), ip, error: message, crmData });
     sendJson(
       res,
       502,
@@ -435,12 +435,12 @@ const server = http.createServer((req, res) => {
 server.listen(config.port, config.host, () => {
   console.log(`[lead] обработчик заявок слушает http://${config.host}:${config.port}${config.path}`);
   console.log(`[rates] курсы ЦБ для калькулятора: http://${config.host}:${config.port}${config.ratesPath}`);
-  if (config.bitrix.configured) {
-    console.log(`[lead] CRM: ${maskSecrets(config.bitrix.base)} (источник ${config.bitrix.sourceId})`);
+  if (config.amocrm.configured) {
+    console.log(`[lead] CRM: ${config.amocrm.baseUrl}, воронка ${config.amocrm.pipelineId}, этап ${config.amocrm.statusId}`);
   } else {
     console.warn(
-      "[lead] ВНИМАНИЕ: не задан BITRIX_WEBHOOK_URL — заявки не будут уходить в CRM.\n" +
-        "        Скопируйте .env.example в .env и вставьте входящий вебхук Bitrix24.",
+      "[lead] ВНИМАНИЕ: не заданы параметры amoCRM — заявки не будут уходить в CRM.\n" +
+        "        Заполните AMOCRM_BASE_URL, AMOCRM_ACCESS_TOKEN, AMOCRM_PIPELINE_ID и AMOCRM_STATUS_ID.",
     );
   }
   console.log(
