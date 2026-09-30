@@ -1,7 +1,7 @@
 {#
   Двухъярусный sticky-хедер ТЛК БАРС.
   Ярус 1 (utility) — переключатель языка, «Рассчитать», телефон, время работы,
-  Telegram (ссылка на Макс временно закомментирована).
+  Telegram и Макс.
   Ярус 2 (navbar) — логотип, меню (5 пунктов), янтарная CTA. «Услуги» → мега-меню.
   Тексты — из словаря (t), без хардкода. Поведение — header.ts (прогрессивное улучшение).
 #}
@@ -42,11 +42,9 @@
         <a href="{{ site.telegram }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.telegram' | t(locale) }}">
           {{ brandIcon("telegram", "h-4 w-4") }}
         </a>
-        {# Макс временно скрыт (аккаунт ещё не зарегистрирован) — вернуть = снять комментарий.
-        <a href="{{ site.max }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="({ 'a11y.max' | t(locale) })">
-          ({ brandIcon("max", "h-4 w-4") })
+        <a href="{{ site.max }}" rel="nofollow noopener" target="_blank" class="inline-flex items-center transition-colors hover:text-cyan" aria-label="{{ 'a11y.max' | t(locale) }}">
+          {{ brandIcon("max", "h-4 w-4") }}
         </a>
-        #}
       </div>
     </div>
   </div>

@@ -121,8 +121,8 @@ const ru: Dictionary = {
       note: "Ответим в течение рабочего дня",
       cargoLabel: "Что везёте или что нужно закупить",
       cargoError: "Укажите товар или задачу.",
-      contactLabel: "Телефон или Telegram",
-      contactError: "Укажите корректный телефон или логин Telegram.",
+      contactLabel: "Телефон, Telegram или Макс",
+      contactError: "Укажите корректный телефон или логин в мессенджере.",
       success: "Заявка отправлена! Свяжемся с вами в течение рабочего дня.",
     },
     trust: {
@@ -230,8 +230,8 @@ const ru: Dictionary = {
       note: "Ответим в течение рабочего дня",
       cargoLabel: "Что нужно закупить",
       cargoError: "Укажите, что нужно закупить.",
-      contactLabel: "Телефон или Telegram",
-      contactError: "Укажите корректный телефон или логин Telegram.",
+      contactLabel: "Телефон, Telegram или Макс",
+      contactError: "Укажите корректный телефон или логин в мессенджере.",
       success: "Заявка отправлена! Свяжемся с вами в течение рабочего дня.",
     },
     alibaba: {

@@ -22,12 +22,10 @@ const site: SiteConfig = {
   phone: "+7 495 133 12 60",
   phoneHref: "+74951331260",
   calculateUrl: "/calculator/",
-  // Telegram и Макс — разные мессенджеры и разные ссылки. Одной кнопкой
-  // «Telegram / Макс» их выводить нельзя: клик уводил бы в один из двух.
-  telegram: "https://t.me/tlkbars",
-  // Ссылка сохранена, но нигде не выводится: кнопки и упоминания Макса
-  // закомментированы, пока аккаунт не зарегистрирован.
-  max: "https://max.ru/tlkbars",
+  telegram: "https://t.me/neoapelsin",
+  max: "https://max.ru/u/f9LHodD0cOJGjixGM0kTPubvpvQo6YOomVjo-i7KqJhiHk7R5FPTRZj90Jw",
+  whatsapp: "https://wa.me/79859673614",
+  instagram: "https://www.instagram.com/tlkbars/",
   email: "info@tlkbars.ru",
   privacyEmail: "barslogistics@yandex.com",
   address:

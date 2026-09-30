@@ -48,6 +48,10 @@ export interface SiteConfig {
   telegram: string;
   /** Ссылка на мессенджер Макс (отдельная от Telegram). */
   max: string;
+  /** Ссылка на WhatsApp руководителя. */
+  whatsapp: string;
+  /** Ссылка на Instagram компании. */
+  instagram: string;
   /** E-mail для связи. */
   email: string;
   /** E-mail для обращений по вопросам обработки персональных данных. */

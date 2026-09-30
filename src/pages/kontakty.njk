@@ -18,10 +18,19 @@ sitemap: true
     <p><span class="font-semibold">E-mail:</span> <a href="mailto:{{ site.email }}" class="text-brand">{{ site.email }}</a></p>
     <p><span class="font-semibold">Офис в Гуанчжоу:</span> {{ site.addressCn }}</p>
 
-    {# Мессенджеры (сейчас только Telegram — кнопка Макса закомментирована в макросе). #}
+    <p><span class="font-semibold">Telegram / Макс:</span> менеджер Георгий</p>
     <div class="flex flex-col gap-3 pt-1 sm:flex-row">
       {{ messengers("lg") }}
     </div>
+
+    <p>
+      <span class="font-semibold">WeChat / WhatsApp:</span> руководитель Евгений,
+      <a href="{{ site.whatsapp }}" class="text-brand" rel="nofollow noopener" target="_blank">+7 985 967-36-14</a>
+    </p>
+    <p>
+      <span class="font-semibold">Instagram:</span>
+      <a href="{{ site.instagram }}" class="text-brand" rel="nofollow noopener" target="_blank">@tlkbars</a>
+    </p>
 
     {# Время работы. #}
     <p class="flex items-start gap-2 rounded-md bg-surface-alt px-3 py-2 text-sm text-muted">
