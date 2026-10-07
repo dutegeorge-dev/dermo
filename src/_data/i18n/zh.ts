@@ -429,7 +429,7 @@ const zh: Dictionary = {
     },
     contacts: {
       title: "如何联系我们",
-      text: "工作时间为莫斯科时间 8:00–20:00。请以方便的方式来信或来电。",
+      text: "工作时间为莫斯科时间 7:00–17:00。请以方便的方式来信或来电。",
       phoneRuLabel: "电话",
       telegramLabel: "Telegram",
       maxLabel: "MAX",
@@ -837,7 +837,7 @@ const zh: Dictionary = {
     },
     contacts: {
       title: "如何联系我们",
-      text: "工作时间为莫斯科时间 8:00–20:00。请以方便的方式来信或来电。",
+      text: "工作时间为莫斯科时间 7:00–17:00。请以方便的方式来信或来电。",
       phoneRuLabel: "电话",
       telegramLabel: "Telegram",
       maxLabel: "MAX",

@@ -430,7 +430,7 @@ const en: Dictionary = {
     },
     contacts: {
       title: "How to reach us",
-      text: "We work from 8:00 to 20:00 Moscow time. Write or call however is convenient.",
+      text: "We work from 7:00 to 17:00 Moscow time. Write or call however is convenient.",
       phoneRuLabel: "Phone",
       telegramLabel: "Telegram",
       maxLabel: "MAX",
@@ -838,7 +838,7 @@ const en: Dictionary = {
     },
     contacts: {
       title: "How to reach us",
-      text: "We work from 8:00 to 20:00 Moscow time. Write or call however is convenient.",
+      text: "We work from 7:00 to 17:00 Moscow time. Write or call however is convenient.",
       phoneRuLabel: "Phone",
       telegramLabel: "Telegram",
       maxLabel: "MAX",
