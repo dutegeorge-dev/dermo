@@ -314,7 +314,7 @@ export async function autoContracts(tx: DbOrTx, dealId: number): Promise<Partial
 /** Создание сделки: используется и формой, и загрузкой инвойса («новая сделка из документа»). */
 export async function createDeal(
   tx: DbOrTx,
-  userId: number,
+  userId: number | null,
   fields: Partial<DealInsert> & { title: string },
   opts: { statusKey?: string; ip?: string | null } = {},
 ): Promise<{ id: number; key: string; number: number; title: string }> {

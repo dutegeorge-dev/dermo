@@ -27,6 +27,7 @@ import { CRM_ROOT } from "../config.ts";
 import { db, pool } from "../db/client.ts";
 import { contacts, counterparties, dealEvents, deals, dealStatuses, kbSpaces } from "../db/schema.ts";
 import { getCompany, setCompany } from "../lib/settings.ts";
+import { removeDemoExtras, seedDemoDocuments, seedDemoKb } from "./demo.ts";
 import { audit } from "../lib/audit.ts";
 import {
   listTopics,
@@ -200,6 +201,7 @@ async function seedDemo(): Promise<void> {
 
 async function removeDemo(): Promise<void> {
   const removed = await db.delete(deals).where(eq(deals.source, "demo")).returning({ id: deals.id });
+  await removeDemoExtras();
   const orphanDemoClients = await db
     .delete(counterparties)
     .where(
@@ -276,6 +278,8 @@ try {
   if (values.demo) {
     console.log("Демо-данные CRM:");
     await seedDemo();
+    await seedDemoDocuments();
+    await seedDemoKb();
   }
   console.log("✓ Готово");
 } catch (error) {

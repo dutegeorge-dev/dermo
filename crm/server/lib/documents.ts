@@ -147,7 +147,7 @@ export type ItemInput = {
 };
 
 /** Ищет товар по названию (без учёта регистра) или создаёт — справочник пополняется сам. */
-async function resolveProduct(tx: DbOrTx, userId: number, item: { productId: number | null; name: string; hsCode: string | null; unit: string | null }) {
+async function resolveProduct(tx: DbOrTx, userId: number | null, item: { productId: number | null; name: string; hsCode: string | null; unit: string | null }) {
   if (item.productId) {
     const [p] = await tx.select({ id: products.id }).from(products).where(eq(products.id, item.productId));
     if (p) return p.id;
@@ -166,7 +166,7 @@ async function resolveProduct(tx: DbOrTx, userId: number, item: { productId: num
 }
 
 /** Заменяет позиции документа. Возвращает сумму позиций (для суммы документа). */
-export async function replaceItems(tx: DbOrTx, userId: number, documentId: number, raw: unknown): Promise<number | null> {
+export async function replaceItems(tx: DbOrTx, userId: number | null, documentId: number, raw: unknown): Promise<number | null> {
   if (!Array.isArray(raw)) throw new HttpError(400, "Позиции — список");
   if (raw.length > 500) throw new HttpError(400, "Слишком много позиций");
   await tx.delete(documentItems).where(eq(documentItems.documentId, documentId));
@@ -221,7 +221,7 @@ export const pad2 = (n: number) => String(n).padStart(2, "0");
  */
 export async function linkToDeal(
   tx: DbOrTx,
-  userId: number,
+  userId: number | null,
   doc: { id: number; type: string; dealId: number | null; counterpartyId: number | null; clientId: number | null; parentId: number | null; number: string | null },
 ): Promise<Partial<DocInsert>> {
   if (!doc.dealId) return {};
