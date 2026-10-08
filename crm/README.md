@@ -1,10 +1,12 @@
 # Внутренний раздел tlkbars.ru/crm/
 
-Закрытый раздел для сотрудников ООО ТЛК БАРС: **база знаний** (как Confluence) и, на следующем этапе, **CRM** (как Jira). Интерфейс на русском, вход по личному логину и паролю.
+Закрытый раздел для сотрудников ООО ТЛК БАРС: **база знаний** (как Confluence) и **CRM** (как Jira). Интерфейс на русском, вход по личному логину и паролю.
 
 - Адрес: `https://tlkbars.ru/crm/` (SPA), API — `https://tlkbars.ru/crm/api/`.
-- Этап 1 (сделан): каркас, вход, пользователи и роли, журнал действий, база знаний, справочник для звонков.
-- Этап 2 (заложен): клиенты, сделки `BARS-N`, канбан-доска — таблицы уже в БД, интерфейса пока нет (см. [план](#этап-2--crm)).
+- Есть: вход, пользователи и роли, журнал действий, база знаний, справочник для звонков, CRM — сделки `BARS-N` на канбан-доске и в таблице, клиенты и контакты, этапы воронки.
+- Дальше: заявки с сайта сразу в CRM (см. [что дальше](#crm-что-дальше)).
+
+Все данные — в PostgreSQL. JSON в `crm/seed/` — только исходник для первичного импорта справочника; после импорта он не читается, правки из интерфейса пишутся в БД.
 
 Публичный сайт (11ty) и его обработчик заявок (`server/`, amoCRM) раздел не затрагивает: это отдельный пакет со своими зависимостями и отдельной службой.
 
@@ -19,7 +21,7 @@
 - [Схема БД](#схема-бд)
 - [API](#api)
 - [Справочник для звонков](#справочник-для-звонков)
-- [Этап 2 — CRM](#этап-2--crm)
+- [CRM](#crm)
 
 ## Стек и структура
 
@@ -41,7 +43,8 @@ crm/
   drizzle/              SQL-миграции (генерируются, коммитятся)
   seed/
     kb-call-script.json данные справочника для звонков (11 тем)
-  scripts/backup.sh     бэкап БД и вложений (cron)
+  scripts/backup.sh     бэкап БД и вложений (cron), выгрузка в облако
+  shared/deal-fields.ts поля сделки: подписи и варианты — общие для сервера и интерфейса
   server/
     index.ts            точка входа службы
     app.ts              Fastify: API под /crm/api, SPA под /crm/
@@ -60,6 +63,7 @@ crm/
 deploy/
   nginx/tlkbars.ru.conf, tlkbars.live.conf   location /crm/ → 127.0.0.1:3100
   systemd/bars-crm.service                   служба раздела
+  deploy-crm.sh                              обновить только /crm/ (без пересборки сайта)
   cron/bars-crm-backup                       ежедневный бэкап
 ```
 
@@ -103,6 +107,7 @@ npm run crm:dev
 | `npm run crm:migrate` | Применить миграции из `crm/drizzle/` |
 | `npm run crm:create-admin -- --login L --name "Имя" [--email E] [--reset]` | Создать администратора. Пароль спрашивается без отображения (или `CRM_ADMIN_PASSWORD=…`). `--reset` — задать новый пароль существующему и сделать его admin (если доступ потерян) |
 | `npm run crm:seed [-- --file путь.json] [-- --force]` | Начальные данные (идемпотентно), см. [ниже](#импорт) |
+| `npm run crm:seed -- --demo` / `-- --remove-demo` | Добавить / удалить тестовые сделки и клиентов (метка «демо») — попробовать CRM |
 | `npm run crm:test` | Интеграционные тесты API — нужна **отдельная** БД: `CRM_TEST_DATABASE_URL=postgres://…/crm_test` (она очищается) |
 
 В `crm/`: `npm run typecheck`, `npm run db:generate` (новая миграция после правки `server/db/schema.ts`), `npm start` (прод-запуск).
@@ -138,7 +143,7 @@ sudo chown www-data:www-data crm/.env && sudo chmod 600 crm/.env
 npm run crm:build
 npm run crm:migrate
 npm run crm:create-admin -- --login admin --name "Имя Фамилия"
-npm run crm:seed
+npm run crm:seed                 # пространства + справочник; добавьте -- --demo, чтобы попробовать CRM
 sudo chown -R www-data:www-data /var/www/tlkbars/repo
 
 # 5. Служба
@@ -157,6 +162,7 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo cp deploy/cron/bars-crm-backup /etc/cron.d/bars-crm-backup
 sudo chmod 644 /etc/cron.d/bars-crm-backup
 sudo bash crm/scripts/backup.sh                   # проверить вручную
+#    облако — см. «Бэкапы в облако» ниже
 
 # 8. robots.txt с Disallow: /crm/ появится после пересборки сайта
 npm run build
@@ -185,7 +191,10 @@ location ^~ /crm/ {
 
 ### Обновления
 
-`sudo bash deploy/deploy.sh` — после сборки сайта скрипт сам ставит зависимости `crm/`, собирает фронтенд, применяет миграции и перезапускает `bars-crm` (если служба установлена; до установки этот шаг пропускается).
+- **Только CRM, без пересборки сайта:** `sudo bash deploy/deploy-crm.sh` — фиксирует правки CMS и подтягивает `main` (как `deploy.sh`), затем зависимости `crm/`, сборка фронтенда, миграции, перезапуск `bars-crm` и проверка `/crm/api/health`. Сайт (`_site`) и `bars-lead` не трогаются.
+- **Всё вместе:** `sudo bash deploy/deploy.sh` — пересобирает сайт и после этого делает то же для `/crm/` (если служба `bars-crm` установлена; до установки шаг пропускается).
+
+Если в обновлении менялись шаблоны сайта или `server/`, нужен полный `deploy.sh`.
 
 ### Проверка после деплоя
 
@@ -199,9 +208,49 @@ curl -s  https://tlkbars.ru/robots.txt | grep crm          # Disallow: /crm/
 
 - `crm/scripts/backup.sh` — `pg_dump` в формате custom + архив каталога вложений, в `/var/backups/bars-crm/`, хранение 14 дней (`CRM_BACKUP_DIR`, `CRM_BACKUP_KEEP_DAYS` меняют путь и срок).
 - `/etc/cron.d/bars-crm-backup` — каждый день в 00:40 по времени сервера (03:40 МСК при UTC), лог — `/var/log/bars-crm-backup.log`.
-- Бэкапы лежат на том же сервере — периодически копируйте `/var/backups/bars-crm` наружу (rsync/облако).
+- Если задан `CRM_BACKUP_RCLONE_REMOTE`, копия сразу уходит в облако (хранение `CRM_BACKUP_CLOUD_KEEP_DAYS`, по умолчанию 30 дней), размер облачной копии сверяется с локальной.
+- Если бэкап не удался (дамп, архив, выгрузка) — сообщение в Telegram при заданных `CRM_BACKUP_TELEGRAM_TOKEN` и `CRM_BACKUP_TELEGRAM_CHAT`, и ненулевой код в логе.
 
-Восстановление:
+Чаще раза в сутки — поменяйте расписание в `/etc/cron.d/bars-crm-backup` (например `40 */6 * * *` — каждые 6 часов); скрипт рассчитан на любое число запусков в день.
+
+### Бэкапы в облако
+
+Выгрузка идёт через [rclone](https://rclone.org) — он умеет и S3-хранилища, и Яндекс Диск. В базе персональные данные клиентов (ФИО, телефоны), поэтому:
+
+- храним в **российском** облаке (152-ФЗ) — рекомендуем **Яндекс Object Storage** (холодное хранилище — копейки за гигабайт) или Selectel;
+- шифруем **до отправки** — слой `crypt` в rclone: в облаке лежат только зашифрованные файлы, без пароля их не прочитать даже владельцу аккаунта облака.
+
+Настройка (один раз, от root — cron запускает бэкап от root):
+
+```bash
+sudo apt install rclone
+
+# 1. Хранилище. Яндекс Cloud: создать бакет (например tlkbars-backups, класс «Холодное»),
+#    сервисный аккаунт с ролью storage.uploader + storage.viewer и статический ключ доступа.
+sudo rclone config create yandex s3 provider=Other env_auth=false \
+  access_key_id=<ID ключа> secret_access_key=<секрет> \
+  endpoint=https://storage.yandexcloud.net region=ru-central1 acl=private
+
+#    (Вариант — Яндекс Диск: sudo rclone config, тип «yandex», войти в аккаунт в браузере.)
+
+# 2. Шифрование поверх хранилища. Пароли сохраните в менеджере паролей:
+#    без них бэкап из облака не восстановить.
+sudo rclone config create tlkbars-crypt crypt remote=yandex:tlkbars-backups/crm \
+  password=$(rclone obscure '<длинный пароль>') password2=$(rclone obscure '<второй пароль>') \
+  filename_encryption=off directory_name_encryption=false
+
+# 3. В crm/.env:
+#    CRM_BACKUP_RCLONE_REMOTE=tlkbars-crypt:
+#    CRM_BACKUP_TELEGRAM_TOKEN=<токен бота>   CRM_BACKUP_TELEGRAM_CHAT=<ID чата>
+
+# 4. Проверка
+sudo bash crm/scripts/backup.sh
+sudo rclone ls tlkbars-crypt:
+```
+
+Восстановление из облака: `sudo rclone copy tlkbars-crypt:crm-2026-10-08_0040.dump /tmp/` — и дальше как ниже.
+
+Восстановление (из локальной копии или скачанной из облака):
 
 ```bash
 sudo systemctl stop bars-crm
@@ -214,7 +263,7 @@ sudo systemctl start bars-crm
 ## Безопасность
 
 - **Учётки личные**, общего пароля нет. Первый админ — `crm:create-admin`, остальных заводит админ в «Пользователи». Удаления нет — только отключение: авторство правок и журнал сохраняются.
-- **Роли**: `admin` — всё, плюс пользователи и журнал действий, удаление пространств; `manager` — читает всё, редактирует базу знаний и справочник (на этапе 2 — сделки).
+- **Роли**: `admin` — всё, плюс пользователи и журнал действий, удаление пространств; `manager` — читает всё, редактирует базу знаний, справочник, сделки и клиентов. Только admin: этапы воронки, удаление сделок и клиентов.
 - **Пароли** — argon2id (m=19 МБ, t=2), минимум 8 символов. Смена пароля и отключение завершают сессии пользователя.
 - **Сессия** — случайный токен в cookie `bars_crm_session`: `HttpOnly; Secure; SameSite=Lax; Path=/crm`, 30 дней, продлевается при активности. В БД хранится только SHA-256 токена.
 - **CSRF** — у каждой сессии свой токен; фронтенд шлёт его в `X-CSRF-Token` на всех изменяющих запросах, плюс проверка `Origin`. Вход принимает только JSON.
@@ -237,27 +286,27 @@ sudo systemctl start bars-crm
 | `kb_spaces` | Пространства: `key` (SALES, CUSTOMS…), `name`, `description`, `position` |
 | `kb_pages` | Страницы: `space_id`, `parent_id` (дерево любой вложенности), `title`, `content` (TipTap JSON), `content_text` (плоский текст), `position`, `version`, авторы; `search` — `tsvector` (russian, заголовок с весом A) + GIN-индекс |
 | `kb_page_versions` | Каждое сохранение страницы: `version`, `title`, `content`, `note` («Создание», «Откат к версии 3»), автор, время |
-| `attachments` | Файлы: `owner_type` (`kb_page`, на этапе 2 — `deal`) + `owner_id`, имя, MIME, размер, `storage_key` (путь в `CRM_UPLOAD_DIR`) |
+| `attachments` | Файлы: `owner_type` (`kb_page` или `deal`) + `owner_id`, имя, MIME, размер, `storage_key` (путь в `CRM_UPLOAD_DIR`) |
 | `call_script_topics` | Строки справочника: `id`, `position`, `title`, `ask` (jsonb string[]), `qa` (jsonb [{q, a}]), `search_text` + `search` (tsvector) |
 | `call_script_versions` | Снимок всего справочника на каждое сохранение: `version`, `topics` (jsonb), `note`, автор |
 
-### Этап 2 (таблицы созданы, интерфейса нет)
+### CRM
 
 | Таблица | Назначение |
 |---|---|
 | `clients` | Компания: `kind` (`ip`/`ooo`/`other`), `name`, `inn`, `notes` |
 | `contacts` | Контакты компании: `name`, `phone`, `messenger` (`telegram`/`whatsapp`/`max`/`wechat`/`other`) + `messenger_handle`, `email`, `position`, `is_primary` |
-| `deal_statuses` | Колонки доски (заполнены миграцией): Новый лид → Квалификация → Расчёт отправлен → Договор → Оплата поставщику / выкуп → В пути → Таможня → Доставлено → Закрыто |
+| `deal_statuses` | Этапы воронки = колонки доски: `key`, `name`, `color`, `position`, `is_final` (последний этап). Начальный набор (миграция 0002): Новая заявка → Поиск товара → Расчёт доставки предварительный → Предложение клиенту → Заказ у поставщика → Расчёт доставки → Согласование доставки → Доставка / информирование клиента → Завершено |
 | `deals` | Сделка, ключ `key` = `BARS-` + `number` (последовательность `deal_number_seq`), все поля ниже |
 | `deal_comments` | Комментарии: `deal_id`, `author_id`, `body` |
-| `deal_events` | Журнал изменений сделки: `kind` (created, field_changed, status_changed, comment_added…), `field`, `old_value`, `new_value`, кто, когда |
+| `deal_events` | Журнал изменений сделки: `kind` (created, field_changed, status_changed, lost, reopened, attachment_added), `field`, `old_value`/`new_value` (человекочитаемые), кто, когда |
 
 Поля `deals`:
 
 | Поле | Тип / значения |
 |---|---|
 | `title`, `client_id`, `contact_id` | название, клиент, контакт |
-| `status_key`, `outcome` | статус-колонка; итог `won`/`lost` — обязателен только для «Закрыто» (CHECK) |
+| `status_key`, `outcome`, `lost_reason`, `closed_at` | этап; итог: `null` — в работе, `won` — на завершающем этапе, `lost` — отказ (на любом этапе, с причиной) |
 | `product`, `hs_code` | товар, код ТН ВЭД |
 | `weight_kg`, `volume_m3` | вес, объём (numeric) |
 | `pickup_location`, `delivery_location` | место забора в Китае, доставки в России |
@@ -268,9 +317,9 @@ sudo systemctl start bars-crm
 | `certificates`, `certificate_holder` | `yes` / `no` / `in_progress` + на кого |
 | `chestny_znak` | `not_required` / `required` / `applied` |
 | `assignee_id`, `due_date`, `priority`, `labels` | исполнитель, срок, `low`…`urgent`, метки (text[]) |
-| `description` | TipTap JSON (тот же редактор, что в базе знаний) |
+| `description` | текст |
 | `board_position` | порядок карточки в колонке |
-| `source` | `manual` / `site` (заявки с сайта) |
+| `source` | `manual` / `site` (заявки с сайта, позже) / `demo` (тестовые) |
 | вложения | `attachments` с `owner_type = 'deal'` |
 
 ## API
@@ -291,7 +340,15 @@ sudo systemctl start bars-crm
 | `POST /kb/pages/:id/attachments` (multipart `file`), `GET/DELETE /files/:id` | Вложения |
 | `GET /calls`, `POST /calls/topics`, `PUT/DELETE /calls/topics/:id`, `POST /calls/reorder` | Справочник |
 | `GET /calls/versions[/:v]`, `POST /calls/versions/:v/restore` | История справочника и откат |
-| `GET /search?q=` | Глобальный поиск: страницы + справочник, сниппеты с `<mark>` |
+| `GET /stages`, `PUT /stages` (admin) | Этапы воронки; `PUT` — полный список в новом порядке |
+| `GET /deals?view=board` | Доска: всё в работе + успешные за 30 дней |
+| `GET /deals?outcome=open\|won\|lost\|all&stage=&assignee=me\|none\|id&client=&label=&q=&sort=&dir=` | Таблица |
+| `POST /deals`, `GET/PATCH/DELETE /deals/:key` | Сделка по ключу `BARS-12`; `PATCH` — любые поля, каждое изменение в журнал; удаление — admin |
+| `POST /deals/:key/move` `{statusKey, beforeKey}` | Перенос на этап / в место колонки |
+| `POST /deals/:key/lose` `{reason}`, `POST /deals/:key/reopen` | Отказ и возврат в работу |
+| `POST /deals/:key/comments`, `DELETE /deals/:key/comments/:id`, `POST /deals/:key/attachments` | Комментарии, вложения |
+| `GET/POST /clients`, `GET/PATCH/DELETE /clients/:id`, `POST /clients/:id/contacts`, `PATCH/DELETE /contacts/:id` | Клиенты и контакты |
+| `GET /search?q=` | Глобальный поиск: сделки, клиенты, страницы, справочник; сниппеты с `<mark>` |
 | `GET /audit?before=&userId=&entityType=` | Журнал действий (admin) |
 
 ## Справочник для звонков
@@ -308,20 +365,25 @@ sudo systemctl start bars-crm
 - `--force` — темы из файла перезаписывают одноимённые и встают в порядке файла; темы, созданные в интерфейсе, остаются после них.
 - Любое изменение — новая версия в истории («Импорт из kb-call-script.json»), так что импорт можно откатить.
 
-## Этап 2 — CRM
+## CRM
 
-Схема уже в БД (см. выше), в сайдбаре есть неактивный пункт «Сделки · скоро», маршрут `/crm/deals` занят заглушкой. Что добавить:
+**Доска** (`/crm/deals`): колонки — этапы воронки, карточка — ключ, название, клиент, исполнитель, метки, срок (просрочка — красным), приоритет «Высокий/Срочный». Карточки перетаскиваются между колонками и внутри колонки; «+» в шапке колонки — новая сделка сразу на этом этапе. В колонке завершающего этапа — успешные сделки за 30 дней. Фильтры: поиск (ключ, название, товар, ТН ВЭД, клиент, ИНН, контакт, телефон) и исполнитель («Мои»).
 
-1. **API** `routes/deals.ts`, `routes/clients.ts`:
-   - `GET /deals?status=&assignee=&client=&label=&q=&due_before=` (таблица с фильтрами), `GET /deals/board` (сделки по колонкам), `POST /deals`, `GET/PATCH /deals/:key` (по `BARS-123`), `POST /deals/:key/move` `{statusKey, outcome?, beforeId?}` — перенос на доске с пересчётом `board_position`;
-   - `GET/POST /deals/:key/comments`, `GET /deals/:key/events`, вложения — через существующий `attachments` с `owner_type='deal'`;
-   - `PATCH` пишет в `deal_events` каждое изменённое поле (old/new) и в `audit_log`; смена статуса — `status_changed`; перевод в «Закрыто» требует `outcome` (CHECK в БД) и ставит `closed_at`;
-   - `GET/POST/PATCH /clients`, контакты, история сделок клиента (`deals.client_id`), поиск по ИНН и телефону;
-   - `manager` редактирует сделки, `admin` — ещё и справочники статусов/меток.
-2. **Экраны** `web/src/pages/deals/`:
-   - доска: колонки из `deal_statuses`, карточка — ключ, название, клиент, исполнитель, срок (просрочка — красным); перетаскивание между колонками тем же подходом, что дерево страниц; «Закрыто» спрашивает итог;
-   - боковая панель по клику на карточку (`/crm/deals/BARS-123` поверх доски): все поля сделки группами («Груз», «Маршрут», «Документы и разрешения», «Работа»), описание в TipTap, вложения, комментарии, вкладка «Активность» из `deal_events`;
-   - табличный вид с фильтрами (статус, исполнитель, клиент, метки, срок) и сортировкой;
-   - клиенты: список, карточка компании с контактами и историей сделок.
-3. **Поиск**: добавить сделки (по ключу `BARS-…`, названию, товару, ТН ВЭД) и клиентов (название, ИНН, телефон) в `GET /search`.
-4. **Заявки с сайта → CRM** (позже, вместо внешней CRM): `server/index.ts` после приёма заявки дополнительно вызывает внутренний эндпоинт `POST /crm/api/intake/lead` (только с 127.0.0.1, с общим секретом из `.env`), который создаёт клиента/контакт и сделку со статусом «Новый лид» и `source='site'`. Текущую отправку заявок не менять, пока CRM не заменит её полностью.
+**Таблица** (`/crm/deals?view=table`): те же сделки списком с сортировкой и фильтрами «В работе / Успешные / Отказ / Все» и по этапу.
+
+**Карточка сделки** — панель справа поверх доски (`/crm/deals/BARS-12`, ссылку можно переслать): шкала этапов (клик — перевести; на телефоне это основной способ), описание, поля группами «Груз», «Маршрут», «Документы и разрешения», вложения, комментарии, «Активность» — кто, когда и что изменил (было → стало). Справа — клиент и контакт (телефон кликабельный), исполнитель, срок, приоритет, метки. Поля сохраняются сами: списки и даты сразу, текст — по уходу с поля. «Отказ» закрывает сделку с причиной и убирает с доски; «Вернуть в работу» — обратно.
+
+**Этапы** (кнопка «Этапы», только admin): как в прежней CRM — перетаскивание, номер, цветная плашка, карандаш (название и цвет из палитры), добавить, удалить (если на этапе нет сделок). Последний этап — завершающий: сделка в нём считается успешной.
+
+**Клиенты** (`/crm/clients`): поиск по названию, ИНН, контакту, телефону; карточка компании — реквизиты, заметки, контакты (телефон, мессенджер, e-mail, должность), история сделок. Новую компанию и контакт можно завести прямо в форме новой сделки.
+
+**Роли**: `manager` создаёт и ведёт сделки и клиентов; `admin` — ещё этапы воронки, удаление сделок и клиентов.
+
+**Попробовать**: `npm run crm:seed -- --demo` — 9 тестовых сделок на всех этапах; `npm run crm:seed -- --remove-demo` — убрать их.
+
+### CRM: что дальше
+
+1. **Заявки с сайта сразу в CRM** (вместо amoCRM): `server/index.ts` после приёма заявки вызывает внутренний эндпоинт `POST /crm/api/intake/lead` (только с 127.0.0.1, с общим секретом из `.env`), который находит клиента по телефону или создаёт нового, и заводит сделку на первом этапе с `source='site'`. Текущую отправку в amoCRM не трогаем, пока CRM её не заменит.
+2. Несколько воронок (например, «Образцы» отдельно от «Общей»): таблица `pipelines`, `deal_statuses.pipeline_id`, `deals.pipeline_id`, переключатель воронки над доской.
+3. Сумма сделки и отчёты (конверсия по этапам, время на этапе — уже считается по `deal_events`).
+4. Уведомления исполнителю в Telegram о новых сделках и просроченных сроках.
