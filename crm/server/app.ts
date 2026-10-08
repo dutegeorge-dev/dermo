@@ -9,7 +9,7 @@ import path from "node:path";
 import cookie from "@fastify/cookie";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
-import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 
 import { config } from "./config.ts";
 import { HttpError } from "./lib/http.ts";
@@ -147,6 +147,11 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
 
   app.get(config.basePath, async (_request, reply) => reply.redirect(`${config.basePath}/`, 301));
 
+  const sendIndex = (reply: FastifyReply) =>
+    reply.header("cache-control", "no-store").type("text/html; charset=utf-8").send(fs.createReadStream(indexFile));
+
+  if (hasWeb) app.get(`${config.basePath}/`, async (_request, reply) => sendIndex(reply));
+
   app.setNotFoundHandler(async (request, reply) => {
     const url = request.url.split("?")[0];
     if (url.startsWith(`${API_PREFIX}/`) || url === API_PREFIX) {
@@ -154,10 +159,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
     }
     // Любой другой путь под /crm/ — маршрут SPA: отдаём index.html.
     if (request.method === "GET" && url.startsWith(`${config.basePath}/`) && hasWeb && !path.extname(url)) {
-      return reply
-        .header("cache-control", "no-store")
-        .type("text/html; charset=utf-8")
-        .send(fs.createReadStream(indexFile));
+      return sendIndex(reply);
     }
     return reply.status(404).type("text/plain; charset=utf-8").send("Не найдено");
   });

@@ -1,0 +1,178 @@
+/* Шрифт Onest — тот же, что на сайте (файлы берутся из src/assets/fonts). */
+@font-face {
+  font-family: "Onest";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../../src/assets/fonts/onest-cyrillic-400-normal.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: "Onest";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../../src/assets/fonts/onest-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Onest";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../../../src/assets/fonts/onest-cyrillic-500-normal.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: "Onest";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../../../src/assets/fonts/onest-latin-500-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Onest";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../../src/assets/fonts/onest-cyrillic-600-normal.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: "Onest";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../../src/assets/fonts/onest-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-white text-[14px] antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html.dark {
+    @apply bg-neutral-900;
+    color-scheme: dark;
+  }
+  /* Цвет текста — на body: вариант dark: срабатывает только у потомков html.dark. */
+  body {
+    @apply bg-white text-slate-900 dark:bg-neutral-900 dark:text-neutral-100;
+  }
+  ::selection {
+    @apply bg-accent/20;
+  }
+  mark {
+    @apply rounded-sm bg-yellow-200/80 px-0.5 text-inherit dark:bg-yellow-500/30;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700;
+  }
+  .btn-primary {
+    @apply border-accent bg-accent text-white hover:bg-accent-hover dark:border-accent dark:bg-accent dark:text-white dark:hover:bg-accent-hover;
+  }
+  .btn-danger {
+    @apply border-red-600 bg-red-600 text-white hover:bg-red-700 dark:border-red-600 dark:bg-red-600 dark:hover:bg-red-700;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-slate-600 hover:bg-slate-100 dark:bg-transparent dark:text-neutral-300 dark:hover:bg-neutral-800;
+  }
+  .btn-sm {
+    @apply px-2 py-1 text-xs;
+  }
+  .icon-btn {
+    @apply inline-flex h-7 w-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:hover:bg-transparent dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100;
+  }
+  .input {
+    @apply block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder:text-neutral-500;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium text-slate-600 dark:text-neutral-400;
+  }
+  .link {
+    @apply text-accent hover:underline dark:text-accent-bright;
+  }
+  .muted {
+    @apply text-slate-500 dark:text-neutral-400;
+  }
+  .panel {
+    @apply rounded-lg border border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-900;
+  }
+  .divide-line > * + * {
+    @apply border-t border-slate-200 dark:border-neutral-800;
+  }
+  .page-title {
+    @apply text-xl font-semibold tracking-tight text-slate-900 dark:text-neutral-50;
+  }
+}
+
+/* ── Редактор и просмотр страниц (TipTap) ─────────────────────────────── */
+.doc {
+  @apply prose prose-slate max-w-none text-[15px] leading-relaxed dark:prose-invert;
+  @apply prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-accent prose-code:before:content-none prose-code:after:content-none dark:prose-a:text-accent-bright;
+}
+.doc :where(code):not(:where(pre *)) {
+  @apply rounded bg-slate-100 px-1 py-0.5 text-[0.9em] font-normal dark:bg-neutral-800;
+}
+.doc li > p {
+  @apply my-1;
+}
+.doc pre {
+  @apply bg-slate-900 text-slate-100 dark:bg-black/60;
+}
+.doc table {
+  @apply my-4 w-full border-collapse text-sm;
+}
+.doc th,
+.doc td {
+  @apply border border-slate-300 px-2 py-1.5 align-top dark:border-neutral-700;
+}
+.doc th {
+  @apply bg-slate-50 text-left font-semibold dark:bg-neutral-800;
+}
+.doc td > p,
+.doc th > p {
+  @apply m-0;
+}
+.doc img {
+  @apply my-3 max-h-[600px] rounded border border-slate-200 dark:border-neutral-800;
+}
+.doc img.ProseMirror-selectednode {
+  @apply outline outline-2 outline-accent;
+}
+.ProseMirror {
+  @apply min-h-[300px] outline-none;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  @apply pointer-events-none float-left h-0 text-slate-400 dark:text-neutral-500;
+}
+.ProseMirror .selectedCell::after {
+  content: "";
+  @apply pointer-events-none absolute inset-0 bg-accent/10;
+}
+.ProseMirror td,
+.ProseMirror th {
+  @apply relative;
+}
+.ProseMirror .column-resize-handle {
+  @apply pointer-events-none absolute -right-0.5 bottom-0 top-0 w-1 bg-accent/50;
+}
+.tableWrapper {
+  @apply overflow-x-auto;
+}
+
+/* Свой крестик очистки в полях поиска — системный прячем. */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}

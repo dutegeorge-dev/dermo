@@ -81,6 +81,7 @@ export async function kbRoutes(app: FastifyInstance): Promise<void> {
         description: kbSpaces.description,
         updatedAt: kbSpaces.updatedAt,
         pageCount: count(kbPages.id),
+        lastPageUpdatedAt: max(kbPages.updatedAt),
       })
       .from(kbSpaces)
       .leftJoin(kbPages, eq(kbPages.spaceId, kbSpaces.id))
