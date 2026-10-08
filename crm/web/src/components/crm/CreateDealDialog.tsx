@@ -5,10 +5,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 
 import { COMPANY_KINDS, MESSENGERS } from "../../../../shared/deal-fields.ts";
+import { SCHEMES } from "../../../../shared/documents.ts";
 import { api } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
 import { ErrorBox, Modal } from "../ui.tsx";
-import { ClientPicker, type PickedClient } from "./ClientPicker.tsx";
+import { CounterpartyPicker, type Picked } from "./CounterpartyPicker.tsx";
 import { useDirectory, useStages } from "./common.tsx";
 
 export function CreateDealDialog({ onClose, initialStage }: { onClose: () => void; initialStage?: string }) {
@@ -20,7 +21,8 @@ export function CreateDealDialog({ onClose, initialStage }: { onClose: () => voi
 
   const [title, setTitle] = useState("");
   const [product, setProduct] = useState("");
-  const [client, setClient] = useState<PickedClient | null>(null);
+  const [client, setClient] = useState<Picked | null>(null);
+  const [scheme, setScheme] = useState<keyof typeof SCHEMES>("commission");
   const [kind, setKind] = useState<keyof typeof COMPANY_KINDS>("ooo");
   const [inn, setInn] = useState("");
   const [contactName, setContactName] = useState("");
@@ -41,6 +43,7 @@ export function CreateDealDialog({ onClose, initialStage }: { onClose: () => voi
         body: {
           title,
           product,
+          scheme,
           statusKey: statusKey || stages[0]?.key,
           assigneeId: assigneeId ? Number(assigneeId) : null,
           clientId: client?.id ?? null,
@@ -72,7 +75,7 @@ export function CreateDealDialog({ onClose, initialStage }: { onClose: () => voi
           </div>
           <div className="sm:col-span-2">
             <label className="label">Клиент</label>
-            <ClientPicker value={client} onChange={setClient} />
+            <CounterpartyPicker role="client" value={client} onChange={setClient} />
           </div>
           {client && client.id === null && (
             <>
@@ -107,6 +110,12 @@ export function CreateDealDialog({ onClose, initialStage }: { onClose: () => voi
               </div>
             </>
           )}
+          <div>
+            <label className="label" htmlFor="d-scheme">Схема</label>
+            <select id="d-scheme" className="input" value={scheme} onChange={(e) => setScheme(e.target.value as keyof typeof SCHEMES)}>
+              {Object.entries(SCHEMES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
           <div>
             <label className="label" htmlFor="d-stage">Этап</label>
             <select id="d-stage" className="input" value={statusKey || stages[0]?.key || ""} onChange={(e) => setStatusKey(e.target.value)}>

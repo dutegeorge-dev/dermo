@@ -7,9 +7,10 @@ import { useNavigate } from "react-router";
 import { api } from "../lib/api.ts";
 import { SnippetHtml } from "../lib/highlight.tsx";
 import type { SearchResult } from "../lib/types.ts";
-import { IconBoard, IconBook, IconBuilding, IconPhone, IconSearch } from "./Icons.tsx";
+import { COUNTERPARTY_ROLES, docSpec } from "../../../shared/documents.ts";
+import { IconBoard, IconBook, IconBox, IconBuilding, IconFile, IconPhone, IconSearch } from "./Icons.tsx";
 
-type Item = { key: string; to: string; kind: "page" | "topic" | "deal" | "client"; title: string; sub: string; snippet: string };
+type Item = { key: string; to: string; kind: "page" | "topic" | "deal" | "client" | "document" | "product"; title: string; sub: string; snippet: string };
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -53,10 +54,26 @@ export function GlobalSearch() {
       })),
       ...data.clients.map((c) => ({
         key: `c-${c.id}`,
-        to: `/clients/${c.id}`,
+        to: `/${COUNTERPARTY_ROLES[c.role].path}/${c.id}`,
         kind: "client" as const,
         title: c.name,
-        sub: `Клиент${c.inn ? ` · ИНН ${c.inn}` : ""}`,
+        sub: `${COUNTERPARTY_ROLES[c.role].one}${c.inn ? ` · ИНН ${c.inn}` : ""}`,
+        snippet: "",
+      })),
+      ...data.documents.map((d) => ({
+        key: `doc-${d.id}`,
+        to: `/documents/${d.id}`,
+        kind: "document" as const,
+        title: [docSpec(d.type)?.label ?? d.type, d.number && `№ ${d.number}`].filter(Boolean).join(" "),
+        sub: ["Документ", d.party, d.date && d.date.split("-").reverse().join(".")].filter(Boolean).join(" · "),
+        snippet: "",
+      })),
+      ...data.products.map((p) => ({
+        key: `p-${p.id}`,
+        to: `/products/${p.id}`,
+        kind: "product" as const,
+        title: p.name,
+        sub: `Товар${p.hsCode ? ` · ТН ВЭД ${p.hsCode}` : ""}`,
         snippet: "",
       })),
       ...data.callTopics.map((t) => ({
@@ -110,7 +127,7 @@ export function GlobalSearch() {
           ref={inputRef}
           type="search"
           value={q}
-          placeholder="Поиск: сделки, клиенты, база знаний, справочник"
+          placeholder="Поиск: сделки, контрагенты, документы, товары, база знаний"
           className="input pl-8 pr-8"
           onChange={(e) => {
             setQ(e.target.value);
@@ -153,7 +170,7 @@ export function GlobalSearch() {
               onClick={() => go(item)}
               className={`flex w-full gap-2.5 px-3 py-2 text-left ${i === active ? "bg-slate-100 dark:bg-neutral-800" : ""}`}
             >
-              <span className="mt-0.5 text-slate-400">{{ page: <IconBook />, topic: <IconPhone />, deal: <IconBoard />, client: <IconBuilding /> }[item.kind]}</span>
+              <span className="mt-0.5 text-slate-400">{{ page: <IconBook />, topic: <IconPhone />, deal: <IconBoard />, client: <IconBuilding />, document: <IconFile />, product: <IconBox /> }[item.kind]}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{item.title}</span>
                 <span className="block truncate text-xs muted">{item.sub}</span>

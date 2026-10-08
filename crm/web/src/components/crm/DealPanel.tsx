@@ -11,7 +11,8 @@ import { formatDateTime, formatRelative, formatSize } from "../../lib/format.ts"
 import type { Contact, DealResponse, Stage } from "../../lib/types.ts";
 import { IconFile, IconPaperclip, IconTrash, IconX } from "../Icons.tsx";
 import { ConfirmDialog, ErrorBox, Modal, Spinner } from "../ui.tsx";
-import { ClientPicker, type PickedClient } from "./ClientPicker.tsx";
+import { CounterpartyPicker, ensureCounterparty, type Picked } from "./CounterpartyPicker.tsx";
+import { DealDocs } from "./DealDocs.tsx";
 import { StageChip, useDirectory, useStages } from "./common.tsx";
 
 type Save = (patch: Record<string, unknown>) => Promise<void>;
@@ -140,6 +141,16 @@ function eventText(e: DealResponse["events"][number]): ReactNode {
       return <>вернул в работу</>;
     case "attachment_added":
       return <>прикрепил файл «{e.newValue}»</>;
+    case "document_added":
+      return <>добавил документ: {e.newValue}</>;
+    case "document_removed":
+      return <>удалил документ: {e.oldValue}</>;
+    case "payment_changed":
+      return <>отметил оплату — {e.oldValue}: <b className="font-medium">{e.newValue}</b></>;
+    case "party_added":
+      return <>добавил подрядчика {e.newValue}</>;
+    case "party_removed":
+      return <>убрал подрядчика {e.oldValue}</>;
     default:
       return e.kind;
   }
@@ -148,17 +159,17 @@ function eventText(e: DealResponse["events"][number]): ReactNode {
 function ClientBlock({ data, save }: { data: DealResponse; save: Save }) {
   const { deal } = data;
   const [editing, setEditing] = useState(false);
-  const [picked, setPicked] = useState<PickedClient | null>(null);
+  const [picked, setPicked] = useState<Picked | null>(null);
   const contacts = useQuery({
-    queryKey: ["client", deal.clientId, "contacts"],
-    queryFn: () => api<{ contacts: Contact[] }>(`/clients/${deal.clientId}`),
+    queryKey: ["counterparty", deal.clientId],
+    queryFn: () => api<{ contacts: Contact[] }>(`/counterparties/${deal.clientId}`),
     enabled: !!deal.clientId && editing,
   });
 
   if (editing) {
     return (
       <div className="space-y-2">
-        <ClientPicker value={picked ?? (deal.clientId ? { id: deal.clientId, name: deal.clientName ?? "" } : null)} onChange={setPicked} allowNew={false} autoFocus />
+        <CounterpartyPicker role="client" value={picked ?? (deal.clientId ? { id: deal.clientId, name: deal.clientName ?? "" } : null)} onChange={setPicked} autoFocus />
         {deal.clientId && contacts.data && contacts.data.contacts.length > 0 && !picked && (
           <select className="input" value={deal.contactId ?? ""} onChange={(e) => void save({ contactId: e.target.value ? Number(e.target.value) : null })}>
             <option value="">Контакт не выбран</option>
@@ -170,7 +181,8 @@ function ClientBlock({ data, save }: { data: DealResponse; save: Save }) {
             type="button"
             className="btn btn-primary btn-sm"
             onClick={async () => {
-              if (picked?.id && picked.id !== deal.clientId) await save({ clientId: picked.id, contactId: null });
+              const id = picked ? await ensureCounterparty(picked, "client") : null;
+              if (id && id !== deal.clientId) await save({ clientId: id, contactId: null });
               setEditing(false);
               setPicked(null);
             }}
@@ -282,6 +294,8 @@ export function DealPanel({ dealKey, onClose }: { dealKey: string; onClose: () =
                 <TitleInput value={deal.title} onSave={(title) => save({ title })} />
                 {closed && deal.lostReason && <p className="text-sm text-red-700 dark:text-red-300">Причина отказа: {deal.lostReason}</p>}
                 <StageBar stages={stages} current={deal.statusKey} disabled={closed} onPick={(statusKey) => void run(() => api(`/deals/${dealKey}/move`, { method: "POST", body: { statusKey, beforeKey: null } }))} />
+
+                <DealDocs data={data} save={save} run={run} />
 
                 <DescriptionInput value={deal.description} onSave={(description) => save({ description })} />
 

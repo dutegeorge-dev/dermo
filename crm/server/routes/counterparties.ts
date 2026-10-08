@@ -143,7 +143,13 @@ export async function counterpartyRoutes(app: FastifyInstance): Promise<void> {
   app.post("/counterparties", async (request) => {
     const user = currentUser(request);
     const input = body<Record<string, unknown>>(request);
-    const values = counterpartyValues({ role: "client", kind: input.role === "client" || !input.role ? "ooo" : "foreign", ...input });
+    const isClientish = input.role === "client" || input.role === "contractor" || !input.role;
+    const values = counterpartyValues({
+      role: "client",
+      kind: isClientish ? "ooo" : "foreign",
+      country: input.role === "supplier" ? "Китай" : "Россия",
+      ...input,
+    });
     if (!values.name) throw new HttpError(400, "Укажите название");
     const counterparty = await db.transaction(async (tx) => {
       const [created] = await tx

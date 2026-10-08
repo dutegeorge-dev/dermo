@@ -54,7 +54,9 @@ export type CallTopic = { id: string; title: string; ask: string[]; qa: CallQa[]
 
 export type SearchResult = {
   deals: { key: string; title: string; client: string | null; status: string; outcome: string | null }[];
-  clients: { id: number; name: string; inn: string | null }[];
+  clients: { id: number; name: string; inn: string | null; role: CounterpartyRole }[];
+  documents: { id: number; type: string; number: string | null; date: string | null; party: string | null }[];
+  products: { id: number; name: string; hsCode: string | null }[];
   pages: { id: number; title: string; spaceKey: string; spaceName: string; snippet: string; updatedAt: string }[];
   callTopics: { id: string; title: string; ask: string[]; snippet: string }[];
 };
@@ -68,6 +70,11 @@ export type Deal = {
   number: number;
   key: string;
   title: string;
+  scheme: "commission" | "supply" | "teu";
+  supplierId: number | null;
+  supplierName: string | null;
+  clientContractId: number | null;
+  supplierContractId: number | null;
   statusKey: string;
   outcome: "won" | "lost" | null;
   lostReason: string | null;
@@ -120,27 +127,173 @@ export type DealEvent = {
   createdAt: string;
 };
 
-export type DealResponse = { deal: Deal; comments: DealComment[]; events: DealEvent[]; attachments: Attachment[] };
+export type DealParty = { id: number; name: string; role: CounterpartyRole; contractorType: string | null };
 
-export type Client = {
+export type Money = { currency: string; amount: number; paid: number };
+export type FinanceRow = {
+  category: string;
+  label: string;
+  plan: { amount: number | null; currency: string } | null;
+  fact: Money[];
+};
+
+export type DealDocument = {
   id: number;
-  kind: "ooo" | "ip" | "other";
+  type: string;
+  number: string | null;
+  date: string | null;
+  seqNo: number | null;
+  parentId: number | null;
+  dealId: number | null;
+  counterpartyId: number | null;
+  counterpartyName: string | null;
+  contractorType: string | null;
+  currency: string | null;
+  amount: number | null;
+  status: string | null;
+  paymentStatus: "unpaid" | "partial" | "paid" | null;
+  paidAmount: number | null;
+  paidAt: string | null;
+  validUntil: string | null;
+  fileCount: number;
+};
+
+export type DealResponse = {
+  deal: Deal;
+  comments: DealComment[];
+  events: DealEvent[];
+  attachments: Attachment[];
+  parties: DealParty[];
+  documents: DealDocument[];
+  finance: { orderId: number | null; rows: FinanceRow[]; clientInvoices: Money[] };
+};
+
+export type CounterpartyRole = "client" | "supplier" | "contractor";
+
+export type Counterparty = {
+  id: number;
+  role: CounterpartyRole;
+  contractorType: string | null;
+  kind: "ooo" | "ip" | "other" | "foreign";
   name: string;
+  fullName: string | null;
+  country: string;
   inn: string | null;
+  kpp: string | null;
+  ogrn: string | null;
+  regNumber: string | null;
+  legalAddress: string | null;
+  postalAddress: string | null;
+  bankAccount: string | null;
+  bankName: string | null;
+  bankBik: string | null;
+  bankCorrAccount: string | null;
+  bankInn: string | null;
+  bankAddress: string | null;
+  bankSwift: string | null;
+  signatoryTitle: string | null;
+  signatoryName: string | null;
+  signatoryBasis: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
   notes: string;
   createdAt: string;
   updatedAt: string;
 };
 
-export type ClientRow = Pick<Client, "id" | "kind" | "name" | "inn" | "updatedAt"> & {
+export type CounterpartyRow = Pick<Counterparty, "id" | "role" | "contractorType" | "kind" | "name" | "inn" | "country" | "email" | "updatedAt"> & {
   dealCount: number;
+  documentCount: number;
   contactName: string | null;
   contactPhone: string | null;
+  contactEmail: string | null;
+};
+
+export type DocumentRow = {
+  id: number;
+  type: string;
+  number: string | null;
+  date: string | null;
+  seqNo: number | null;
+  counterpartyId: number | null;
+  counterpartyName: string | null;
+  counterpartyRole: CounterpartyRole | null;
+  clientId: number | null;
+  clientName: string | null;
+  dealId: number | null;
+  dealKey: string | null;
+  parentId: number | null;
+  parentNumber: string | null;
+  parentType: string | null;
+  currency: string | null;
+  amount: number | null;
+  status: string | null;
+  paymentStatus: "unpaid" | "partial" | "paid" | null;
+  paidAmount: number | null;
+  paidAt: string | null;
+  validUntil: string | null;
+  createdAt: string;
+  updatedAt: string;
+  fileCount: number;
+};
+
+export type DocItem = {
+  id?: number;
+  productId: number | null;
+  productName?: string | null;
+  name: string;
+  batchNo: string | null;
+  hsCode: string | null;
+  quantity: number | null;
+  unit: string | null;
+  price: number | null;
+  amount: number | null;
+};
+
+export type DocFile = Attachment & { label: string | null };
+
+export type DocumentFull = {
+  document: DocumentRow & { data: Record<string, unknown>; notes: string; createdBy: number | null };
+  items: DocItem[];
+  files: DocFile[];
+  children: DocumentRow[];
+  parentLabel: string | null;
+};
+
+export type ProductRow = {
+  id: number;
+  name: string;
+  nameRu: string | null;
+  hsCode: string | null;
+  unit: string | null;
+  updatedAt: string;
+  lastPrice: number | null;
+  lastCurrency: string | null;
+  supplierCount: number;
+  clientCount: number;
+};
+
+export type ProductLine = {
+  documentId: number;
+  type: string;
+  number: string | null;
+  date: string | null;
+  currency: string | null;
+  counterpartyId: number | null;
+  counterpartyName: string | null;
+  clientId: number | null;
+  clientName: string | null;
+  dealKey: string | null;
+  quantity: number | null;
+  unit: string | null;
+  price: number | null;
+  amount: number | null;
 };
 
 export type Contact = {
   id: number;
-  clientId: number | null;
+  counterpartyId: number | null;
   name: string;
   phone: string | null;
   messenger: string | null;

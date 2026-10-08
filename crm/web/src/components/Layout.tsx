@@ -10,7 +10,13 @@ import { GlobalSearch } from "./GlobalSearch.tsx";
 import {
   IconBoard,
   IconBook,
+  IconBox,
   IconBuilding,
+  IconFactory,
+  IconFile,
+  IconSettings,
+  IconTruck,
+  IconUpload,
   IconHistory,
   IconLogout,
   IconMenu,
@@ -79,6 +85,18 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         <NavItem to="/clients" icon={<IconBuilding />}>
           Клиенты
         </NavItem>
+        <NavItem to="/suppliers" icon={<IconFactory />}>
+          Поставщики
+        </NavItem>
+        <NavItem to="/contractors" icon={<IconTruck />}>
+          Подрядчики
+        </NavItem>
+        <NavItem to="/documents" icon={<IconFile />}>
+          Документы
+        </NavItem>
+        <NavItem to="/products" icon={<IconBox />}>
+          Товары
+        </NavItem>
       </nav>
 
       <div className="space-y-0.5 border-t border-slate-200 px-2 py-2 dark:border-neutral-800">
@@ -89,6 +107,9 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
             </NavItem>
             <NavItem to="/audit" icon={<IconHistory />}>
               Журнал действий
+            </NavItem>
+            <NavItem to="/settings" icon={<IconSettings />}>
+              Реквизиты компании
             </NavItem>
           </>
         )}
@@ -143,6 +164,10 @@ export function Layout() {
             <IconMenu size={18} />
           </button>
           <GlobalSearch />
+          <Link to="/documents/new" className="btn ml-auto shrink-0" title="Загрузить документ: инвойс, договор, накладную…">
+            <IconUpload size={14} />
+            <span className="hidden sm:inline">Загрузить документ</span>
+          </Link>
         </header>
         <main className="min-w-0 flex-1">
           <Outlet />

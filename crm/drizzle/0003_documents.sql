@@ -135,3 +135,6 @@ CREATE INDEX "contacts_counterparty_idx" ON "contacts" USING btree ("counterpart
 -- Имена служебных объектов — под новое имя таблицы (на работу не влияют).
 ALTER SEQUENCE IF EXISTS "clients_id_seq" RENAME TO "counterparties_id_seq";--> statement-breakpoint
 ALTER INDEX IF EXISTS "clients_pkey" RENAME TO "counterparties_pkey";
+--> statement-breakpoint
+-- Страна — словом, как в форме.
+UPDATE "counterparties" SET "country" = 'Россия' WHERE "country" = 'RU';

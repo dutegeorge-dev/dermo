@@ -14,7 +14,12 @@ import { PageView } from "./pages/kb/PageView.tsx";
 import { SpaceHome } from "./pages/kb/SpaceHome.tsx";
 import { SpaceLayout } from "./pages/kb/SpaceLayout.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
-import { ClientPage, ClientsPage } from "./pages/crm/ClientsPage.tsx";
+import { CounterpartiesPage, CounterpartyPage } from "./pages/crm/CounterpartiesPage.tsx";
+import { ProductPage, ProductsPage } from "./pages/crm/ProductsPage.tsx";
+import { DocumentEditor } from "./pages/docs/DocumentEditor.tsx";
+import { DocumentPage } from "./pages/docs/DocumentPage.tsx";
+import { DocumentsPage } from "./pages/docs/DocumentsPage.tsx";
+import { SettingsPage } from "./pages/SettingsPage.tsx";
 import { DealsPage } from "./pages/crm/DealsPage.tsx";
 import { NotFoundPage } from "./pages/misc.tsx";
 import { ProfilePage } from "./pages/ProfilePage.tsx";
@@ -56,14 +61,25 @@ const router = createBrowserRouter(
             { path: "calls", element: <CallScriptPage /> },
             { path: "calls/history", element: <CallScriptHistory /> },
             { path: "deals", element: <DealsPage />, children: [{ path: ":key" }] },
-            { path: "clients", element: <ClientsPage /> },
-            { path: "clients/:id", element: <ClientPage /> },
+            { path: "clients", element: <CounterpartiesPage key="client" role="client" /> },
+            { path: "clients/:id", element: <CounterpartyPage key="client" role="client" /> },
+            { path: "suppliers", element: <CounterpartiesPage key="supplier" role="supplier" /> },
+            { path: "suppliers/:id", element: <CounterpartyPage key="supplier" role="supplier" /> },
+            { path: "contractors", element: <CounterpartiesPage key="contractor" role="contractor" /> },
+            { path: "contractors/:id", element: <CounterpartyPage key="contractor" role="contractor" /> },
+            { path: "documents", element: <DocumentsPage /> },
+            { path: "documents/new", element: <DocumentEditor key="new" /> },
+            { path: "documents/:id", element: <DocumentPage /> },
+            { path: "documents/:id/edit", element: <DocumentEditor key="edit" /> },
+            { path: "products", element: <ProductsPage /> },
+            { path: "products/:id", element: <ProductPage /> },
             { path: "profile", element: <ProfilePage /> },
             {
               element: <AdminOnly />,
               children: [
                 { path: "users", element: <UsersPage /> },
                 { path: "audit", element: <AuditPage /> },
+                { path: "settings", element: <SettingsPage /> },
               ],
             },
             { path: "*", element: <NotFoundPage /> },

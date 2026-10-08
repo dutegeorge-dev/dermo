@@ -61,7 +61,7 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
     if (!doc) throw new HttpError(404, "Документ не найден");
     if (doc.type !== "commission_order") throw new HttpError(400, "Для этого типа документа шаблона нет");
     const buffer = await renderOrderDocx(db, id, config.uploadDir);
-    const filename = `Поручение № ${doc.number ?? id}.docx`;
+    const filename = `Поручение ${doc.number ?? id}.docx`;
     return reply
       .header("content-type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
       .header(
