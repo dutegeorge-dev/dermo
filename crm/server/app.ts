@@ -49,7 +49,9 @@ function originAllowed(request: FastifyRequest): boolean {
 export async function buildApp(options: { logger?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options.logger ?? false,
-    trustProxy: config.trustProxy,
+    // IP клиента берём из X-Forwarded-For, только если запрос пришёл от nginx
+    // с этой же машины: иначе заголовок можно подделать и обойти лимит входа.
+    trustProxy: config.trustProxy ? ["127.0.0.1", "::1"] : false,
     bodyLimit: 2 * 1024 * 1024,
   });
 

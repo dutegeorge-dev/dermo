@@ -72,6 +72,7 @@ export const config = {
     ttlMs: envNumber("CRM_SESSION_DAYS", 30) * 24 * 60 * 60 * 1000,
     secure: envBool("CRM_COOKIE_SECURE", true),
   },
+  /** Сервис стоит за nginx на этой же машине (X-Forwarded-For от 127.0.0.1). */
   trustProxy: envBool("CRM_TRUST_PROXY", true),
   /** Собранный фронтенд (vite build). */
   webDist: path.join(CRM_ROOT, "web", "dist"),

@@ -1,0 +1,12 @@
+# Ежедневный бэкап внутреннего раздела /crm/ (БД + вложения), хранение 14 дней.
+#
+# Установка:
+#   sudo cp deploy/cron/bars-crm-backup /etc/cron.d/bars-crm-backup
+#   sudo chmod 644 /etc/cron.d/bars-crm-backup
+# Лог: /var/log/bars-crm-backup.log
+#
+# Время — серверное (обычно UTC): 00:40 UTC = 03:40 МСК, вне рабочего времени.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+40 0 * * * root /var/www/tlkbars/repo/crm/scripts/backup.sh >> /var/log/bars-crm-backup.log 2>&1

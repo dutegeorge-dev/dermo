@@ -1,0 +1,55 @@
+# Внутренний раздел https://tlkbars.ru/crm/ — база знаний и CRM (каталог crm/).
+#
+# Отдаёт SPA и API под /crm/; nginx проксирует туда location /crm/.
+# Секреты (DATABASE_URL и др.) сервис читает сам из crm/.env.
+#
+# Установка:
+#   sudo cp deploy/systemd/bars-crm.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bars-crm
+#   systemctl status bars-crm
+#   journalctl -u bars-crm -f
+#
+# ⚠️ Пути — под раскладку «репозиторий в /var/www/tlkbars/repo». Вложения
+# хранятся в /var/lib/bars-crm/uploads (каталог создаёт systemd: StateDirectory)
+# — в crm/.env должно быть CRM_UPLOAD_DIR=/var/lib/bars-crm/uploads.
+
+[Unit]
+Description=ТЛК БАРС — внутренний раздел /crm/ (база знаний + CRM)
+Documentation=https://github.com/dutegeorge-dev/dermo/blob/main/crm/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/tlkbars/repo/crm
+
+# tsx из dependencies пакета crm/ (работает на Node 20).
+ExecStart=/usr/bin/node --import tsx server/index.ts
+
+Environment=NODE_ENV=production
+Environment=CRM_HOST=127.0.0.1
+Environment=CRM_PORT=3100
+
+Restart=always
+RestartSec=3s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bars-crm
+
+# Сервису нужна запись только в каталог вложений; код и сборка — только чтение.
+StateDirectory=bars-crm
+StateDirectoryMode=0750
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

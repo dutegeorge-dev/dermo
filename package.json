@@ -23,7 +23,13 @@
     "preview": "npm run build && npx http-server _site -p 8080 -c-1",
     "preview:fast": "npm run clean && npm run build:css && npm run build:js && npm run build:11ty && npx http-server _site -p 8080 -c-1",
     "cms": "decap-server",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "crm:dev": "npm --prefix crm run dev",
+    "crm:build": "npm --prefix crm run build",
+    "crm:migrate": "npm --prefix crm run db:migrate",
+    "crm:create-admin": "npm --prefix crm run create-admin --",
+    "crm:seed": "npm --prefix crm run seed --",
+    "crm:test": "npm --prefix crm test"
   },
   "keywords": [
     "eleventy",

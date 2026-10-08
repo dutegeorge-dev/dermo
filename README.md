@@ -34,8 +34,13 @@ cp .env.example .env   # заполнить при необходимости (�
 | `npm run clean`     | Очистка каталога сборки `_site/`.                                           |
 | `npm run cms`       | Локальный сервер Decap CMS (`decap-server`) для админки без хостинга.        |
 | `npm run server`    | Бэкенд-обработчик заявок (порт 3000) → лиды в amoCRM + Telegram.           |
+| `npm run crm:*`     | Внутренний раздел `/crm/` (база знаний + CRM) — см. [crm/README.md](crm/README.md). |
 
 После `npm run dev` сайт доступен на `http://localhost:8080`, обработчик заявок — на `http://localhost:3000` (поднимается тем же `npm run dev`).
+
+## Внутренний раздел /crm/
+
+`https://tlkbars.ru/crm/` — закрытый раздел для сотрудников: база знаний, справочник для звонков, на следующем этапе — CRM. Отдельный пакет `crm/` (Fastify + PostgreSQL + React) со своими зависимостями, настройками (`crm/.env`) и службой `bars-crm`; публичный сайт и обработчик заявок он не затрагивает. Ссылок на раздел с сайта нет, он закрыт от индексации (`Disallow: /crm/`, `X-Robots-Tag`). Запуск, деплой, бэкапы, схема БД и план CRM — в [crm/README.md](crm/README.md).
 
 ## Переменные окружения
 
@@ -54,6 +59,7 @@ cp .env.example .env   # заполнить при необходимости (�
 
 ```
 server/           бэкенд-обработчик заявок → amoCRM + Telegram (порт 3000)
+crm/              внутренний раздел /crm/: база знаний + CRM (отдельный сервис, порт 3100)
 src/
   _includes/
     layouts/      base, page, landing, article
