@@ -24,6 +24,7 @@ import {
   pgEnum,
   pgSequence,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
@@ -184,6 +185,8 @@ export const attachments = pgTable(
     mime: text("mime").notNull(),
     size: integer("size").notNull(),
     storageKey: text("storage_key").notNull(),
+    /** Метка файла документа: original — как прислали, signed — подписанный скан, generated — сформирован системой. */
+    label: text("label"),
     createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
@@ -236,9 +239,12 @@ export const callScriptVersions = pgTable("call_script_versions", {
   createdAt: createdAt(),
 });
 
-// ── Этап 2: CRM (схема заложена, интерфейса пока нет) ───────────────────────
+// ── CRM ─────────────────────────────────────────────────────────────────────
 
-export const companyKind = pgEnum("company_kind", ["ip", "ooo", "other"]);
+/** Организационная форма: ООО, ИП, иностранная компания, прочее. */
+export const companyKind = pgEnum("company_kind", ["ip", "ooo", "other", "foreign"]);
+/** Роль контрагента: клиент, поставщик товара, подрядчик (перевозчик, брокер, СВХ…). */
+export const counterpartyRole = pgEnum("counterparty_role", ["client", "supplier", "contractor"]);
 export const messengerKind = pgEnum("messenger_kind", [
   "telegram",
   "whatsapp",
@@ -253,28 +259,61 @@ export const certificateStatus = pgEnum("certificate_status", ["yes", "no", "in_
 export const chestnyZnak = pgEnum("chestny_znak", ["not_required", "required", "applied"]);
 export const dealPriority = pgEnum("deal_priority", ["low", "medium", "high", "urgent"]);
 export const dealOutcome = pgEnum("deal_outcome", ["won", "lost"]);
+export const dealScheme = pgEnum("deal_scheme", ["commission", "supply", "teu"]);
+export const paymentStatus = pgEnum("payment_status", ["unpaid", "partial", "paid"]);
 
-/** Клиент — компания (ИП/ООО). */
-export const clients = pgTable(
-  "clients",
+/**
+ * Контрагент: клиент, поставщик или подрядчик. Одна таблица — реквизиты,
+ * контакты и документы у всех одинаковые; в интерфейсе это три раздела.
+ */
+export const counterparties = pgTable(
+  "counterparties",
   {
     id: serial("id").primaryKey(),
+    role: counterpartyRole("role").notNull().default("client"),
+    /** Для подрядчиков: carrier_cn, carrier_ru, broker, warehouse, agent, other. */
+    contractorType: text("contractor_type"),
     kind: companyKind("kind").notNull().default("ooo"),
+    /** Краткое название, как в документах: «ИП Иванова И.И.», «QINGDAO GREAT WAY …». */
     name: text("name").notNull(),
+    /** Полное наименование для договоров. */
+    fullName: text("full_name"),
+    country: text("country").notNull().default("RU"),
     inn: text("inn"),
+    kpp: text("kpp"),
+    /** ОГРН / ОГРНИП. */
+    ogrn: text("ogrn"),
+    /** Регистрационный номер иностранной компании (USCC в Китае). */
+    regNumber: text("reg_number"),
+    legalAddress: text("legal_address"),
+    postalAddress: text("postal_address"),
+    bankAccount: text("bank_account"),
+    bankName: text("bank_name"),
+    bankBik: text("bank_bik"),
+    bankCorrAccount: text("bank_corr_account"),
+    bankInn: text("bank_inn"),
+    bankAddress: text("bank_address"),
+    bankSwift: text("bank_swift"),
+    /** Подписант: должность, ФИО, основание («Устава»). */
+    signatoryTitle: text("signatory_title"),
+    signatoryName: text("signatory_name"),
+    signatoryBasis: text("signatory_basis"),
+    email: text("email"),
+    phone: text("phone"),
+    website: text("website"),
     notes: text("notes").notNull().default(""),
     createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("clients_inn_idx").on(t.inn)],
+  (t) => [index("counterparties_inn_idx").on(t.inn), index("counterparties_role_idx").on(t.role, t.name)],
 );
 
 export const contacts = pgTable(
   "contacts",
   {
     id: serial("id").primaryKey(),
-    clientId: integer("client_id").references(() => clients.id, { onDelete: "cascade" }),
+    counterpartyId: integer("counterparty_id").references(() => counterparties.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     phone: text("phone"),
     messenger: messengerKind("messenger"),
@@ -285,7 +324,7 @@ export const contacts = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("contacts_client_idx").on(t.clientId), index("contacts_phone_idx").on(t.phone)],
+  (t) => [index("contacts_counterparty_idx").on(t.counterpartyId), index("contacts_phone_idx").on(t.phone)],
 );
 
 /**
@@ -316,8 +355,16 @@ export const deals = pgTable(
       .default(sql`nextval('deal_number_seq')`),
     key: text("key").generatedAlwaysAs(sql`'BARS-' || ("number"::text)`),
     title: text("title").notNull(),
-    clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
+    /** Схема работы с клиентом: комиссия, поставка, ТЭУ. */
+    scheme: dealScheme("scheme").notNull().default("commission"),
+    clientId: integer("client_id").references(() => counterparties.id, { onDelete: "set null" }),
     contactId: integer("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    supplierId: integer("supplier_id").references(() => counterparties.id, { onDelete: "set null" }),
+    /** Договор с клиентом (комиссии / поставки / ТЭУ) и контракт с поставщиком. */
+    clientContractId: integer("client_contract_id").references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
+    supplierContractId: integer("supplier_contract_id").references((): AnyPgColumn => documents.id, {
+      onDelete: "set null",
+    }),
     statusKey: text("status_key")
       .notNull()
       .default("new_request")
@@ -392,3 +439,117 @@ export const dealEvents = pgTable(
   },
   (t) => [index("deal_events_deal_idx").on(t.dealId, t.createdAt)],
 );
+
+/** Подрядчики сделки (перевозчики, брокер, СВХ…) — кроме клиента и поставщика. */
+export const dealParties = pgTable(
+  "deal_parties",
+  {
+    dealId: integer("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    counterpartyId: integer("counterparty_id")
+      .notNull()
+      .references(() => counterparties.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.dealId, t.counterpartyId] })],
+);
+
+// ── Документы и товары ──────────────────────────────────────────────────────
+
+/** Товар — справочник наименований из инвойсов. */
+export const products = pgTable(
+  "products",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    /** Наименование по-русски (для поручений и ДТ), если в инвойсе по-английски. */
+    nameRu: text("name_ru"),
+    hsCode: text("hs_code"),
+    unit: text("unit"),
+    notes: text("notes").notNull().default(""),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("products_name_idx").on(t.name)],
+);
+
+/**
+ * Документ любого типа: договоры, поручения, инвойсы, накладные, ДТ,
+ * сертификаты, доверенности… Типы и их поля — shared/documents.ts;
+ * поля, нужные не всем типам, лежат в data (jsonb).
+ */
+export const documents = pgTable(
+  "documents",
+  {
+    id: serial("id").primaryKey(),
+    type: text("type").notNull(),
+    number: text("number"),
+    date: date("date"),
+    /** Вторая сторона документа (клиент, поставщик или подрядчик). */
+    counterpartyId: integer("counterparty_id").references(() => counterparties.id, { onDelete: "set null" }),
+    /** Клиент, к которому относится документ (для документов поставщиков и подрядчиков). */
+    clientId: integer("client_id").references(() => counterparties.id, { onDelete: "set null" }),
+    dealId: integer("deal_id").references((): AnyPgColumn => deals.id, { onDelete: "set null" }),
+    /** Договор, к которому относится документ: приложение, инвойс по контракту и т.п. */
+    parentId: integer("parent_id").references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
+    /** Порядковый номер внутри договора (поручение № 09 к договору комиссии). */
+    seqNo: integer("seq_no"),
+    currency: text("currency"),
+    amount: numeric("amount", { precision: 16, scale: 2 }),
+    /** draft | signed | cancelled — для договоров и приложений. */
+    status: text("status"),
+    paymentStatus: paymentStatus("payment_status"),
+    paidAmount: numeric("paid_amount", { precision: 16, scale: 2 }),
+    paidAt: date("paid_at"),
+    validUntil: date("valid_until"),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    notes: text("notes").notNull().default(""),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("documents_type_idx").on(t.type, t.date),
+    index("documents_counterparty_idx").on(t.counterpartyId),
+    index("documents_client_idx").on(t.clientId),
+    index("documents_deal_idx").on(t.dealId),
+    index("documents_parent_idx").on(t.parentId),
+    index("documents_valid_idx").on(t.validUntil),
+  ],
+);
+
+/** Строки документа: позиции инвойса, товары поручения, спецификации. */
+export const documentItems = pgTable(
+  "document_items",
+  {
+    id: serial("id").primaryKey(),
+    documentId: integer("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+    /** Наименование, как в документе. */
+    name: text("name").notNull(),
+    /** «Партийный номер» в поручении: 1, 2, 3… */
+    batchNo: text("batch_no"),
+    hsCode: text("hs_code"),
+    quantity: numeric("quantity", { precision: 16, scale: 3 }),
+    unit: text("unit"),
+    price: numeric("price", { precision: 16, scale: 4 }),
+    amount: numeric("amount", { precision: 16, scale: 2 }),
+  },
+  (t) => [
+    index("document_items_doc_idx").on(t.documentId, t.position),
+    index("document_items_product_idx").on(t.productId),
+  ],
+);
+
+/** Настройки: реквизиты своей компании, счета. Ключ → JSON. */
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: updatedAt(),
+});

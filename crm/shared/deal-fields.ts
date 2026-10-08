@@ -3,7 +3,18 @@
  * интерфейса (подписи, варианты). Без зависимостей: импортируется с обеих сторон.
  */
 
-export type FieldKind = "text" | "longtext" | "number" | "date" | "enum" | "user" | "labels" | "client" | "contact";
+export type FieldKind =
+  | "text"
+  | "longtext"
+  | "number"
+  | "date"
+  | "enum"
+  | "user"
+  | "labels"
+  | "client"
+  | "contact"
+  | "counterparty"
+  | "document";
 
 export type FieldSpec = {
   label: string;
@@ -16,13 +27,17 @@ export type FieldSpec = {
 
 export const ROUTES = { auto: "Авто", rail: "Ж/д", air: "Авиа", sea: "Море", multimodal: "Мультимодальный" } as const;
 export const PRIORITIES = { low: "Низкий", medium: "Средний", high: "Высокий", urgent: "Срочный" } as const;
-export const COMPANY_KINDS = { ooo: "ООО", ip: "ИП", other: "Другое" } as const;
+export const COMPANY_KINDS = { ooo: "ООО", ip: "ИП", foreign: "Иностранная компания", other: "Другое" } as const;
 export const MESSENGERS = { telegram: "Telegram", whatsapp: "WhatsApp", max: "Макс", wechat: "WeChat", other: "Другой" } as const;
 
 export const DEAL_FIELDS = {
   title: { label: "Название", kind: "text", max: 300, required: true },
+  scheme: { label: "Схема", kind: "enum", values: { commission: "Комиссия", supply: "Поставка", teu: "ТЭУ" } },
   clientId: { label: "Клиент", kind: "client" },
   contactId: { label: "Контакт", kind: "contact" },
+  supplierId: { label: "Поставщик", kind: "counterparty" },
+  clientContractId: { label: "Договор с клиентом", kind: "document" },
+  supplierContractId: { label: "Контракт с поставщиком", kind: "document" },
   product: { label: "Товар", kind: "text", max: 500 },
   hsCode: { label: "Код ТН ВЭД", kind: "text", max: 20 },
   weightKg: { label: "Вес, кг", kind: "number" },

@@ -345,12 +345,148 @@ describe("CRM: сделки", () => {
 
   test("клиенты: карточка с контактами и сделками, ИНН проверяется", async () => {
     const s = await login("ivan", "managerpass");
-    assert.equal((await call(s, "POST", "/clients", { name: "ИП Петров", kind: "ip", inn: "123" })).statusCode, 400);
-    const list = (await call(s, "GET", `/clients?q=${encodeURIComponent("пол-маркет")}`)).json().clients;
+    assert.equal((await call(s, "POST", "/counterparties", { role: "client", name: "ИП Петров", kind: "ip", inn: "123" })).statusCode, 400);
+    const list = (await call(s, "GET", `/counterparties?role=client&q=${encodeURIComponent("пол-маркет")}`)).json().counterparties;
     assert.equal(list.length, 1);
-    const card = (await call(s, "GET", `/clients/${list[0].id}`)).json();
+    const card = (await call(s, "GET", `/counterparties/${list[0].id}`)).json();
     assert.equal(card.contacts[0].name, "Сергей");
     assert.equal(card.deals.length, 1);
-    assert.equal((await call(s, "POST", `/clients/${list[0].id}/contacts`, { name: "Анна", email: "a@b.ru" })).statusCode, 200);
+    assert.equal((await call(s, "POST", `/counterparties/${list[0].id}/contacts`, { name: "Анна", email: "a@b.ru" })).statusCode, 200);
+    assert.equal((await call(s, "GET", "/counterparties?role=supplier&q=" + encodeURIComponent("пол-маркет"))).json().counterparties.length, 0);
+  });
+});
+
+describe("Документы: договор → инвойс → сделка → поручение", () => {
+  test("полная цепочка, план/факт, оплаты, товары, связи", async () => {
+    const s = await login("ivan", "managerpass");
+    const admin = await login("admin", "adminpass1");
+
+    // Реквизиты своей компании (обычно — npm run crm:seed).
+    const company = await call(admin, "PUT", "/settings/company", {
+      name: "ООО ТЛК БАРС",
+      legalAddress: "143408, Московская область, г. Красногорск",
+      ogrn: "1255000095778",
+      inn: "5024256988",
+      kpp: "502401001",
+      city: "г. Красногорск",
+      signatoryShort: "Фотин Е.П.",
+      accounts: [{ id: "cny", label: "Юани", currency: "CNY", account: "40702156924840000310", bankName: "ВТБ", bik: "044525411", corrAccount: "30101810145250000411", bankInn: "7702070139", bankAddress: "Москва" }],
+      orderAccountId: "cny",
+    });
+    assert.equal(company.statusCode, 200, company.body);
+    assert.equal((await call(s, "PUT", "/settings/company", { name: "x" })).statusCode, 403);
+
+    const client = (await call(s, "POST", "/counterparties", {
+      role: "client", kind: "ip", name: "ИП Иванова И.И.", inn: "771234567890", ogrn: "321770000000001",
+      bankAccount: "40802810000000000001", bankName: "АО «Тест-Банк»", bankBik: "044525000", signatoryName: "Иванова Ирина Игоревна",
+    })).json().counterparty;
+    const supplier = (await call(s, "POST", "/counterparties", { role: "supplier", name: "QINGDAO GREAT WAY INTERNATIONAL COMMERCE CO.,LTD.", country: "CN" })).json().counterparty;
+    assert.equal(supplier.kind, "foreign");
+    const carrier = (await call(s, "POST", "/counterparties", { role: "contractor", contractorType: "carrier_cn", name: "Китайский перевозчик" })).json().counterparty;
+
+    // Договор комиссии с клиентом и контракт с поставщиком.
+    const commission = (await call(s, "POST", "/documents", { type: "commission_contract", number: "01", date: "2026-03-09", counterpartyId: client.id, validUntil: "2099-12-31" })).json().document;
+    const contract = (await call(s, "POST", "/documents", { type: "supplier_contract", number: "QGW-09-26", date: "2026-09-10", counterpartyId: supplier.id, currency: "CNY", validUntil: "2027-12-31" })).json().document;
+    // Нельзя привязать инвойс к договору комиссии.
+    assert.equal((await call(s, "POST", "/documents", { type: "supplier_invoice", parentId: commission.id, counterpartyId: supplier.id })).statusCode, 400);
+
+    // Инвойс поставщика → новая сделка с клиентом.
+    const inv = await call(s, "POST", "/documents", {
+      type: "supplier_invoice", number: "PI-031", date: "2026-10-01", counterpartyId: supplier.id, currency: "CNY",
+      data: { incoterms: "EXW (Shijiazhuang, Китай)", paymentTerms: "30% депозит 70% до отгрузки" },
+      items: [
+        { name: "Artificial grass", quantity: "14 600", unit: "кв. м.", price: "9,49" },
+        { name: "Glue", quantity: 10, unit: "шт.", price: 50, amount: 500 },
+      ],
+      newDeal: { clientId: client.id },
+    });
+    assert.equal(inv.statusCode, 200, inv.body);
+    const dealKey = inv.json().deal.key as string;
+    const invoiceId = inv.json().document.id as number;
+
+    let deal = (await call(s, "GET", `/deals/${dealKey}`)).json();
+    assert.equal(deal.deal.title, "Artificial grass");
+    assert.equal(deal.deal.clientId, client.id);
+    assert.equal(deal.deal.supplierId, supplier.id, "поставщик подставился из инвойса");
+    assert.equal(deal.deal.clientContractId, commission.id, "договор комиссии подобран сам");
+    assert.equal(deal.deal.supplierContractId, contract.id, "контракт поставщика подобран сам");
+    const invoice = (await call(s, "GET", `/documents/${invoiceId}`)).json();
+    assert.equal(invoice.document.parentId, contract.id, "инвойс привязан к контракту");
+    assert.equal(invoice.document.amount, 139054, "сумма = сумма позиций");
+    assert.equal(invoice.document.paymentStatus, "unpaid");
+    assert.equal(invoice.items[0].productName, "Artificial grass", "товар создан в справочнике");
+
+    // Поручение: № 01 по договору комиссии, товары из инвойса, смета.
+    const order = await call(s, "POST", `/deals/${dealKey}/order`);
+    assert.equal(order.statusCode, 200, order.body);
+    assert.equal(order.json().document.number, "01");
+    assert.equal((await call(s, "POST", `/deals/${dealKey}/order`)).statusCode, 409, "одна сделка — одно поручение");
+    const orderId = order.json().document.id as number;
+    const orderDoc = (await call(s, "GET", `/documents/${orderId}`)).json();
+    assert.deepEqual(orderDoc.items.map((i: { batchNo: string }) => i.batchNo), ["1", "2"]);
+    assert.equal(orderDoc.document.parentId, commission.id);
+    const costs = orderDoc.document.data.costs as { category: string; amount: number | null }[];
+    assert.equal(costs[0].amount, 139054);
+    costs.find((c) => c.category === "transport")!.amount = 60050;
+    costs.find((c) => c.category === "broker")!.amount = 20000;
+    assert.equal((await call(s, "PATCH", `/documents/${orderId}`, { data: { ...orderDoc.document.data, costs } })).statusCode, 200);
+
+    // DOCX по шаблону.
+    const docx = await app.inject({ method: "GET", url: `${API}/documents/${orderId}/docx`, headers: { cookie: s.cookie } });
+    assert.equal(docx.statusCode, 200, docx.body);
+    assert.equal(docx.rawPayload.subarray(0, 2).toString(), "PK");
+
+    // Счёт перевозчика и ДТ → факт; оплаты.
+    const carrierInv = (await call(s, "POST", "/documents", { type: "contractor_invoice", number: "TR-1", counterpartyId: carrier.id, dealId: deal.deal.id, currency: "CNY", amount: 61000 })).json().document;
+    await call(s, "POST", "/documents", { type: "customs_declaration", number: "10013160/011026/0000001", dealId: deal.deal.id, currency: "RUB", amount: 900000 });
+    await call(s, "PATCH", `/documents/${invoiceId}`, { paymentStatus: "partial", paidAmount: 41716.2 });
+    await call(s, "PATCH", `/documents/${carrierInv.id}`, { paymentStatus: "paid" });
+
+    deal = (await call(s, "GET", `/deals/${dealKey}`)).json();
+    assert.ok(deal.parties.some((p: { id: number }) => p.id === carrier.id), "перевозчик попал в участники сделки");
+    const rows = Object.fromEntries((deal.finance.rows as { category: string; plan: unknown; fact: { amount: number; paid: number }[] }[]).map((r) => [r.category, r]));
+    assert.deepEqual(rows.transport.plan, { amount: 60050, currency: "CNY" });
+    assert.deepEqual(rows.transport.fact, [{ currency: "CNY", amount: 61000, paid: 61000 }]);
+    assert.deepEqual(rows.goods.fact, [{ currency: "CNY", amount: 139054, paid: 41716.2 }]);
+    assert.equal(rows.customs.fact[0].amount, 900000);
+    assert.equal((deal.documents as unknown[]).length, 6, "инвойс, поручение, счёт, ДТ + договор комиссии и контракт");
+
+    // Связи: карточка поставщика — товары и цены, клиенты; карточка клиента — поставщики.
+    const supCard = (await call(s, "GET", `/counterparties/${supplier.id}`)).json();
+    assert.equal(supCard.products[0].price, 9.49);
+    assert.ok(supCard.related.some((r: { id: number }) => r.id === client.id));
+    const supRow = (await call(s, "GET", "/counterparties?role=supplier")).json().counterparties.find((c: { id: number }) => c.id === supplier.id);
+    assert.equal(supRow.dealCount, 1);
+    assert.equal(supRow.documentCount, 2, "контракт и инвойс");
+    const clientCard = (await call(s, "GET", `/counterparties/${client.id}`)).json();
+    assert.ok(clientCard.related.some((r: { id: number }) => r.id === supplier.id));
+    assert.ok(clientCard.documents.some((d: { type: string }) => d.type === "commission_contract"));
+
+    // Товар: история цен у поставщика и поручения клиента.
+    const prodRes = await call(s, "GET", `/products?q=grass`);
+    assert.equal(prodRes.statusCode, 200, prodRes.body);
+    const grass = prodRes.json().products[0];
+    assert.equal(grass.lastPrice, 9.49);
+    const prodCard = (await call(s, "GET", `/products/${grass.id}`)).json();
+    assert.equal(prodCard.purchases[0].counterpartyName, supplier.name);
+    assert.equal(prodCard.sales[0].clientName, client.name);
+
+    // Реестр: долги и истекающие.
+    const debts = (await call(s, "GET", "/documents?payment=debt")).json().documents.map((d: { id: number }) => d.id);
+    assert.ok(debts.includes(invoiceId) && !debts.includes(carrierInv.id));
+    await call(s, "POST", "/documents", { type: "power_of_attorney", number: "Д-1", validUntil: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10) });
+    const expiring = (await call(s, "GET", "/documents?expiring=30")).json().documents;
+    assert.equal(expiring[0].type, "power_of_attorney");
+
+    // Подписанный скан → статус «подписан».
+    const boundary = "----crmdoc";
+    const up = await app.inject({
+      method: "POST",
+      url: `${API}/documents/${orderId}/files?label=signed`,
+      headers: { cookie: s.cookie, "x-csrf-token": s.csrf, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="scan.pdf"\r\nContent-Type: application/pdf\r\n\r\n%PDF-1.4\r\n--${boundary}--\r\n`,
+    });
+    assert.equal(up.statusCode, 200, up.body);
+    assert.equal((await call(s, "GET", `/documents/${orderId}`)).json().document.status, "signed");
   });
 });

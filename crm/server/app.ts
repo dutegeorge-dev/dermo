@@ -17,8 +17,12 @@ import { loadSession, safeEqual } from "./lib/session.ts";
 import { auditRoutes } from "./routes/audit.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { callRoutes } from "./routes/calls.ts";
-import { clientRoutes } from "./routes/clients.ts";
+import { counterpartyRoutes } from "./routes/counterparties.ts";
 import { dealRoutes } from "./routes/deals.ts";
+import { documentRoutes } from "./routes/documents.ts";
+import { orderRoutes } from "./routes/orders.ts";
+import { productRoutes } from "./routes/products.ts";
+import { settingsRoutes } from "./routes/settings.ts";
 import { fileRoutes } from "./routes/files.ts";
 import { kbRoutes } from "./routes/kb.ts";
 import { searchRoutes } from "./routes/search.ts";
@@ -124,7 +128,11 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
       await api.register(searchRoutes, { prefix: "/search" });
       await api.register(auditRoutes, { prefix: "/audit" });
       await api.register(dealRoutes);
-      await api.register(clientRoutes);
+      await api.register(counterpartyRoutes);
+      await api.register(documentRoutes);
+      await api.register(orderRoutes);
+      await api.register(productRoutes);
+      await api.register(settingsRoutes);
     },
     { prefix: API_PREFIX },
   );

@@ -26,6 +26,7 @@
     "@fastify/multipart": "^10.1.2",
     "@fastify/static": "^10.1.5",
     "@node-rs/argon2": "^2.2.2",
+    "docx-templates": "^4.15.0",
     "drizzle-orm": "^0.45.3",
     "fastify": "^5.12.5",
     "pg": "^8.23.1",

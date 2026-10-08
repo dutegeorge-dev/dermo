@@ -14,9 +14,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { config } from "../config.ts";
 import { db, type DbOrTx } from "../db/client.ts";
-import { attachments, deals, kbPages } from "../db/schema.ts";
+import { attachments, deals, documents, kbPages } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
-import { addEvent, parseDealKey } from "../lib/deals.ts";
+import { addEvent, documentLabel, parseDealKey } from "../lib/deals.ts";
 import { currentUser, HttpError, intParam } from "../lib/http.ts";
 
 /** Эти типы безопасно показывать прямо в браузере; остальное — только скачиванием. */
@@ -50,7 +50,7 @@ function contentDisposition(kind: "inline" | "attachment", filename: string): st
 }
 
 /** Принимает файл из multipart-запроса (поле file), кладёт на диск и в attachments. */
-async function saveUpload(request: FastifyRequest, ownerType: string, ownerId: number, ownerLabel: string) {
+async function saveUpload(request: FastifyRequest, ownerType: string, ownerId: number, ownerLabel: string, label: string | null = null) {
   const user = currentUser(request);
   const file = await request.file();
   if (!file) throw new HttpError(400, "Файл не передан");
@@ -78,6 +78,7 @@ async function saveUpload(request: FastifyRequest, ownerType: string, ownerId: n
       mime: file.mimetype || "application/octet-stream",
       size,
       storageKey: key,
+      label,
       createdBy: user.id,
     })
     .returning();
@@ -95,6 +96,7 @@ async function saveUpload(request: FastifyRequest, ownerType: string, ownerId: n
     mime: created.mime,
     size: created.size,
     createdAt: created.createdAt,
+    label: created.label,
     createdByName: user.name,
     url: `${config.basePath}/api/files/${created.id}`,
   };
@@ -116,6 +118,19 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
     if (!deal) throw new HttpError(404, "Сделка не найдена");
     const attachment = await saveUpload(request, "deal", deal.id, `к сделке ${deal.key}`);
     await addEvent(db, deal.id, currentUser(request).id, "attachment_added", null, null, attachment.filename);
+    return { attachment };
+  });
+
+  /** Файл документа. ?label=original|signed — как прислали / подписанный скан. */
+  app.post("/documents/:id/files", async (request) => {
+    const id = intParam((request.params as { id: string }).id);
+    const [doc] = await db.select({ id: documents.id, dealId: documents.dealId }).from(documents).where(eq(documents.id, id));
+    if (!doc) throw new HttpError(404, "Документ не найден");
+    const raw = (request.query as { label?: string }).label;
+    const label = raw === "signed" || raw === "original" ? raw : null;
+    const attachment = await saveUpload(request, "document", id, `к документу «${await documentLabel(db, id)}»`, label);
+    // Загрузили подписанный скан — документ подписан.
+    if (label === "signed") await db.update(documents).set({ status: "signed", updatedAt: new Date() }).where(eq(documents.id, id));
     return { attachment };
   });
 

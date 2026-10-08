@@ -25,7 +25,8 @@ import { and, asc, eq, notExists } from "drizzle-orm";
 
 import { CRM_ROOT } from "../config.ts";
 import { db, pool } from "../db/client.ts";
-import { clients, contacts, dealEvents, deals, dealStatuses, kbSpaces } from "../db/schema.ts";
+import { contacts, counterparties, dealEvents, deals, dealStatuses, kbSpaces } from "../db/schema.ts";
+import { getCompany, setCompany } from "../lib/settings.ts";
 import { audit } from "../lib/audit.ts";
 import {
   listTopics,
@@ -152,12 +153,12 @@ async function seedDemo(): Promise<void> {
       let ids = clientIds.get(d.client);
       if (!ids) {
         const [client] = await tx
-          .insert(clients)
-          .values({ name: d.client, kind: d.client.startsWith("ИП") ? "ip" : "ooo", inn: d.inn, notes: "демо" })
-          .returning({ id: clients.id });
+          .insert(counterparties)
+          .values({ role: "client", name: d.client, kind: d.client.startsWith("ИП") ? "ip" : "ooo", inn: d.inn, notes: "демо" })
+          .returning({ id: counterparties.id });
         const [contact] = await tx
           .insert(contacts)
-          .values({ clientId: client.id, name: d.contact, phone: d.phone, messenger: "telegram", isPrimary: true })
+          .values({ counterpartyId: client.id, name: d.contact, phone: d.phone, messenger: "telegram", isPrimary: true })
           .returning({ id: contacts.id });
         ids = { clientId: client.id, contactId: contact.id };
         clientIds.set(d.client, ids);
@@ -200,15 +201,54 @@ async function seedDemo(): Promise<void> {
 async function removeDemo(): Promise<void> {
   const removed = await db.delete(deals).where(eq(deals.source, "demo")).returning({ id: deals.id });
   const orphanDemoClients = await db
-    .delete(clients)
+    .delete(counterparties)
     .where(
       and(
-        eq(clients.notes, "демо"),
-        notExists(db.select({ id: deals.id }).from(deals).where(eq(deals.clientId, clients.id))),
+        eq(counterparties.notes, "демо"),
+        notExists(db.select({ id: deals.id }).from(deals).where(eq(deals.clientId, counterparties.id))),
       ),
     )
-    .returning({ id: clients.id });
+    .returning({ id: counterparties.id });
   console.log(`  − удалено демо-сделок: ${removed.length}, демо-клиентов: ${orphanDemoClients.length}`);
+}
+
+/** Реквизиты ООО ТЛК БАРС для шаблонов — из договоров компании. Только если ещё не заданы. */
+async function seedCompany(): Promise<void> {
+  const current = await getCompany(db);
+  if (current.name) return;
+  const vtb = {
+    bankName: "ФИЛИАЛ «ЦЕНТРАЛЬНЫЙ» БАНКА ВТБ (ПАО)",
+    bik: "044525411",
+    corrAccount: "30101810145250000411",
+    bankInn: "7702070139",
+    bankAddress: "г Москва ул. Рождественка, д. 10/2, строен. 1",
+  };
+  await setCompany(
+    db,
+    {
+      name: "ООО ТЛК БАРС",
+      fullName: "Общество с ограниченной ответственностью «Торгово-логистическая компания БАРС»",
+      legalAddress: "143408, Московская область, г. Красногорск, б-р Космонавтов, д. 7, кв. 189",
+      ogrn: "1255000095778",
+      inn: "5024256988",
+      kpp: "502401001",
+      okpo: "54212939",
+      city: "г. Красногорск",
+      signatoryTitle: "Директор",
+      signatoryName: "Фотин Евгений Петрович",
+      signatoryShort: "Фотин Е.П.",
+      signatoryBasis: "Устава",
+      email: "info@tlkbars.ru",
+      phone: "+7 (495) 133-12-60",
+      accounts: [
+        { id: "vtb-cny", label: "Юани, ВТБ", currency: "CNY", account: "40702156924840000310", ...vtb },
+        { id: "vtb-rub", label: "Рубли, ВТБ", currency: "RUB", account: "40702810600810064577", ...vtb },
+      ],
+      orderAccountId: "vtb-cny",
+    },
+    null,
+  );
+  console.log("  + реквизиты ООО ТЛК БАРС (Настройки → Реквизиты компании)");
 }
 
 try {
@@ -218,6 +258,9 @@ try {
     console.log("✓ Готово");
     process.exit(0);
   }
+
+  console.log("Реквизиты компании:");
+  await seedCompany();
 
   console.log("Пространства базы знаний:");
   await seedSpaces();

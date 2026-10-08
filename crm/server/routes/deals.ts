@@ -7,18 +7,33 @@ import type { FastifyInstance } from "fastify";
 
 import { DEAL_FIELDS, type DealField } from "../../shared/deal-fields.ts";
 import { db, type DbOrTx } from "../db/client.ts";
-import { attachments, clients, contacts, dealComments, dealEvents, deals, dealStatuses, users } from "../db/schema.ts";
+import {
+  attachments,
+  contacts,
+  counterparties,
+  dealComments,
+  dealEvents,
+  dealParties,
+  deals,
+  dealStatuses,
+  users,
+} from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import {
   addEvent,
+  autoContracts,
+  createDeal,
   dealQuery,
+  dealSearchColumns,
   displayValue,
   endOfColumn,
   getStage,
+  outcomeForStage,
   parseDealKey,
   parseFields,
   sameValue,
 } from "../lib/deals.ts";
+import { dealDocuments, dealFinance } from "../lib/finance.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
 import { deleteAttachmentRows, unlinkStoredFiles } from "./files.ts";
 
@@ -31,12 +46,6 @@ async function findDeal(tx: DbOrTx, rawKey: unknown) {
   return deal;
 }
 
-/** Итог сделки при переходе на этап: завершающий → успешно, иначе — в работе (отказ не трогаем). */
-function outcomeForStage(isFinal: boolean, current: "won" | "lost" | null) {
-  if (current === "lost") return { outcome: "lost" as const };
-  return isFinal ? { outcome: "won" as const, closedAt: new Date() } : { outcome: null, closedAt: null };
-}
-
 /** Новый клиент (и контакт) из формы создания сделки. */
 async function createClientInline(
   tx: DbOrTx,
@@ -47,7 +56,10 @@ async function createClientInline(
   if (!name) return null;
   const kind = input.kind === "ip" || input.kind === "other" ? input.kind : "ooo";
   const inn = typeof input.inn === "string" ? input.inn.replace(/\D/g, "").slice(0, 12) || null : null;
-  const [row] = await tx.insert(clients).values({ name, kind, inn, createdBy: userId }).returning({ id: clients.id });
+  const [row] = await tx
+    .insert(counterparties)
+    .values({ role: "client", name, kind, inn, createdBy: userId })
+    .returning({ id: counterparties.id });
   return row.id;
 }
 
@@ -64,7 +76,7 @@ async function createContactInline(
   const [row] = await tx
     .insert(contacts)
     .values({
-      clientId,
+      counterpartyId: clientId,
       name: name || phone,
       phone: phone || null,
       messenger,
@@ -175,6 +187,7 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     else if (q.assignee === "none") filters.push(isNull(deals.assigneeId));
     else if (q.assignee && Number(q.assignee) > 0) filters.push(eq(deals.assigneeId, Number(q.assignee)));
     if (q.client && Number(q.client) > 0) filters.push(eq(deals.clientId, Number(q.client)));
+    if (q.supplier && Number(q.supplier) > 0) filters.push(eq(deals.supplierId, Number(q.supplier)));
     if (q.label) filters.push(sql`${q.label} = ANY(${deals.labels})`);
     if (q.q?.trim()) {
       const text = q.q.trim().slice(0, 100);
@@ -185,8 +198,9 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
           ilike(deals.title, like),
           ilike(deals.product, like),
           ilike(deals.hsCode, like),
-          ilike(clients.name, like),
-          ilike(clients.inn, like),
+          ilike(dealSearchColumns.client.name, like),
+          ilike(dealSearchColumns.client.inn, like),
+          ilike(dealSearchColumns.supplier.name, like),
           ilike(contacts.name, like),
           ilike(contacts.phone, like),
           ...(num ? [eq(deals.number, Number(num[1]))] : []),
@@ -219,10 +233,6 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     const deal = await db.transaction(async (tx) => {
       const fields = await parseFields(tx, input);
       if (!fields.title) throw new HttpError(400, "Укажите название сделки");
-      const stage = await getStage(tx, typeof input.statusKey === "string" ? input.statusKey : "new_request").catch(async () => {
-        const [first] = await tx.select().from(dealStatuses).orderBy(asc(dealStatuses.position)).limit(1);
-        return first;
-      });
 
       let clientId = (fields.clientId as number | null | undefined) ?? null;
       if (!clientId && input.newClient && typeof input.newClient === "object") {
@@ -232,31 +242,12 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
       if (!contactId && input.newContact && typeof input.newContact === "object") {
         contactId = await createContactInline(tx, clientId, input.newContact as Record<string, unknown>);
       }
-
-      const [created] = await tx
-        .insert(deals)
-        .values({
-          ...fields,
-          title: fields.title,
-          clientId,
-          contactId,
-          assigneeId: "assigneeId" in fields ? fields.assigneeId : user.id,
-          statusKey: stage.key,
-          ...outcomeForStage(stage.isFinal, null),
-          boardPosition: await endOfColumn(tx, stage.key),
-          createdBy: user.id,
-        })
-        .returning({ id: deals.id, key: deals.key, number: deals.number, title: deals.title });
-      await addEvent(tx, created.id, user.id, "created", null, null, stage.name);
-      await audit(tx, {
-        userId: user.id,
-        action: "create",
-        entityType: "deal",
-        entityId: created.key,
-        summary: `Создал сделку ${created.key} «${created.title}»`,
-        ip: request.ip,
-      });
-      return created;
+      return createDeal(
+        tx,
+        user.id,
+        { ...fields, title: fields.title, clientId, contactId },
+        { statusKey: typeof input.statusKey === "string" ? input.statusKey : undefined, ip: request.ip },
+      );
     });
     return { deal };
   });
@@ -308,7 +299,19 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
         .where(and(eq(attachments.ownerType, "deal"), eq(attachments.ownerId, deal.id)))
         .orderBy(asc(attachments.createdAt)),
     ]);
-    return { deal, comments, events, attachments: files };
+    const parties = await db
+      .select({
+        id: counterparties.id,
+        name: counterparties.name,
+        role: counterparties.role,
+        contractorType: counterparties.contractorType,
+      })
+      .from(dealParties)
+      .innerJoin(counterparties, eq(counterparties.id, dealParties.counterpartyId))
+      .where(eq(dealParties.dealId, deal.id))
+      .orderBy(asc(counterparties.name));
+    const docs = await dealDocuments(db, deal.id);
+    return { deal, comments, events, attachments: files, parties, documents: docs, finance: await dealFinance(db, deal.id, docs) };
   });
 
   /** Правка полей. Каждое изменённое поле — запись в журнале сделки. */
@@ -334,7 +337,14 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
         );
       }
       if (Object.keys(changed).length === 0) return { ok: true, changed: [] };
+      // Сменили клиента, схему или поставщика — договоры подбираем заново (если их не выбрали явно).
+      if (("clientId" in changed || "scheme" in changed) && !("clientContractId" in changed)) changed.clientContractId = null;
+      if (("supplierId" in changed || "scheme" in changed) && !("supplierContractId" in changed)) changed.supplierContractId = null;
       await tx.update(deals).set({ ...changed, updatedAt: new Date() }).where(eq(deals.id, deal.id));
+      const picked = await autoContracts(tx, deal.id);
+      for (const [field, value] of Object.entries(picked) as [DealField, unknown][]) {
+        await addEvent(tx, deal.id, user.id, "field_changed", field, null, await displayValue(tx, field, value));
+      }
       await audit(tx, {
         userId: user.id,
         action: "update",
@@ -462,6 +472,38 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     });
     await unlinkStoredFiles(stored);
     return { ok: true };
+  });
+
+  // ── Подрядчики сделки ────────────────────────────────────────────────────
+
+  app.post("/deals/:key/parties", async (request) => {
+    const user = currentUser(request);
+    const counterpartyId = intParam(body<{ counterpartyId: number }>(request).counterpartyId, "counterpartyId");
+    return db.transaction(async (tx) => {
+      const deal = await findDeal(tx, (request.params as { key: string }).key);
+      const [cp] = await tx.select().from(counterparties).where(eq(counterparties.id, counterpartyId));
+      if (!cp) throw new HttpError(404, "Контрагент не найден");
+      await tx.insert(dealParties).values({ dealId: deal.id, counterpartyId }).onConflictDoNothing();
+      await addEvent(tx, deal.id, user.id, "party_added", null, null, cp.name);
+      return { ok: true };
+    });
+  });
+
+  app.delete("/deals/:key/parties/:id", async (request) => {
+    const user = currentUser(request);
+    const counterpartyId = intParam((request.params as { id: string }).id);
+    return db.transaction(async (tx) => {
+      const deal = await findDeal(tx, (request.params as { key: string }).key);
+      const [removed] = await tx
+        .delete(dealParties)
+        .where(and(eq(dealParties.dealId, deal.id), eq(dealParties.counterpartyId, counterpartyId)))
+        .returning();
+      if (removed) {
+        const [cp] = await tx.select({ name: counterparties.name }).from(counterparties).where(eq(counterparties.id, counterpartyId));
+        await addEvent(tx, deal.id, user.id, "party_removed", null, cp?.name ?? null, null);
+      }
+      return { ok: true };
+    });
   });
 
   // ── Комментарии ──────────────────────────────────────────────────────────
