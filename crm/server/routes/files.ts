@@ -10,12 +10,13 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 
 import { and, eq, inArray } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { config } from "../config.ts";
 import { db, type DbOrTx } from "../db/client.ts";
-import { attachments, kbPages } from "../db/schema.ts";
+import { attachments, deals, kbPages } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
+import { addEvent, parseDealKey } from "../lib/deals.ts";
 import { currentUser, HttpError, intParam } from "../lib/http.ts";
 
 /** Эти типы безопасно показывать прямо в браузере; остальное — только скачиванием. */
@@ -48,62 +49,74 @@ function contentDisposition(kind: "inline" | "attachment", filename: string): st
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
+/** Принимает файл из multipart-запроса (поле file), кладёт на диск и в attachments. */
+async function saveUpload(request: FastifyRequest, ownerType: string, ownerId: number, ownerLabel: string) {
+  const user = currentUser(request);
+  const file = await request.file();
+  if (!file) throw new HttpError(400, "Файл не передан");
+
+  const filename = path.basename(file.filename || "file").slice(0, 200) || "file";
+  const id = crypto.randomUUID();
+  const month = new Date().toISOString().slice(0, 7);
+  const key = `${month}/${id}`;
+  const target = storagePath(key);
+  await fs.promises.mkdir(path.dirname(target), { recursive: true });
+  await pipeline(file.file, fs.createWriteStream(target));
+  if (file.file.truncated) {
+    await fs.promises.rm(target, { force: true });
+    throw new HttpError(413, `Файл больше ${Math.round(config.maxUploadBytes / 1024 / 1024)} МБ`);
+  }
+  const { size } = await fs.promises.stat(target);
+
+  const [created] = await db
+    .insert(attachments)
+    .values({
+      id,
+      ownerType,
+      ownerId,
+      filename,
+      mime: file.mimetype || "application/octet-stream",
+      size,
+      storageKey: key,
+      createdBy: user.id,
+    })
+    .returning();
+  await audit(db, {
+    userId: user.id,
+    action: "create",
+    entityType: "attachment",
+    entityId: id,
+    summary: `Прикрепил файл «${filename}» ${ownerLabel}`,
+    ip: request.ip,
+  });
+  return {
+    id: created.id,
+    filename: created.filename,
+    mime: created.mime,
+    size: created.size,
+    createdAt: created.createdAt,
+    createdByName: user.name,
+    url: `${config.basePath}/api/files/${created.id}`,
+  };
+}
+
 export async function fileRoutes(app: FastifyInstance): Promise<void> {
   /** Загрузка вложения к странице базы знаний (multipart, поле file). */
   app.post("/kb/pages/:id/attachments", async (request) => {
-    const user = currentUser(request);
     const pageId = intParam((request.params as { id: string }).id);
     const [page] = await db.select({ id: kbPages.id, title: kbPages.title }).from(kbPages).where(eq(kbPages.id, pageId));
     if (!page) throw new HttpError(404, "Страница не найдена");
+    return { attachment: await saveUpload(request, "kb_page", pageId, `к странице «${page.title}»`) };
+  });
 
-    const file = await request.file();
-    if (!file) throw new HttpError(400, "Файл не передан");
-
-    const filename = path.basename(file.filename || "file").slice(0, 200) || "file";
-    const id = crypto.randomUUID();
-    const month = new Date().toISOString().slice(0, 7);
-    const key = `${month}/${id}`;
-    const target = storagePath(key);
-    await fs.promises.mkdir(path.dirname(target), { recursive: true });
-    await pipeline(file.file, fs.createWriteStream(target));
-    if (file.file.truncated) {
-      await fs.promises.rm(target, { force: true });
-      throw new HttpError(413, `Файл больше ${Math.round(config.maxUploadBytes / 1024 / 1024)} МБ`);
-    }
-    const { size } = await fs.promises.stat(target);
-
-    const [created] = await db
-      .insert(attachments)
-      .values({
-        id,
-        ownerType: "kb_page",
-        ownerId: pageId,
-        filename,
-        mime: file.mimetype || "application/octet-stream",
-        size,
-        storageKey: key,
-        createdBy: user.id,
-      })
-      .returning();
-    await audit(db, {
-      userId: user.id,
-      action: "create",
-      entityType: "attachment",
-      entityId: id,
-      summary: `Прикрепил файл «${filename}» к странице «${page.title}»`,
-      ip: request.ip,
-    });
-    return {
-      attachment: {
-        id: created.id,
-        filename: created.filename,
-        mime: created.mime,
-        size: created.size,
-        createdAt: created.createdAt,
-        createdByName: user.name,
-        url: `${config.basePath}/api/files/${created.id}`,
-      },
-    };
+  /** Загрузка вложения к сделке. */
+  app.post("/deals/:key/attachments", async (request) => {
+    const number = parseDealKey((request.params as { key: string }).key);
+    const [deal] = await db.select({ id: deals.id, key: deals.key }).from(deals).where(eq(deals.number, number));
+    if (!deal) throw new HttpError(404, "Сделка не найдена");
+    const attachment = await saveUpload(request, "deal", deal.id, `к сделке ${deal.key}`);
+    await addEvent(db, deal.id, currentUser(request).id, "attachment_added", null, null, attachment.filename);
+    return { attachment };
   });
 
   app.get("/files/:id", async (request, reply) => {

@@ -18,5 +18,5 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["server/**/*.ts", "drizzle.config.ts"]
+  "include": ["server/**/*.ts", "shared/**/*.ts", "drizzle.config.ts"]
 }

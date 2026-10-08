@@ -15,6 +15,13 @@
       "when": 1791447354357,
       "tag": "0001_deal_statuses",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791449335945,
+      "tag": "0002_crm_pipeline",
+      "breakpoints": true
     }
   ]
 }

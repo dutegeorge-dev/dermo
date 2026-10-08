@@ -7,9 +7,9 @@ import { useNavigate } from "react-router";
 import { api } from "../lib/api.ts";
 import { SnippetHtml } from "../lib/highlight.tsx";
 import type { SearchResult } from "../lib/types.ts";
-import { IconBook, IconPhone, IconSearch } from "./Icons.tsx";
+import { IconBoard, IconBook, IconBuilding, IconPhone, IconSearch } from "./Icons.tsx";
 
-type Item = { key: string; to: string; kind: "page" | "topic"; title: string; sub: string; snippet: string };
+type Item = { key: string; to: string; kind: "page" | "topic" | "deal" | "client"; title: string; sub: string; snippet: string };
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -43,6 +43,22 @@ export function GlobalSearch() {
   const items = useMemo<Item[]>(() => {
     if (!data || debounced.length < 2) return [];
     return [
+      ...data.deals.map((d) => ({
+        key: `d-${d.key}`,
+        to: `/deals/${d.key}`,
+        kind: "deal" as const,
+        title: `${d.key} · ${d.title}`,
+        sub: `Сделка · ${d.outcome === "lost" ? "отказ" : d.status}${d.client ? ` · ${d.client}` : ""}`,
+        snippet: "",
+      })),
+      ...data.clients.map((c) => ({
+        key: `c-${c.id}`,
+        to: `/clients/${c.id}`,
+        kind: "client" as const,
+        title: c.name,
+        sub: `Клиент${c.inn ? ` · ИНН ${c.inn}` : ""}`,
+        snippet: "",
+      })),
       ...data.callTopics.map((t) => ({
         key: `t-${t.id}`,
         to: `/calls?topic=${encodeURIComponent(t.id)}&q=${encodeURIComponent(debounced)}`,
@@ -94,7 +110,7 @@ export function GlobalSearch() {
           ref={inputRef}
           type="search"
           value={q}
-          placeholder="Поиск по базе знаний и справочнику"
+          placeholder="Поиск: сделки, клиенты, база знаний, справочник"
           className="input pl-8 pr-8"
           onChange={(e) => {
             setQ(e.target.value);
@@ -137,7 +153,7 @@ export function GlobalSearch() {
               onClick={() => go(item)}
               className={`flex w-full gap-2.5 px-3 py-2 text-left ${i === active ? "bg-slate-100 dark:bg-neutral-800" : ""}`}
             >
-              <span className="mt-0.5 text-slate-400">{item.kind === "page" ? <IconBook /> : <IconPhone />}</span>
+              <span className="mt-0.5 text-slate-400">{{ page: <IconBook />, topic: <IconPhone />, deal: <IconBoard />, client: <IconBuilding /> }[item.kind]}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{item.title}</span>
                 <span className="block truncate text-xs muted">{item.sub}</span>

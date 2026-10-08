@@ -65,3 +65,4 @@ export const IconGrip = make(["M9 6h.01", "M15 6h.01", "M9 12h.01", "M15 12h.01"
 export const IconList = make(["M8 6h13", "M8 12h13", "M8 18h13", "M3 6h.01", "M3 12h.01", "M3 18h.01"], "IconList");
 export const IconShield = make(["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"], "IconShield");
 export const IconUser = make(["M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2", "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"], "IconUser");
+export const IconBuilding = make(["M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16", "M16 9h2a2 2 0 0 1 2 2v10", "M2 21h20", "M8 7h4", "M8 11h4", "M8 15h4"], "IconBuilding");

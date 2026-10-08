@@ -289,14 +289,17 @@ export const contacts = pgTable(
 );
 
 /**
- * Статусы сделки — колонки канбан-доски. Таблицей, а не enum: порядок и
- * названия можно менять без миграции типов. Заполняется миграцией.
+ * Этапы воронки — колонки канбан-доски. Таблицей, а не enum: админ меняет
+ * названия, цвета и порядок в интерфейсе. Начальный набор — миграцией 0002.
+ * Последний по порядку этап — завершающий (is_final): сделка в нём «успешна».
  */
 export const dealStatuses = pgTable("deal_statuses", {
   key: text("key").primaryKey(),
   name: text("name").notNull(),
   position: integer("position").notNull(),
-  /** Финальный статус («Закрыто»): у сделки должен быть указан итог. */
+  /** Цвет плашки этапа (#RRGGBB). */
+  color: text("color").notNull().default("#94A3B8"),
+  /** Завершающий этап: сделка в нём получает итог «успешно». */
   isFinal: boolean("is_final").notNull().default(false),
 });
 
@@ -317,9 +320,11 @@ export const deals = pgTable(
     contactId: integer("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     statusKey: text("status_key")
       .notNull()
-      .default("new_lead")
+      .default("new_request")
       .references(() => dealStatuses.key),
+    /** null — в работе; won — дошла до завершающего этапа; lost — отказ (на любом этапе). */
     outcome: dealOutcome("outcome"),
+    lostReason: text("lost_reason"),
     product: text("product"),
     hsCode: text("hs_code"),
     weightKg: numeric("weight_kg", { precision: 14, scale: 3 }),
@@ -337,7 +342,7 @@ export const deals = pgTable(
     dueDate: date("due_date"),
     priority: dealPriority("priority").notNull().default("medium"),
     labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
-    description: jsonb("description").$type<TiptapDoc>(),
+    description: text("description").notNull().default(""),
     /** Порядок карточки внутри колонки доски. */
     boardPosition: doublePrecision("board_position").notNull().default(0),
     /** manual | site — откуда пришла сделка (позже: заявки с сайта). */

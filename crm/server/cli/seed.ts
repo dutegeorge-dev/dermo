@@ -12,17 +12,20 @@
  *    С --force темы из файла заменяют одноимённые и встают в порядке файла;
  *    темы, созданные в интерфейсе, сохраняются и идут после них.
  *    Любое изменение записывается новой версией в истории справочника.
+ * 3. --demo — тестовые клиенты и сделки на разных этапах (метка «демо»,
+ *    source=demo), чтобы попробовать CRM. Повторно не создаются.
+ *    --remove-demo — удалить их (и демо-клиентов без других сделок).
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import { eq } from "drizzle-orm";
+import { and, asc, eq, notExists } from "drizzle-orm";
 
 import { CRM_ROOT } from "../config.ts";
 import { db, pool } from "../db/client.ts";
-import { kbSpaces } from "../db/schema.ts";
+import { clients, contacts, dealEvents, deals, dealStatuses, kbSpaces } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import {
   listTopics,
@@ -37,6 +40,8 @@ const { values } = parseArgs({
   options: {
     file: { type: "string" },
     force: { type: "boolean", default: false },
+    demo: { type: "boolean", default: false },
+    "remove-demo": { type: "boolean", default: false },
   },
 });
 
@@ -122,7 +127,98 @@ async function seedCallScript(file: string, force: boolean): Promise<void> {
   });
 }
 
+const DEMO_DEALS = [
+  { client: "ООО «Пол-Маркет»", inn: "7701234567", contact: "Сергей", phone: "+7 900 000-00-01", title: "Ламинат LVT, 2 фуры", product: "Ламинат LVT 4 мм", hsCode: "3918101000", weightKg: 38000, volumeM3: 64, route: "auto", stage: 0 },
+  { client: "ИП Соколова А. В.", inn: "500100732259", contact: "Анна", phone: "+7 900 000-00-02", title: "Детская одежда, сборный груз", product: "Одежда детская трикотажная", hsCode: "6111209000", weightKg: 420, volumeM3: 3.2, route: "auto", stage: 1, chestnyZnak: "required" },
+  { client: "ООО «ТехноСвет»", inn: "7802345678", contact: "Михаил", phone: "+7 900 000-00-03", title: "Светодиодные панели", product: "Панели LED 600×600", hsCode: "9405110009", weightKg: 1800, volumeM3: 12, route: "rail", stage: 2, certificates: "in_progress" },
+  { client: "ООО «Модуль»", inn: "6601234567", contact: "Олег", phone: "+7 900 000-00-04", title: "Модульный дом, образцы", product: "Сэндвич-панели (образцы)", hsCode: "9406900099", weightKg: 35, volumeM3: 0.2, route: "air", stage: 3 },
+  { client: "ООО «Вектор Поставка»", inn: "5401234567", contact: "Дарья", phone: "+7 900 000-00-05", title: "Мониторы 27″, 300 шт.", product: "Мониторы 27″", hsCode: "8528521000", weightKg: 2700, volumeM3: 18, route: "rail", stage: 4, exportLicense: "we_arrange" },
+  { client: "ООО «Пол-Маркет»", inn: "7701234567", contact: "Сергей", phone: "+7 900 000-00-01", title: "Плинтус и подложка", product: "Плинтус ПВХ, подложка", hsCode: "3916209000", weightKg: 5200, volumeM3: 22, route: "auto", stage: 5 },
+  { client: "ООО «Агро-Тех»", inn: "2301234567", contact: "Виктор", phone: "+7 900 000-00-06", title: "Запчасти для спецтехники", product: "Запчасти гидравлики", hsCode: "8412290009", weightKg: 900, volumeM3: 2.5, route: "auto", stage: 6 },
+  { client: "ИП Ким Д. С.", inn: "253601234567", contact: "Денис", phone: "+7 900 000-00-07", title: "Текстиль для дома", product: "Постельное бельё", hsCode: "6302210000", weightKg: 3100, volumeM3: 25, route: "sea", stage: 7, chestnyZnak: "applied" },
+  { client: "ООО «ТехноСвет»", inn: "7802345678", contact: "Михаил", phone: "+7 900 000-00-03", title: "Прожекторы, пробная партия", product: "Прожекторы LED 100 Вт", hsCode: "9405410009", weightKg: 600, volumeM3: 4, route: "auto", stage: 8 },
+] as const;
+
+async function seedDemo(): Promise<void> {
+  const [exists] = await db.select({ id: deals.id }).from(deals).where(eq(deals.source, "demo")).limit(1);
+  if (exists) {
+    console.log("  = демо-сделки уже есть (удалить: --remove-demo)");
+    return;
+  }
+  const stages = await db.select().from(dealStatuses).orderBy(asc(dealStatuses.position));
+  const clientIds = new Map<string, { clientId: number; contactId: number }>();
+  await db.transaction(async (tx) => {
+    for (const [i, d] of DEMO_DEALS.entries()) {
+      let ids = clientIds.get(d.client);
+      if (!ids) {
+        const [client] = await tx
+          .insert(clients)
+          .values({ name: d.client, kind: d.client.startsWith("ИП") ? "ip" : "ooo", inn: d.inn, notes: "демо" })
+          .returning({ id: clients.id });
+        const [contact] = await tx
+          .insert(contacts)
+          .values({ clientId: client.id, name: d.contact, phone: d.phone, messenger: "telegram", isPrimary: true })
+          .returning({ id: contacts.id });
+        ids = { clientId: client.id, contactId: contact.id };
+        clientIds.set(d.client, ids);
+      }
+      const stage = stages[Math.min(d.stage, stages.length - 1)];
+      const due = new Date(Date.now() + (i - 2) * 3 * 86_400_000).toISOString().slice(0, 10);
+      const [deal] = await tx
+        .insert(deals)
+        .values({
+          title: d.title,
+          ...ids,
+          statusKey: stage.key,
+          outcome: stage.isFinal ? "won" : null,
+          closedAt: stage.isFinal ? new Date() : null,
+          product: d.product,
+          hsCode: d.hsCode,
+          weightKg: String(d.weightKg),
+          volumeM3: String(d.volumeM3),
+          pickupLocation: "Гуанчжоу",
+          deliveryLocation: "Москва",
+          route: d.route,
+          contractParty: "ours",
+          exportLicense: "exportLicense" in d ? d.exportLicense : "yes",
+          certificates: "certificates" in d ? d.certificates : "yes",
+          chestnyZnak: "chestnyZnak" in d ? d.chestnyZnak : "not_required",
+          dueDate: due,
+          priority: i % 4 === 0 ? "high" : "medium",
+          labels: ["демо"],
+          description: "Тестовая сделка для знакомства с CRM. Удалить: npm run crm:seed -- --remove-demo",
+          boardPosition: (i + 1) * 1024,
+          source: "demo",
+        })
+        .returning({ id: deals.id });
+      await tx.insert(dealEvents).values({ dealId: deal.id, kind: "created", newValue: stage.name });
+    }
+  });
+  console.log(`  + демо: ${DEMO_DEALS.length} сделок, ${clientIds.size} клиентов`);
+}
+
+async function removeDemo(): Promise<void> {
+  const removed = await db.delete(deals).where(eq(deals.source, "demo")).returning({ id: deals.id });
+  const orphanDemoClients = await db
+    .delete(clients)
+    .where(
+      and(
+        eq(clients.notes, "демо"),
+        notExists(db.select({ id: deals.id }).from(deals).where(eq(deals.clientId, clients.id))),
+      ),
+    )
+    .returning({ id: clients.id });
+  console.log(`  − удалено демо-сделок: ${removed.length}, демо-клиентов: ${orphanDemoClients.length}`);
+}
+
 try {
+  if (values["remove-demo"]) {
+    console.log("Демо-данные CRM:");
+    await removeDemo();
+    console.log("✓ Готово");
+    process.exit(0);
+  }
+
   console.log("Пространства базы знаний:");
   await seedSpaces();
 
@@ -133,6 +229,10 @@ try {
   } else {
     console.warn(`  ! файл ${file} не найден — справочник не импортирован`);
     process.exitCode = 2;
+  }
+  if (values.demo) {
+    console.log("Демо-данные CRM:");
+    await seedDemo();
   }
   console.log("✓ Готово");
 } catch (error) {

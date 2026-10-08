@@ -233,3 +233,124 @@ describe("справочник для звонков", () => {
     assert.ok(log.some((e) => e.summary.includes("Создал пространство «Таможня»")));
   });
 });
+
+describe("CRM: сделки", () => {
+  test("этапы воронки из миграции", async () => {
+    const s = await login("ivan", "managerpass");
+    const stages = (await call(s, "GET", "/stages")).json().stages as { key: string; name: string; isFinal: boolean }[];
+    assert.deepEqual(stages.map((x) => x.name), [
+      "Новая заявка",
+      "Поиск товара",
+      "Расчёт доставки предварительный",
+      "Предложение клиенту",
+      "Заказ у поставщика",
+      "Расчёт доставки",
+      "Согласование доставки",
+      "Доставка / информирование клиента",
+      "Завершено",
+    ]);
+    assert.deepEqual(stages.filter((x) => x.isFinal).map((x) => x.key), ["done"]);
+  });
+
+  test("создание, правка с журналом, перенос, отказ, комментарии, поиск", async () => {
+    const s = await login("ivan", "managerpass");
+    const created = await call(s, "POST", "/deals", {
+      title: "Ламинат 2 фуры",
+      product: "Ламинат LVT",
+      route: "auto",
+      newClient: { name: "ООО Пол-Маркет", kind: "ooo", inn: "7701234567" },
+      newContact: { name: "Сергей", phone: "+7 900 123-45-67", messenger: "telegram" },
+    });
+    assert.equal(created.statusCode, 200, created.body);
+    const key = created.json().deal.key as string;
+    assert.match(key, /^BARS-\d+$/);
+
+    let deal = (await call(s, "GET", `/deals/${key}`)).json();
+    assert.equal(deal.deal.statusKey, "new_request");
+    assert.equal(deal.deal.clientName, "ООО Пол-Маркет");
+    assert.equal(deal.deal.contactPhone, "+7 900 123-45-67");
+    assert.equal(deal.deal.assigneeName, "Иван", "исполнитель по умолчанию — автор");
+
+    const patch = await call(s, "PATCH", `/deals/${key}`, { weightKg: "1 250,5", exportLicense: "we_arrange", labels: ["срочно", "срочно", " LVT "] });
+    assert.deepEqual(patch.json().changed.sort(), ["exportLicense", "labels", "weightKg"]);
+    assert.equal((await call(s, "PATCH", `/deals/${key}`, { route: "boat" })).statusCode, 400);
+
+    // Перенос на завершающий этап → успешно; обратно → снова в работе.
+    assert.equal((await call(s, "POST", `/deals/${key}/move`, { statusKey: "done" })).statusCode, 200);
+    deal = (await call(s, "GET", `/deals/${key}`)).json();
+    assert.equal(deal.deal.outcome, "won");
+    await call(s, "POST", `/deals/${key}/move`, { statusKey: "offer" });
+    deal = (await call(s, "GET", `/deals/${key}`)).json();
+    assert.equal(deal.deal.outcome, null);
+    assert.equal(deal.deal.weightKg, 1250.5);
+    assert.equal((await call(s, "PATCH", `/deals/${key}`, { weightKg: 1250.5 })).json().changed.length, 0);
+    assert.deepEqual(deal.deal.labels, ["срочно", "LVT"]);
+
+    const kinds = (deal.events as { kind: string; field: string | null; newValue: unknown }[]).map((e) => e.kind);
+    assert.ok(kinds.includes("created") && kinds.includes("status_changed") && kinds.includes("field_changed"));
+    const lic = deal.events.find((e: { field: string | null }) => e.field === "exportLicense");
+    assert.equal(lic.newValue, "Оформляем сами");
+
+    // Порядок в колонке: вторая сделка встаёт перед первой.
+    const second = (await call(s, "POST", "/deals", { title: "Мониторы", statusKey: "offer" })).json().deal.key;
+    await call(s, "POST", `/deals/${second}/move`, { statusKey: "offer", beforeKey: key });
+    const board = (await call(s, "GET", "/deals?view=board")).json().deals as { key: string; statusKey: string }[];
+    assert.deepEqual(board.filter((d) => d.statusKey === "offer").map((d) => d.key), [second, key]);
+
+    // Отказ убирает с доски, возврат — возвращает.
+    await call(s, "POST", `/deals/${second}/lose`, { reason: "Дорого" });
+    let onBoard = (await call(s, "GET", "/deals?view=board")).json().deals.map((d: { key: string }) => d.key);
+    assert.ok(!onBoard.includes(second));
+    assert.equal((await call(s, "GET", "/deals?outcome=lost")).json().deals[0].lostReason, "Дорого");
+    await call(s, "POST", `/deals/${second}/reopen`);
+    onBoard = (await call(s, "GET", "/deals?view=board")).json().deals.map((d: { key: string }) => d.key);
+    assert.ok(onBoard.includes(second));
+
+    const comment = await call(s, "POST", `/deals/${key}/comments`, { body: "Клиент ждёт расчёт до пятницы" });
+    assert.equal(comment.statusCode, 200);
+    assert.equal((await call(s, "GET", `/deals/${key}`)).json().comments.length, 1);
+
+    // Поиск по телефону контакта и по ключу.
+    const byPhone = (await call(s, "GET", `/search?q=${encodeURIComponent("123-45")}`)).json();
+    assert.equal(byPhone.deals[0]?.key, key);
+    const byKey = (await call(s, "GET", `/deals?q=${key.toLowerCase()}`)).json().deals;
+    assert.equal(byKey.length, 1);
+
+    // Удалять сделки может только admin.
+    assert.equal((await call(s, "DELETE", `/deals/${second}`)).statusCode, 403);
+  });
+
+  test("редактор этапов: переименование, новый этап, удаление занятого запрещено", async () => {
+    const admin = await login("admin", "adminpass1");
+    const manager = await login("ivan", "managerpass");
+    const stages = (await call(admin, "GET", "/stages")).json().stages as { key: string; name: string; color: string }[];
+    assert.equal((await call(manager, "PUT", "/stages", { stages })).statusCode, 403);
+
+    const withoutOffer = stages.filter((x) => x.key !== "offer");
+    const busy = await call(admin, "PUT", "/stages", { stages: withoutOffer });
+    assert.equal(busy.statusCode, 409);
+    assert.match(busy.json().error, /Предложение клиенту/);
+
+    const next = [
+      ...stages.slice(0, -1).map((x) => (x.key === "new_request" ? { ...x, name: "Новая заявка с сайта" } : x)),
+      { name: "Оплата", color: "#43A047" },
+      stages[stages.length - 1],
+    ];
+    assert.equal((await call(admin, "PUT", "/stages", { stages: next })).statusCode, 200);
+    const after = (await call(admin, "GET", "/stages")).json().stages as { name: string; isFinal: boolean }[];
+    assert.equal(after[0].name, "Новая заявка с сайта");
+    assert.equal(after[after.length - 2].name, "Оплата");
+    assert.ok(after[after.length - 1].isFinal);
+  });
+
+  test("клиенты: карточка с контактами и сделками, ИНН проверяется", async () => {
+    const s = await login("ivan", "managerpass");
+    assert.equal((await call(s, "POST", "/clients", { name: "ИП Петров", kind: "ip", inn: "123" })).statusCode, 400);
+    const list = (await call(s, "GET", `/clients?q=${encodeURIComponent("пол-маркет")}`)).json().clients;
+    assert.equal(list.length, 1);
+    const card = (await call(s, "GET", `/clients/${list[0].id}`)).json();
+    assert.equal(card.contacts[0].name, "Сергей");
+    assert.equal(card.deals.length, 1);
+    assert.equal((await call(s, "POST", `/clients/${list[0].id}/contacts`, { name: "Анна", email: "a@b.ru" })).statusCode, 200);
+  });
+});

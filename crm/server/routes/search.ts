@@ -25,7 +25,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
   app.get("/", async (request) => {
     const q = String((request.query as { q?: string }).q ?? "").trim().slice(0, 200);
     const tsq = buildPrefixQuery(q);
-    if (!tsq) return { pages: [], callTopics: [] };
+    if (!tsq) return { pages: [], callTopics: [], deals: [], clients: [] };
     const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
     const pages = await db.execute<{
@@ -54,7 +54,29 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY ts_rank(t.search, to_tsquery('russian', ${tsq})) DESC, t.position
       LIMIT 20`);
 
+    const num = /^(?:bars-?)?(\d{1,9})$/i.exec(q);
+    const dealRows = await db.execute<{ key: string; title: string; client: string | null; status: string; outcome: string | null }>(sql`
+      SELECT d.key, d.title, c.name AS client, s.name AS status, d.outcome
+      FROM deals d
+      LEFT JOIN clients c ON c.id = d.client_id
+      LEFT JOIN contacts ct ON ct.id = d.contact_id
+      JOIN deal_statuses s ON s.key = d.status_key
+      WHERE d.title ILIKE ${like} OR d.product ILIKE ${like} OR d.hs_code ILIKE ${like}
+         OR c.name ILIKE ${like} OR c.inn ILIKE ${like} OR ct.name ILIKE ${like} OR ct.phone ILIKE ${like}
+         ${num ? sql`OR d.number = ${Number(num[1])}` : sql``}
+      ORDER BY d.outcome NULLS FIRST, d.updated_at DESC
+      LIMIT 10`);
+
+    const clientRows = await db.execute<{ id: number; name: string; inn: string | null }>(sql`
+      SELECT c.id, c.name, c.inn FROM clients c
+      WHERE c.name ILIKE ${like} OR c.inn ILIKE ${like}
+         OR EXISTS (SELECT 1 FROM contacts ct WHERE ct.client_id = c.id AND (ct.name ILIKE ${like} OR ct.phone ILIKE ${like}))
+      ORDER BY c.name
+      LIMIT 10`);
+
     return {
+      deals: dealRows.rows,
+      clients: clientRows.rows.map((r) => ({ ...r, id: Number(r.id) })),
       pages: pages.rows.map((r) => ({
         id: Number(r.id),
         title: r.title,

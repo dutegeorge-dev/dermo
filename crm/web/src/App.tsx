@@ -14,7 +14,9 @@ import { PageView } from "./pages/kb/PageView.tsx";
 import { SpaceHome } from "./pages/kb/SpaceHome.tsx";
 import { SpaceLayout } from "./pages/kb/SpaceLayout.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
-import { DealsPage, NotFoundPage } from "./pages/misc.tsx";
+import { ClientPage, ClientsPage } from "./pages/crm/ClientsPage.tsx";
+import { DealsPage } from "./pages/crm/DealsPage.tsx";
+import { NotFoundPage } from "./pages/misc.tsx";
 import { ProfilePage } from "./pages/ProfilePage.tsx";
 import { UsersPage } from "./pages/UsersPage.tsx";
 
@@ -53,7 +55,9 @@ const router = createBrowserRouter(
             },
             { path: "calls", element: <CallScriptPage /> },
             { path: "calls/history", element: <CallScriptHistory /> },
-            { path: "deals", element: <DealsPage /> },
+            { path: "deals", element: <DealsPage />, children: [{ path: ":key" }] },
+            { path: "clients", element: <ClientsPage /> },
+            { path: "clients/:id", element: <ClientPage /> },
             { path: "profile", element: <ProfilePage /> },
             {
               element: <AdminOnly />,

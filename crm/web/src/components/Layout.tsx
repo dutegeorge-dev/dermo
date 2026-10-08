@@ -10,6 +10,7 @@ import { GlobalSearch } from "./GlobalSearch.tsx";
 import {
   IconBoard,
   IconBook,
+  IconBuilding,
   IconHistory,
   IconLogout,
   IconMenu,
@@ -71,15 +72,13 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         <NavItem to="/calls" icon={<IconPhone />}>
           Справочник для звонков
         </NavItem>
-        <span
-          className="flex cursor-default items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-slate-400 dark:text-neutral-500"
-          title="CRM появится на следующем этапе"
-          aria-disabled="true"
-        >
-          <IconBoard />
-          <span className="flex-1">Сделки</span>
-          <span className="text-[11px]">скоро</span>
-        </span>
+        <div className="px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">CRM</div>
+        <NavItem to="/deals" icon={<IconBoard />}>
+          Сделки
+        </NavItem>
+        <NavItem to="/clients" icon={<IconBuilding />}>
+          Клиенты
+        </NavItem>
       </nav>
 
       <div className="space-y-0.5 border-t border-slate-200 px-2 py-2 dark:border-neutral-800">
