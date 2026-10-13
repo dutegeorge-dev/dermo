@@ -133,10 +133,11 @@ export function EventDialog({ event, onClose }: { event: CalendarEvent; onClose:
       <div className="space-y-4 text-sm">
         <div className="rounded-md bg-slate-50 p-3 dark:bg-neutral-800/60">
           <Link to={`/shipments/${sh.number}`} className="link font-medium">
-            {sh.label}
+            {sh.title}
           </Link>
+          <span className="ml-2 text-xs muted">{sh.label}</span>
           {sh.containerNo ? <span className="ml-2 font-mono text-xs">{sh.containerNo}</span> : <span className="ml-2 text-xs text-amber-700 dark:text-amber-400">контейнер не указан</span>}
-          <div className="mt-1 text-xs muted">{[sh.client, sh.cargo, sh.carrier].filter(Boolean).join(" · ")}</div>
+          <div className="mt-1 text-xs muted">{[sh.client, sh.carrier].filter(Boolean).join(" · ")}</div>
           <div className="mt-2">
             <ShipmentStage shipment={{ stage: sh.stage, status: "active" }} />
           </div>

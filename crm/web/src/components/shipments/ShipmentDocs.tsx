@@ -1,21 +1,21 @@
-/** Блок сделки «Стороны и документы»: схема, поставщик, подрядчики, договоры, документы, поручение, план/факт. */
+/** Блок сделки «Документы»: договоры, подрядчики, документы по группам, поручение, план/факт. */
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 
-import { CLIENT_CONTRACT_BY_SCHEME, CONTRACTOR_TYPES, DOC_GROUPS, type DocGroup, docSpec, formatMoney, SCHEMES } from "../../../../shared/documents.ts";
+import { CLIENT_CONTRACT_BY_SCHEME, CONTRACTOR_TYPES, DOC_GROUPS, type DocGroup, docSpec, formatMoney } from "../../../../shared/documents.ts";
 import { api, BASE } from "../../lib/api.ts";
-import type { DealResponse, DocumentRow, Money } from "../../lib/types.ts";
+import type { DocumentRow, Money, ShipmentResponse } from "../../lib/types.ts";
 import { docTitle, PaymentChip, StatusChip } from "../docs/common.tsx";
 import { IconFile, IconPlus, IconX } from "../Icons.tsx";
 import { ErrorBox } from "../ui.tsx";
-import { CounterpartyPicker, ensureCounterparty, type Picked } from "./CounterpartyPicker.tsx";
+import { CounterpartyPicker, ensureCounterparty, type Picked } from "../crm/CounterpartyPicker.tsx";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 type Save = (patch: Record<string, unknown>) => Promise<void>;
 
-function money(list: Money[]) {
+export function money(list: Money[]) {
   if (list.length === 0) return <span className="muted">—</span>;
   return list.map((m) => (
     <span key={m.currency} className="block">
@@ -32,8 +32,8 @@ function ContractSelect({ label, value, type, counterpartyId, save, field }: { l
     enabled: !!counterpartyId,
   });
   return (
-    <div className="grid items-center gap-1 sm:grid-cols-[150px_1fr] sm:gap-3">
-      <span className="text-xs muted">{label}</span>
+    <div className="block">
+      <span className="label">{label}</span>
       <span className="flex min-w-0 items-center gap-2">
         <select className="input" value={value ?? ""} disabled={!counterpartyId} onChange={(e) => void save({ [field]: e.target.value ? Number(e.target.value) : null })}>
           <option value="">{counterpartyId ? (data?.documents.length ? "— не выбран —" : "нет договора — загрузите") : "—"}</option>
@@ -45,16 +45,61 @@ function ContractSelect({ label, value, type, counterpartyId, save, field }: { l
   );
 }
 
-export function DealDocs({ data, save, run }: { data: DealResponse; save: Save; run: Run }) {
-  const navigate = useNavigate();
-  const { deal } = data;
-  const [addingParty, setAddingParty] = useState(false);
+export function ContractsBlock({ data, save }: { data: ShipmentResponse; save: Save }) {
+  const sh = data.shipment;
+  return (
+    <div className="space-y-2">
+      <ContractSelect label="Договор с клиентом" value={sh.clientContractId} type={CLIENT_CONTRACT_BY_SCHEME[sh.scheme]} counterpartyId={sh.clientId} save={save} field="clientContractId" />
+      <ContractSelect label="Контракт с поставщиком" value={sh.supplierContractId} type="supplier_contract" counterpartyId={sh.supplierId} save={save} field="supplierContractId" />
+    </div>
+  );
+}
+
+export function PartiesBlock({ data, run }: { data: ShipmentResponse; run: Run }) {
+  const sh = data.shipment;
+  const [adding, setAdding] = useState(false);
   const [party, setParty] = useState<Picked | null>(null);
-  const [supplierEdit, setSupplierEdit] = useState(false);
-  const [supplier, setSupplier] = useState<Picked | null>(null);
+  return (
+    <div className="text-sm">
+      {data.parties.length === 0 && !adding && <p className="mb-1 text-xs muted">Перевозчики, брокер, СВХ — добавляются сами из их счетов.</p>}
+      {data.parties.map((p) => (
+        <span key={p.id} className="mb-1 mr-1 inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 dark:bg-neutral-800">
+          <Link to={`/contractors/${p.id}`} className="hover:underline">{p.name}</Link>
+          <span className="text-xs muted">{CONTRACTOR_TYPES[p.contractorType as keyof typeof CONTRACTOR_TYPES] ?? ""}</span>
+          <button type="button" aria-label={`Убрать ${p.name}`} className="text-slate-400 hover:text-red-600" onClick={() => void run(() => api(`/shipments/${sh.number}/parties/${p.id}`, { method: "DELETE" }))}>
+            <IconX size={10} />
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <span className="mt-1 flex gap-2">
+          <span className="flex-1"><CounterpartyPicker role="contractor" value={party} onChange={setParty} autoFocus /></span>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={async () => {
+              const id = await ensureCounterparty(party, "contractor");
+              if (id) await run(() => api(`/shipments/${sh.number}/parties`, { method: "POST", body: { counterpartyId: id } }));
+              setAdding(false);
+              setParty(null);
+            }}
+          >
+            OK
+          </button>
+        </span>
+      ) : (
+        <button type="button" className="text-xs link" onClick={() => setAdding(true)}>+ подрядчик</button>
+      )}
+    </div>
+  );
+}
+
+export function ShipmentDocs({ data }: { data: ShipmentResponse }) {
+  const navigate = useNavigate();
+  const sh = data.shipment;
   const [orderError, setOrderError] = useState<unknown>(null);
 
-  const contractIds = new Set([deal.clientContractId, deal.supplierContractId]);
+  const contractIds = new Set([sh.clientContractId, sh.supplierContractId]);
   const docs = data.documents.filter((d) => !contractIds.has(d.id));
   const byGroup = new Map<DocGroup, typeof docs>();
   for (const d of docs) {
@@ -62,89 +107,11 @@ export function DealDocs({ data, save, run }: { data: DealResponse; save: Save; 
     byGroup.set(g, [...(byGroup.get(g) ?? []), d]);
   }
   const order = data.documents.find((d) => d.id === data.finance.orderId);
-  const newDoc = (type: string) => `/documents/new?type=${type}&deal=${deal.key}`;
+  const newDoc = (type: string) => `/documents/new?type=${type}&shipment=${sh.number}`;
 
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 p-3 sm:p-4 dark:border-neutral-800">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="mr-auto text-xs font-semibold uppercase tracking-wide muted">Стороны и документы</h3>
-        <select className="input w-auto py-1 text-sm" value={deal.scheme} onChange={(e) => void save({ scheme: e.target.value })} aria-label="Схема">
-          {Object.entries(SCHEMES).map(([k, l]) => <option key={k} value={k}>Схема: {l}</option>)}
-        </select>
-      </div>
-
-      <div className="space-y-2">
-        <div className="grid items-center gap-1 sm:grid-cols-[150px_1fr] sm:gap-3">
-          <span className="text-xs muted">Поставщик</span>
-          {supplierEdit ? (
-            <span className="flex gap-2">
-              <span className="flex-1"><CounterpartyPicker role="supplier" value={supplier} onChange={setSupplier} autoFocus /></span>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={async () => {
-                  const id = await ensureCounterparty(supplier, "supplier");
-                  await save({ supplierId: id });
-                  setSupplierEdit(false);
-                }}
-              >
-                OK
-              </button>
-              <button type="button" className="btn btn-sm" onClick={() => setSupplierEdit(false)}>Отмена</button>
-            </span>
-          ) : (
-            <span className="flex items-center gap-2 text-sm">
-              {deal.supplierId ? <Link to={`/suppliers/${deal.supplierId}`} className="link">{deal.supplierName}</Link> : <span className="muted">не указан</span>}
-              <button type="button" className="text-xs link" onClick={() => { setSupplier(deal.supplierId ? { id: deal.supplierId, name: deal.supplierName ?? "" } : null); setSupplierEdit(true); }}>
-                {deal.supplierId ? "изменить" : "указать"}
-              </button>
-            </span>
-          )}
-        </div>
-        <ContractSelect
-          label={`Договор с клиентом`}
-          value={deal.clientContractId}
-          type={CLIENT_CONTRACT_BY_SCHEME[deal.scheme]}
-          counterpartyId={deal.clientId}
-          save={save}
-          field="clientContractId"
-        />
-        <ContractSelect label="Контракт с поставщиком" value={deal.supplierContractId} type="supplier_contract" counterpartyId={deal.supplierId} save={save} field="supplierContractId" />
-        <div className="grid gap-1 sm:grid-cols-[150px_1fr] sm:gap-3">
-          <span className="pt-1 text-xs muted">Подрядчики</span>
-          <div className="text-sm">
-            {data.parties.map((p) => (
-              <span key={p.id} className="mb-1 mr-1 inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 dark:bg-neutral-800">
-                <Link to={`/contractors/${p.id}`} className="hover:underline">{p.name}</Link>
-                <span className="text-xs muted">{CONTRACTOR_TYPES[p.contractorType as keyof typeof CONTRACTOR_TYPES] ?? ""}</span>
-                <button type="button" aria-label={`Убрать ${p.name}`} className="text-slate-400 hover:text-red-600" onClick={() => void run(() => api(`/deals/${deal.key}/parties/${p.id}`, { method: "DELETE" }))}>
-                  <IconX size={10} />
-                </button>
-              </span>
-            ))}
-            {addingParty ? (
-              <span className="mt-1 flex gap-2">
-                <span className="flex-1"><CounterpartyPicker role="contractor" value={party} onChange={setParty} autoFocus /></span>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={async () => {
-                    const id = await ensureCounterparty(party, "contractor");
-                    if (id) await run(() => api(`/deals/${deal.key}/parties`, { method: "POST", body: { counterpartyId: id } }));
-                    setAddingParty(false);
-                    setParty(null);
-                  }}
-                >
-                  OK
-                </button>
-              </span>
-            ) : (
-              <button type="button" className="text-xs link" onClick={() => setAddingParty(true)}>+ подрядчик</button>
-            )}
-          </div>
-        </div>
-      </div>
-
+    <section className="panel space-y-4 p-4">
+      <h2 className="text-sm font-semibold">Документы</h2>
       <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-neutral-800">
         {order ? (
           <>
@@ -154,14 +121,14 @@ export function DealDocs({ data, save, run }: { data: DealResponse; save: Save; 
             <Link className="btn btn-sm" to={`/documents/${order.id}/edit`}>Смета</Link>
           </>
         ) : (
-          deal.scheme === "commission" && (
+          sh.scheme === "commission" && (
             <button
               type="button"
               className="btn btn-primary btn-sm"
               onClick={async () => {
                 setOrderError(null);
                 try {
-                  const res = await api<{ document: { id: number } }>(`/deals/${deal.key}/order`, { method: "POST" });
+                  const res = await api<{ document: { id: number } }>(`/shipments/${sh.number}/order`, { method: "POST" });
                   navigate(`/documents/${res.document.id}/edit`);
                 } catch (e) {
                   setOrderError(e);
@@ -175,10 +142,13 @@ export function DealDocs({ data, save, run }: { data: DealResponse; save: Save; 
         <span className="flex-1" />
         <Link to={newDoc("supplier_invoice")} className="btn btn-sm"><IconPlus size={12} /> Инвойс поставщика</Link>
         <Link to={newDoc("contractor_invoice")} className="btn btn-sm"><IconPlus size={12} /> Счёт подрядчика</Link>
+        <Link to={newDoc("railway_bill")} className="btn btn-sm"><IconPlus size={12} /> СМГС / накладная</Link>
+        <Link to={newDoc("customs_declaration")} className="btn btn-sm"><IconPlus size={12} /> ДТ</Link>
         <Link to={newDoc("other")} className="btn btn-sm"><IconPlus size={12} /> Документ</Link>
       </div>
       {orderError != null && <ErrorBox error={orderError} />}
 
+      {docs.length === 0 && <p className="text-sm muted">Документов пока нет. Загрузите инвойс поставщика — он сам привяжется к договору, товары попадут в справочник.</p>}
       {docs.length > 0 && (
         <div className="space-y-3">
           {(Object.keys(DOC_GROUPS) as DocGroup[])
@@ -195,7 +165,7 @@ export function DealDocs({ data, save, run }: { data: DealResponse; save: Save; 
                       {d.amount !== null && <span className="tabular-nums">{formatMoney(d.amount, d.currency)}</span>}
                       <PaymentChip status={d.paymentStatus} paid={d.paidAmount} amount={d.amount} currency={d.currency} />
                       <StatusChip status={d.status === "draft" ? null : d.status} />
-                      {d.fileCount === 0 && <span className="text-[11px] muted">без файла</span>}
+                      {d.fileCount === 0 && <span className="text-[11px] text-amber-700 dark:text-amber-400">без файла</span>}
                     </li>
                   ))}
                 </ul>
@@ -204,9 +174,55 @@ export function DealDocs({ data, save, run }: { data: DealResponse; save: Save; 
         </div>
       )}
 
+    </section>
+  );
+}
+
+/** Деньги сделки: главные суммы плитками и «план / факт» по статьям. */
+export function FinanceBlock({ data }: { data: ShipmentResponse }) {
+  const rows = Object.fromEntries(data.finance.rows.map((r) => [r.category, r]));
+  const tile = (label: string, list: Money[] | undefined, plan?: { amount: number | null; currency: string } | null, hint?: string) => (
+    <div className="rounded-md border border-slate-200 px-3 py-2 dark:border-neutral-800">
+      <div className="text-xs muted">{label}</div>
+      <div className="mt-0.5 text-base font-semibold tabular-nums">
+        {list && list.length ? (
+          list.map((m) => <span key={m.currency} className="block">{formatMoney(m.amount, m.currency)}</span>)
+        ) : plan?.amount != null ? (
+          <span className="muted" title="Плановая сумма из поручения">≈ {formatMoney(plan.amount, plan.currency)}</span>
+        ) : (
+          <span className="muted">—</span>
+        )}
+      </div>
+      {list?.some((m) => m.paid < m.amount) && (
+        <div className="text-[11px] text-red-600 dark:text-red-400">
+          не оплачено {list.filter((m) => m.paid < m.amount).map((m) => formatMoney(m.amount - m.paid, m.currency)).join(" + ")}
+        </div>
+      )}
+      {list?.length && list.every((m) => m.paid >= m.amount) ? <div className="text-[11px] text-green-700 dark:text-green-400">оплачено</div> : null}
+      {hint && !list?.length && <div className="text-[11px] muted">{hint}</div>}
+    </div>
+  );
+  const other = data.finance.rows.filter((r) => !["goods", "transport", "customs"].includes(r.category)).flatMap((r) => r.fact);
+  const otherSum: Money[] = [];
+  for (const m of other) {
+    const x = otherSum.find((o) => o.currency === m.currency);
+    if (x) {
+      x.amount += m.amount;
+      x.paid += m.paid;
+    } else otherSum.push({ ...m });
+  }
+  return (
+    <section className="panel space-y-3 p-4">
+      <h2 className="text-sm font-semibold">Деньги</h2>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {tile("Стоимость партии", rows.goods?.fact, rows.goods?.plan, "по инвойсу поставщика")}
+        {tile("Перевозка", rows.transport?.fact, rows.transport?.plan, "по счетам перевозчиков")}
+        {tile("Таможенные платежи", rows.customs?.fact, rows.customs?.plan, "по ДТ")}
+        {tile("Брокер, СВХ и прочее", otherSum, null, "счета подрядчиков")}
+      </div>
       {(data.finance.rows.length > 0 || data.finance.clientInvoices.length > 0) && (
         <div className="border-t border-slate-200 pt-3 dark:border-neutral-800">
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide muted">План / факт</p>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide muted">План / факт по статьям</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

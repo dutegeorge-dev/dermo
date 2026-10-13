@@ -15,7 +15,9 @@ import { ConfirmDialog, EmptyState, ErrorBox, Modal, PageHeader, Spinner } from 
 import { api } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
 import { plural } from "../../lib/format.ts";
-import type { Contact, Counterparty, CounterpartyRole, CounterpartyRow, Deal, DocumentRow } from "../../lib/types.ts";
+import type { Contact, Counterparty, CounterpartyRole, CounterpartyRow, Deal, DocumentRow, Shipment } from "../../lib/types.ts";
+import { ShipmentStage } from "../../components/shipments/common.tsx";
+import { shipmentLabel } from "../../../../shared/shipments.ts";
 
 /** Какие документы предлагать добавить в карточке контрагента. */
 const QUICK_DOCS: Record<CounterpartyRole, DocType[]> = {
@@ -176,6 +178,7 @@ type CardData = {
   counterparty: Counterparty;
   contacts: Contact[];
   deals: Deal[];
+  shipments: Shipment[];
   documents: DocumentRow[];
   products: {
     productId: number | null;
@@ -287,7 +290,7 @@ export function CounterpartyPage({ role }: { role: CounterpartyRole }) {
           >
             {label}
             {key === "documents" && data.documents.length > 0 && <span className="ml-1 muted">{data.documents.length}</span>}
-            {key === "deals" && data.deals.length > 0 && <span className="ml-1 muted">{data.deals.length}</span>}
+            {key === "deals" && data.shipments.length > 0 && <span className="ml-1 muted">{data.shipments.length}</span>}
           </button>
         ))}
       </div>
@@ -305,27 +308,43 @@ export function CounterpartyPage({ role }: { role: CounterpartyRole }) {
         </>
       )}
 
-      {tab === "deals" &&
-        (data.deals.length === 0 ? (
-          <p className="text-sm muted">Сделок нет.</p>
-        ) : (
-          <ul className="panel divide-line">
-            {data.deals.map((d) => {
-              const stage = stageBy.get(d.statusKey);
-              return (
-                <li key={d.key} className="flex items-center gap-3 px-4 py-2 text-sm">
-                  <Link to={`/deals/${d.key}`} className="font-mono text-xs link">{d.key}</Link>
-                  <Link to={`/deals/${d.key}`} className="min-w-0 flex-1 truncate hover:underline">{d.title}</Link>
-                  <span className="hidden text-xs muted sm:inline">
-                    {c.role === "client" ? d.supplierName : d.clientName}
-                  </span>
-                  {d.outcome === "lost" ? <span className="text-xs text-red-600">отказ</span> : stage && <StageChip stage={stage} className="max-w-44" />}
-                  <span className="w-16 text-right text-xs muted">{formatShortDate(d.createdAt.slice(0, 10))}</span>
+      {tab === "deals" && (
+        <div className="space-y-5">
+          {data.shipments.length === 0 ? (
+            <p className="text-sm muted">Сделок нет.</p>
+          ) : (
+            <ul className="panel divide-line">
+              {data.shipments.map((sh) => (
+                <li key={sh.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm">
+                  <Link to={`/shipments/${sh.number}`} className="min-w-0 flex-1 truncate font-medium hover:underline">{sh.title}</Link>
+                  <span className="text-xs muted">{shipmentLabel(sh.number)}</span>
+                  {sh.containerNo && <span className="font-mono text-xs">{sh.containerNo}</span>}
+                  <span className="hidden text-xs muted sm:inline">{c.role === "client" ? sh.supplier?.name : sh.client?.name}</span>
+                  <ShipmentStage shipment={sh} className="max-w-52" />
                 </li>
-              );
-            })}
-          </ul>
-        ))}
+              ))}
+            </ul>
+          )}
+          {data.deals.length > 0 && (
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">Лиды в воронке продаж</h3>
+              <ul className="panel divide-line">
+                {data.deals.map((d) => {
+                  const stage = stageBy.get(d.statusKey);
+                  return (
+                    <li key={d.key} className="flex items-center gap-3 px-4 py-2 text-sm">
+                      <Link to={`/deals/${d.key}`} className="font-mono text-xs link">{d.key}</Link>
+                      <Link to={`/deals/${d.key}`} className="min-w-0 flex-1 truncate hover:underline">{d.title}</Link>
+                      {d.outcome === "lost" ? <span className="text-xs text-red-600">отказ</span> : stage && <StageChip stage={stage} className="max-w-44" />}
+                      <span className="w-16 text-right text-xs muted">{formatShortDate(d.createdAt.slice(0, 10))}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {tab === "products" &&
         (data.products.length === 0 ? (

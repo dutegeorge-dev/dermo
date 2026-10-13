@@ -49,7 +49,7 @@ function eventColor(e: CalendarEvent): string {
 function matches(e: CalendarEvent, q: string, onlyPayments: boolean): boolean {
   if (onlyPayments && !(e.kind === "flag" && e.payment)) return false;
   if (!q) return true;
-  const hay = [e.shipment.label, e.shipment.containerNo, e.shipment.client, e.shipment.cargo, e.shipment.carrier, e.title].join(" ").toLowerCase();
+  const hay = [e.shipment.title, e.shipment.label, e.shipment.containerNo, e.shipment.client, e.shipment.carrier, e.title].join(" ").toLowerCase();
   return hay.includes(q.toLowerCase());
 }
 
@@ -84,9 +84,9 @@ function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: () => void 
           <DueLabel date={event.date} />
         </div>
         <div className="mt-0.5 truncate text-xs muted">
-          <span className="font-medium text-slate-700 dark:text-neutral-200">{sh.label}</span>
+          <span className="font-medium text-slate-700 dark:text-neutral-200">{sh.title}</span>
           {sh.containerNo && <span className="ml-1.5 font-mono">{sh.containerNo}</span>}
-          {[sh.client, sh.cargo, sh.carrier].filter(Boolean).map((x) => ` · ${x}`)}
+          {[sh.client, sh.carrier].filter(Boolean).map((x) => ` · ${x}`)}
         </div>
         {error && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</div>}
       </button>
@@ -280,9 +280,9 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
                           e.done ? "text-slate-400 line-through dark:text-neutral-500" : "text-slate-800 dark:text-neutral-100"
                         } ${overdue ? "ring-1 ring-red-500" : ""}`}
                         style={{ background: e.done ? undefined : `${eventColor(e)}26`, borderLeft: `3px solid ${eventColor(e)}` }}
-                        title={`${e.title} — ${e.shipment.label} ${e.shipment.containerNo ?? ""} ${e.shipment.client ?? ""}`}
+                        title={`${e.title} — ${e.shipment.title} ${e.shipment.containerNo ?? ""} ${e.shipment.client ?? ""}`}
                       >
-                        <span className="font-medium">{e.shipment.label}</span> {e.title}
+                        <span className="font-medium">{e.shipment.title}</span> · {e.title}
                       </button>
                     );
                   })}
@@ -303,7 +303,7 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
             <span key={e.id}>
               {i > 0 && ", "}
               <button type="button" className="underline" onClick={() => onOpen(e)}>
-                {e.shipment.label} — {e.title.toLowerCase()}
+                {e.shipment.title} — {e.title.toLowerCase()}
               </button>
             </span>
           ))}
@@ -385,7 +385,7 @@ export function CalendarPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="relative block w-full max-w-xs">
           <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="search" className="input pl-8" placeholder="Контейнер, клиент, груз" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="search" className="input pl-8" placeholder="Груз, контейнер, клиент" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={onlyPayments} onChange={(e) => setOnlyPayments(e.target.checked)} />

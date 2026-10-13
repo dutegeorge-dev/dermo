@@ -5,7 +5,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 
 import { COMPANY_KINDS, MESSENGERS } from "../../../../shared/deal-fields.ts";
-import { SCHEMES } from "../../../../shared/documents.ts";
 import { api } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
 import { ErrorBox, Modal } from "../ui.tsx";
@@ -22,7 +21,6 @@ export function CreateDealDialog({ onClose, initialStage }: { onClose: () => voi
   const [title, setTitle] = useState("");
   const [product, setProduct] = useState("");
   const [client, setClient] = useState<Picked | null>(null);
-  const [scheme, setScheme] = useState<keyof typeof SCHEMES>("commission");
   const [kind, setKind] = useState<keyof typeof COMPANY_KINDS>("ooo");
   const [inn, setInn] = useState("");
   const [contactName, setContactName] = useState("");
@@ -43,7 +41,6 @@ export function CreateDealDialog({ onClose, initialStage }: { onClose: () => voi
         body: {
           title,
           product,
-          scheme,
           statusKey: statusKey || stages[0]?.key,
           assigneeId: assigneeId ? Number(assigneeId) : null,
           clientId: client?.id ?? null,
@@ -70,7 +67,7 @@ export function CreateDealDialog({ onClose, initialStage }: { onClose: () => voi
             <input id="d-title" className="input" required autoFocus maxLength={300} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например: Ламинат, 2 фуры" />
           </div>
           <div className="sm:col-span-2">
-            <label className="label" htmlFor="d-product">Товар</label>
+            <label className="label" htmlFor="d-product">Что хочет клиент</label>
             <input id="d-product" className="input" value={product} onChange={(e) => setProduct(e.target.value)} />
           </div>
           <div className="sm:col-span-2">
@@ -110,12 +107,6 @@ export function CreateDealDialog({ onClose, initialStage }: { onClose: () => voi
               </div>
             </>
           )}
-          <div>
-            <label className="label" htmlFor="d-scheme">Схема</label>
-            <select id="d-scheme" className="input" value={scheme} onChange={(e) => setScheme(e.target.value as keyof typeof SCHEMES)}>
-              {Object.entries(SCHEMES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
           <div>
             <label className="label" htmlFor="d-stage">Этап</label>
             <select id="d-stage" className="input" value={statusKey || stages[0]?.key || ""} onChange={(e) => setStatusKey(e.target.value)}>

@@ -1,4 +1,4 @@
-/** CRM: этапы воронки, сделки, комментарии, журнал изменений. */
+/** Воронка продаж: этапы, лиды, комментарии, журнал изменений, вложения (КП). */
 
 import crypto from "node:crypto";
 
@@ -13,15 +13,14 @@ import {
   counterparties,
   dealComments,
   dealEvents,
-  dealParties,
   deals,
   dealStatuses,
+  shipments,
   users,
 } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import {
   addEvent,
-  autoContracts,
   createDeal,
   dealQuery,
   dealSearchColumns,
@@ -33,7 +32,6 @@ import {
   parseFields,
   sameValue,
 } from "../lib/deals.ts";
-import { dealDocuments, dealFinance } from "../lib/finance.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
 import { deleteAttachmentRows, unlinkStoredFiles } from "./files.ts";
 
@@ -187,7 +185,6 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     else if (q.assignee === "none") filters.push(isNull(deals.assigneeId));
     else if (q.assignee && Number(q.assignee) > 0) filters.push(eq(deals.assigneeId, Number(q.assignee)));
     if (q.client && Number(q.client) > 0) filters.push(eq(deals.clientId, Number(q.client)));
-    if (q.supplier && Number(q.supplier) > 0) filters.push(eq(deals.supplierId, Number(q.supplier)));
     if (q.label) filters.push(sql`${q.label} = ANY(${deals.labels})`);
     if (q.q?.trim()) {
       const text = q.q.trim().slice(0, 100);
@@ -197,10 +194,8 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
         or(
           ilike(deals.title, like),
           ilike(deals.product, like),
-          ilike(deals.hsCode, like),
           ilike(dealSearchColumns.client.name, like),
           ilike(dealSearchColumns.client.inn, like),
-          ilike(dealSearchColumns.supplier.name, like),
           ilike(contacts.name, like),
           ilike(contacts.phone, like),
           ...(num ? [eq(deals.number, Number(num[1]))] : []),
@@ -299,19 +294,18 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
         .where(and(eq(attachments.ownerType, "deal"), eq(attachments.ownerId, deal.id)))
         .orderBy(asc(attachments.createdAt)),
     ]);
-    const parties = await db
+    const linked = await db
       .select({
-        id: counterparties.id,
-        name: counterparties.name,
-        role: counterparties.role,
-        contractorType: counterparties.contractorType,
+        number: shipments.number,
+        title: shipments.title,
+        status: shipments.status,
+        stage: shipments.stage,
+        containerNo: shipments.containerNo,
       })
-      .from(dealParties)
-      .innerJoin(counterparties, eq(counterparties.id, dealParties.counterpartyId))
-      .where(eq(dealParties.dealId, deal.id))
-      .orderBy(asc(counterparties.name));
-    const docs = await dealDocuments(db, deal.id);
-    return { deal, comments, events, attachments: files, parties, documents: docs, finance: await dealFinance(db, deal.id, docs) };
+      .from(shipments)
+      .where(eq(shipments.dealId, deal.id))
+      .orderBy(asc(shipments.number));
+    return { deal, comments, events, attachments: files, shipments: linked };
   });
 
   /** Правка полей. Каждое изменённое поле — запись в журнале сделки. */
@@ -337,14 +331,7 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
         );
       }
       if (Object.keys(changed).length === 0) return { ok: true, changed: [] };
-      // Сменили клиента, схему или поставщика — договоры подбираем заново (если их не выбрали явно).
-      if (("clientId" in changed || "scheme" in changed) && !("clientContractId" in changed)) changed.clientContractId = null;
-      if (("supplierId" in changed || "scheme" in changed) && !("supplierContractId" in changed)) changed.supplierContractId = null;
       await tx.update(deals).set({ ...changed, updatedAt: new Date() }).where(eq(deals.id, deal.id));
-      const picked = await autoContracts(tx, deal.id);
-      for (const [field, value] of Object.entries(picked) as [DealField, unknown][]) {
-        await addEvent(tx, deal.id, user.id, "field_changed", field, null, await displayValue(tx, field, value));
-      }
       await audit(tx, {
         userId: user.id,
         action: "update",
@@ -472,38 +459,6 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     });
     await unlinkStoredFiles(stored);
     return { ok: true };
-  });
-
-  // ── Подрядчики сделки ────────────────────────────────────────────────────
-
-  app.post("/deals/:key/parties", async (request) => {
-    const user = currentUser(request);
-    const counterpartyId = intParam(body<{ counterpartyId: number }>(request).counterpartyId, "counterpartyId");
-    return db.transaction(async (tx) => {
-      const deal = await findDeal(tx, (request.params as { key: string }).key);
-      const [cp] = await tx.select().from(counterparties).where(eq(counterparties.id, counterpartyId));
-      if (!cp) throw new HttpError(404, "Контрагент не найден");
-      await tx.insert(dealParties).values({ dealId: deal.id, counterpartyId }).onConflictDoNothing();
-      await addEvent(tx, deal.id, user.id, "party_added", null, null, cp.name);
-      return { ok: true };
-    });
-  });
-
-  app.delete("/deals/:key/parties/:id", async (request) => {
-    const user = currentUser(request);
-    const counterpartyId = intParam((request.params as { id: string }).id);
-    return db.transaction(async (tx) => {
-      const deal = await findDeal(tx, (request.params as { key: string }).key);
-      const [removed] = await tx
-        .delete(dealParties)
-        .where(and(eq(dealParties.dealId, deal.id), eq(dealParties.counterpartyId, counterpartyId)))
-        .returning();
-      if (removed) {
-        const [cp] = await tx.select({ name: counterparties.name }).from(counterparties).where(eq(counterparties.id, counterpartyId));
-        await addEvent(tx, deal.id, user.id, "party_removed", null, cp?.name ?? null, null);
-      }
-      return { ok: true };
-    });
   });
 
   // ── Комментарии ──────────────────────────────────────────────────────────

@@ -25,40 +25,19 @@ export type FieldSpec = {
   required?: boolean;
 };
 
-export const ROUTES = { auto: "Авто", rail: "Ж/д", air: "Авиа", sea: "Море", multimodal: "Мультимодальный" } as const;
 export const PRIORITIES = { low: "Низкий", medium: "Средний", high: "Высокий", urgent: "Срочный" } as const;
 export const COMPANY_KINDS = { ooo: "ООО", ip: "ИП", foreign: "Иностранная компания", other: "Другое" } as const;
 export const MESSENGERS = { telegram: "Telegram", whatsapp: "WhatsApp", max: "Макс", wechat: "WeChat", other: "Другой" } as const;
 
+/**
+ * Поля лида в воронке — только работа с клиентом. Груз, поставщик, договоры,
+ * документы и деньги — в сделке (shared/shipments.ts).
+ */
 export const DEAL_FIELDS = {
   title: { label: "Название", kind: "text", max: 300, required: true },
-  scheme: { label: "Схема", kind: "enum", values: { commission: "Комиссия", supply: "Поставка", teu: "ТЭУ" } },
   clientId: { label: "Клиент", kind: "client" },
   contactId: { label: "Контакт", kind: "contact" },
-  supplierId: { label: "Поставщик", kind: "counterparty" },
-  clientContractId: { label: "Договор с клиентом", kind: "document" },
-  supplierContractId: { label: "Контракт с поставщиком", kind: "document" },
-  product: { label: "Товар", kind: "text", max: 500 },
-  hsCode: { label: "Код ТН ВЭД", kind: "text", max: 20 },
-  weightKg: { label: "Вес, кг", kind: "number" },
-  volumeM3: { label: "Объём, м³", kind: "number" },
-  pickupLocation: { label: "Место забора в Китае", kind: "text", max: 500 },
-  deliveryLocation: { label: "Место доставки в России", kind: "text", max: 500 },
-  goodsReadyDate: { label: "Готовность товара", kind: "date" },
-  route: { label: "Маршрут", kind: "enum", values: ROUTES },
-  contractParty: { label: "Контракт", kind: "enum", values: { ours: "Наш", client: "Клиента" } },
-  exportLicense: {
-    label: "Экспортная лицензия у поставщика",
-    kind: "enum",
-    values: { yes: "Есть", no: "Нет", we_arrange: "Оформляем сами" },
-  },
-  certificates: { label: "Сертификаты", kind: "enum", values: { yes: "Есть", no: "Нет", in_progress: "Оформляем" } },
-  certificateHolder: { label: "Сертификат — на кого", kind: "text", max: 300 },
-  chestnyZnak: {
-    label: "«Честный знак»",
-    kind: "enum",
-    values: { not_required: "Не требуется", required: "Нужна маркировка", applied: "Нанесена" },
-  },
+  product: { label: "Что хочет клиент", kind: "text", max: 500 },
   assigneeId: { label: "Исполнитель", kind: "user" },
   dueDate: { label: "Срок", kind: "date" },
   priority: { label: "Приоритет", kind: "enum", values: PRIORITIES },
@@ -69,16 +48,6 @@ export const DEAL_FIELDS = {
 export type DealField = keyof typeof DEAL_FIELDS;
 
 export const DEAL_FIELD_NAMES = Object.keys(DEAL_FIELDS) as DealField[];
-
-/** Группы полей в карточке сделки. */
-export const DEAL_FIELD_GROUPS: { title: string; fields: DealField[] }[] = [
-  { title: "Груз", fields: ["product", "hsCode", "weightKg", "volumeM3", "goodsReadyDate"] },
-  { title: "Маршрут", fields: ["route", "pickupLocation", "deliveryLocation"] },
-  {
-    title: "Документы и разрешения",
-    fields: ["contractParty", "exportLicense", "certificates", "certificateHolder", "chestnyZnak"],
-  },
-];
 
 /** Цвет текста, читаемый на фоне цвета этапа. */
 export function textOn(hex: string): "#111827" | "#FFFFFF" {

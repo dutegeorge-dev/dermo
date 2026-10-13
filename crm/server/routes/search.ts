@@ -61,18 +61,18 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       LEFT JOIN counterparties c ON c.id = d.client_id
       LEFT JOIN contacts ct ON ct.id = d.contact_id
       JOIN deal_statuses s ON s.key = d.status_key
-      WHERE d.title ILIKE ${like} OR d.product ILIKE ${like} OR d.hs_code ILIKE ${like}
+      WHERE d.title ILIKE ${like} OR d.product ILIKE ${like}
          OR c.name ILIKE ${like} OR c.inn ILIKE ${like} OR ct.name ILIKE ${like} OR ct.phone ILIKE ${like}
          ${num ? sql`OR d.number = ${Number(num[1])}` : sql``}
       ORDER BY d.outcome NULLS FIRST, d.updated_at DESC
       LIMIT 10`);
 
-    const shipNum = /^(?:[сc]-?)?0*(\d{1,9})$/i.exec(q);
-    const shipmentRows = await db.execute<{ number: number; container_no: string | null; cargo: string; client: string | null; status: string; stage: number }>(sql`
-      SELECT s.number, s.container_no, s.cargo, c.name AS client, s.status, s.stage
+    const shipNum = /^(?:[сc]-?|№\s*)?0*(\d{1,9})$/i.exec(q);
+    const shipmentRows = await db.execute<{ number: number; container_no: string | null; title: string; client: string | null; status: string; stage: number }>(sql`
+      SELECT s.number, s.container_no, s.title, c.name AS client, s.status, s.stage
       FROM shipments s
       LEFT JOIN counterparties c ON c.id = s.client_id
-      WHERE s.container_no ILIKE ${like} OR s.cargo ILIKE ${like} OR c.name ILIKE ${like}
+      WHERE s.container_no ILIKE ${like} OR s.title ILIKE ${like} OR s.hs_code ILIKE ${like} OR c.name ILIKE ${like}
          ${shipNum ? sql`OR s.number = ${Number(shipNum[1])}` : sql``}
       ORDER BY (s.status = 'active') DESC, s.number DESC
       LIMIT 10`);
@@ -102,7 +102,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       shipments: shipmentRows.rows.map((r) => ({
         number: Number(r.number),
         containerNo: r.container_no,
-        cargo: r.cargo,
+        title: r.title,
         client: r.client,
         status: r.status,
         stage: Number(r.stage),

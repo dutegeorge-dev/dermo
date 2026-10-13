@@ -1,10 +1,11 @@
-/** Карточка сделки — боковая панель поверх доски/таблицы: все поля, клиент, комментарии, активность. */
+/** Карточка лида воронки — боковая панель поверх доски/таблицы: клиент, запрос, КП, комментарии, сделки из лида. */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
-import { DEAL_FIELD_GROUPS, DEAL_FIELDS, type DealField, MESSENGERS } from "../../../../shared/deal-fields.ts";
+import { DEAL_FIELDS, type DealField, MESSENGERS } from "../../../../shared/deal-fields.ts";
+import { shipmentLabel, stageSpec } from "../../../../shared/shipments.ts";
 import { api, fileUrl } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
 import { formatDateTime, formatRelative, formatSize } from "../../lib/format.ts";
@@ -12,7 +13,6 @@ import type { Contact, DealResponse, Stage } from "../../lib/types.ts";
 import { IconFile, IconPaperclip, IconTrash, IconX } from "../Icons.tsx";
 import { ConfirmDialog, ErrorBox, Modal, Spinner } from "../ui.tsx";
 import { CounterpartyPicker, ensureCounterparty, type Picked } from "./CounterpartyPicker.tsx";
-import { DealDocs } from "./DealDocs.tsx";
 import { StageChip, useDirectory, useStages } from "./common.tsx";
 
 type Save = (patch: Record<string, unknown>) => Promise<void>;
@@ -21,7 +21,7 @@ type Save = (patch: Record<string, unknown>) => Promise<void>;
 function FieldInput({ field, value, save }: { field: DealField; value: unknown; save: Save }) {
   const spec = DEAL_FIELDS[field];
   const users = useDirectory().data?.users ?? [];
-  const initial = value === null || value === undefined ? "" : String(value).replace(".", spec.kind === "number" ? "," : ".");
+  const initial = value === null || value === undefined ? "" : String(value);
   const [draft, setDraft] = useState(initial);
   useEffect(() => setDraft(initial), [initial]);
   const commit = () => {
@@ -51,7 +51,6 @@ function FieldInput({ field, value, save }: { field: DealField; value: unknown; 
   return (
     <input
       className="input"
-      inputMode={spec.kind === "number" ? "decimal" : undefined}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
@@ -143,14 +142,6 @@ function eventText(e: DealResponse["events"][number]): ReactNode {
       return <>прикрепил файл «{e.newValue}»</>;
     case "document_added":
       return <>добавил документ: {e.newValue}</>;
-    case "document_removed":
-      return <>удалил документ: {e.oldValue}</>;
-    case "payment_changed":
-      return <>отметил оплату — {e.oldValue}: <b className="font-medium">{e.newValue}</b></>;
-    case "party_added":
-      return <>добавил подрядчика {e.newValue}</>;
-    case "party_removed":
-      return <>убрал подрядчика {e.oldValue}</>;
     default:
       return e.kind;
   }
@@ -295,27 +286,52 @@ export function DealPanel({ dealKey, onClose }: { dealKey: string; onClose: () =
                 {closed && deal.lostReason && <p className="text-sm text-red-700 dark:text-red-300">Причина отказа: {deal.lostReason}</p>}
                 <StageBar stages={stages} current={deal.statusKey} disabled={closed} onPick={(statusKey) => void run(() => api(`/deals/${dealKey}/move`, { method: "POST", body: { statusKey, beforeKey: null } }))} />
 
-                <DealDocs data={data} save={save} run={run} />
+                <Row label={DEAL_FIELDS.product.label}>
+                  <FieldInput field="product" value={deal.product} save={save} />
+                </Row>
 
                 <DescriptionInput value={deal.description} onSave={(description) => save({ description })} />
 
-                {DEAL_FIELD_GROUPS.map((group) => (
-                  <section key={group.title}>
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">{group.title}</h3>
-                    <div className="space-y-2">
-                      {group.fields.map((f) => (
-                        <Row key={f} label={DEAL_FIELDS[f].label}>
-                          <FieldInput field={f} value={(deal as Record<string, unknown>)[f]} save={save} />
-                        </Row>
+                <section className="rounded-lg border border-slate-200 p-3 dark:border-neutral-800">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide muted">Сделки (заказы)</h3>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      title="Клиент оплатил депозит — заводим сделку: груз, документы, даты"
+                      onClick={() => {
+                        const q = new URLSearchParams({ new: "1", deal: String(deal.id), dealKey: deal.key, dealTitle: deal.title });
+                        if (deal.clientId) q.set("clientId", String(deal.clientId));
+                        if (deal.clientName) q.set("clientName", deal.clientName);
+                        if (deal.product) q.set("title", deal.product);
+                        navigate(`/shipments?${q}`);
+                      }}
+                    >
+                      Создать сделку
+                    </button>
+                  </div>
+                  {data.shipments.length === 0 ? (
+                    <p className="text-xs muted">Когда клиент оплатит депозит — создайте сделку. Груз, поставщик, документы и деньги ведутся там.</p>
+                  ) : (
+                    <ul className="divide-line text-sm">
+                      {data.shipments.map((sh) => (
+                        <li key={sh.number} className="flex items-center gap-2 py-1.5">
+                          <Link to={`/shipments/${sh.number}`} className="link font-medium">{sh.title}</Link>
+                          <span className="text-xs muted">{shipmentLabel(sh.number)}</span>
+                          {sh.containerNo && <span className="font-mono text-xs">{sh.containerNo}</span>}
+                          <span className="ml-auto text-xs muted">
+                            {sh.status === "active" ? stageSpec(sh.stage).name : sh.status === "closed" ? "закрыта" : "отменена"}
+                          </span>
+                        </li>
                       ))}
-                    </div>
-                  </section>
-                ))}
+                    </ul>
+                  )}
+                </section>
 
                 <section>
                   <div className="mb-2 flex items-center justify-between">
                     <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide muted">
-                      <IconPaperclip size={12} /> Вложения
+                      <IconPaperclip size={12} /> КП и файлы
                     </h3>
                     <button type="button" className="btn btn-sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
                       {uploading ? "Загрузка…" : "Прикрепить"}

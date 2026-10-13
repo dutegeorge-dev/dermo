@@ -5,20 +5,20 @@ import type { FastifyInstance } from "fastify";
 
 import { config } from "../config.ts";
 import { db } from "../db/client.ts";
-import { deals, documents } from "../db/schema.ts";
+import { documents, shipments } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
-import { addEvent, parseDealKey } from "../lib/deals.ts";
 import { assertSingleOrder, nextSeqNo, pad2, replaceItems } from "../lib/documents.ts";
 import { currentUser, HttpError, intParam } from "../lib/http.ts";
 import { buildOrderDraft, renderOrderDocx } from "../lib/order.ts";
+import { addShipmentEvent, parseShipmentNumber } from "../lib/shipments.ts";
 
 export async function orderRoutes(app: FastifyInstance): Promise<void> {
   /** Сформировать поручение по сделке: номер — следующий по договору комиссии клиента. */
-  app.post("/deals/:key/order", async (request) => {
+  app.post("/shipments/:number/order", async (request) => {
     const user = currentUser(request);
-    const number = parseDealKey((request.params as { key: string }).key);
+    const number = parseShipmentNumber((request.params as { number: string }).number);
     return db.transaction(async (tx) => {
-      const [deal] = await tx.select({ id: deals.id, key: deals.key }).from(deals).where(eq(deals.number, number));
+      const [deal] = await tx.select({ id: shipments.id, title: shipments.title }).from(shipments).where(eq(shipments.number, number));
       if (!deal) throw new HttpError(404, "Сделка не найдена");
       await assertSingleOrder(tx, deal.id);
       const draft = await buildOrderDraft(tx, deal.id);
@@ -30,8 +30,8 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
           number: pad2(seqNo),
           seqNo,
           date: new Date().toISOString().slice(0, 10),
-          counterpartyId: draft.deal.clientId,
-          dealId: deal.id,
+          counterpartyId: draft.shipment.clientId,
+          shipmentId: deal.id,
           parentId: draft.contract.id,
           currency: draft.currency,
           amount: draft.amount === null ? null : String(draft.amount),
@@ -41,13 +41,13 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
         })
         .returning({ id: documents.id, number: documents.number });
       await replaceItems(tx, user.id, doc.id, draft.items);
-      await addEvent(tx, deal.id, user.id, "document_added", null, null, `Поручение № ${doc.number}`);
+      await addShipmentEvent(tx, deal.id, user.id, "document_added", null, null, `Поручение № ${doc.number}`);
       await audit(tx, {
         userId: user.id,
         action: "create",
         entityType: "document",
         entityId: doc.id,
-        summary: `Сформировал поручение № ${doc.number} по сделке ${deal.key}`,
+        summary: `Сформировал поручение № ${doc.number} по сделке «${deal.title}»`,
         ip: request.ip,
       });
       return { document: doc };

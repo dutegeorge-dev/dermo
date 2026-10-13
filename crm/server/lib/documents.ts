@@ -1,12 +1,12 @@
-/** Документы: проверка полей, позиции (с пополнением справочника товаров), нумерация, связи со сделкой. */
+/** Документы: проверка полей, позиции (с пополнением справочника товаров), нумерация, связи со сделкой (отгрузкой). */
 
 import { and, asc, eq, isNull, max, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { DOC_STATUSES, docSpec, type DocTypeSpec, PAYMENT_STATUSES } from "../../shared/documents.ts";
 import type { DbOrTx } from "../db/client.ts";
-import { counterparties, dealParties, deals, documentItems, documents, products } from "../db/schema.ts";
-import { addEvent, findActiveContract } from "./deals.ts";
+import { counterparties, documentItems, documents, products, shipmentParties, shipments } from "../db/schema.ts";
+import { addShipmentEvent, findActiveContract } from "./shipments.ts";
 import { HttpError } from "./http.ts";
 
 type DocInsert = typeof documents.$inferInsert;
@@ -15,7 +15,7 @@ const cp = alias(counterparties, "cp");
 const cl = alias(counterparties, "cl");
 const parent = alias(documents, "parent");
 
-/** Список документов с именами сторон, ключом сделки и номером договора. */
+/** Список документов с именами сторон, сделкой и номером договора. */
 export function documentListQuery(tx: DbOrTx) {
   return tx
     .select({
@@ -29,8 +29,9 @@ export function documentListQuery(tx: DbOrTx) {
       counterpartyRole: cp.role,
       clientId: documents.clientId,
       clientName: cl.name,
-      dealId: documents.dealId,
-      dealKey: deals.key,
+      shipmentId: documents.shipmentId,
+      shipmentNumber: shipments.number,
+      shipmentTitle: shipments.title,
       parentId: documents.parentId,
       parentNumber: parent.number,
       parentType: parent.type,
@@ -48,7 +49,7 @@ export function documentListQuery(tx: DbOrTx) {
     .from(documents)
     .leftJoin(cp, eq(cp.id, documents.counterpartyId))
     .leftJoin(cl, eq(cl.id, documents.clientId))
-    .leftJoin(deals, eq(deals.id, documents.dealId))
+    .leftJoin(shipments, eq(shipments.id, documents.shipmentId))
     .leftJoin(parent, eq(parent.id, documents.parentId))
     .$dynamic();
 }
@@ -75,7 +76,7 @@ export function numberOrNull(value: unknown, label: string): string | null {
   return String(n);
 }
 
-async function existing(tx: DbOrTx, table: typeof counterparties | typeof documents | typeof deals, value: unknown, label: string) {
+async function existing(tx: DbOrTx, table: typeof counterparties | typeof documents | typeof shipments, value: unknown, label: string) {
   if (value === null || value === undefined || value === "") return null;
   const id = Number(value);
   if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, `${label}: неверное значение`);
@@ -93,7 +94,7 @@ export async function parseDocumentFields(tx: DbOrTx, input: Record<string, unkn
   if ("date" in input) v.date = dateOrNull(input.date, "Дата");
   if ("counterpartyId" in input) v.counterpartyId = await existing(tx, counterparties, input.counterpartyId, "Контрагент");
   if ("clientId" in input) v.clientId = await existing(tx, counterparties, input.clientId, "Клиент");
-  if ("dealId" in input) v.dealId = await existing(tx, deals, input.dealId, "Сделка");
+  if ("shipmentId" in input) v.shipmentId = await existing(tx, shipments, input.shipmentId, "Сделка");
   if ("parentId" in input) {
     v.parentId = await existing(tx, documents, input.parentId, "Договор");
     if (v.parentId) {
@@ -214,52 +215,65 @@ export async function nextSeqNo(tx: DbOrTx, parentId: number, type: string): Pro
 
 export const pad2 = (n: number) => String(n).padStart(2, "0");
 
+const CARRIER_TYPES = new Set(["carrier_cn", "carrier_ru"]);
+
 /**
  * Документ попал в сделку — подтягиваем связи: клиента сделки, поставщика,
- * контракт поставщика, подрядчика в участники. Возвращает поля, которые надо
- * дописать в сам документ.
+ * контракт поставщика, подрядчика в участники, перевозчика и его инвойс.
+ * Возвращает поля, которые надо дописать в сам документ.
  */
-export async function linkToDeal(
+export async function linkToShipment(
   tx: DbOrTx,
   userId: number | null,
-  doc: { id: number; type: string; dealId: number | null; counterpartyId: number | null; clientId: number | null; parentId: number | null; number: string | null },
+  doc: { id: number; type: string; shipmentId: number | null; counterpartyId: number | null; clientId: number | null; parentId: number | null; number: string | null },
 ): Promise<Partial<DocInsert>> {
-  if (!doc.dealId) return {};
-  const [deal] = await tx.select().from(deals).where(eq(deals.id, doc.dealId));
-  if (!deal) return {};
+  if (!doc.shipmentId) return {};
+  const [sh] = await tx.select().from(shipments).where(eq(shipments.id, doc.shipmentId));
+  if (!sh) return {};
   const spec = docSpec(doc.type)!;
   const patch: Partial<DocInsert> = {};
-  if (!doc.clientId && deal.clientId && doc.counterpartyId !== deal.clientId) patch.clientId = deal.clientId;
+  if (!doc.clientId && sh.clientId && doc.counterpartyId !== sh.clientId) patch.clientId = sh.clientId;
+  const nameOf = async (id: number) =>
+    (await tx.select({ name: counterparties.name }).from(counterparties).where(eq(counterparties.id, id)))[0]?.name ?? null;
 
   if (spec.party === "supplier" && doc.counterpartyId) {
-    if (!deal.supplierId) {
-      await tx.update(deals).set({ supplierId: doc.counterpartyId }).where(eq(deals.id, deal.id));
-      const [s] = await tx.select({ name: counterparties.name }).from(counterparties).where(eq(counterparties.id, doc.counterpartyId));
-      await addEvent(tx, deal.id, userId, "field_changed", "supplierId", null, s?.name ?? null);
+    if (!sh.supplierId) {
+      await tx.update(shipments).set({ supplierId: doc.counterpartyId }).where(eq(shipments.id, sh.id));
+      await addShipmentEvent(tx, sh.id, userId, "field", "supplierId", null, await nameOf(doc.counterpartyId));
     }
     if (!doc.parentId && doc.type !== "supplier_contract") {
       const contractId =
-        deal.supplierContractId ??
-        (await findActiveContract(tx, "supplier_contract", doc.counterpartyId, {
-          clientId: deal.scheme === "teu" ? deal.clientId : null,
-        }));
+        sh.supplierContractId ??
+        (await findActiveContract(tx, "supplier_contract", doc.counterpartyId, { clientId: sh.scheme === "teu" ? sh.clientId : null }));
       if (contractId) patch.parentId = contractId;
     }
   }
   if (spec.party === "contractor" && doc.counterpartyId) {
-    await tx.insert(dealParties).values({ dealId: deal.id, counterpartyId: doc.counterpartyId }).onConflictDoNothing();
+    await tx.insert(shipmentParties).values({ shipmentId: sh.id, counterpartyId: doc.counterpartyId }).onConflictDoNothing();
+    const [c] = await tx.select({ type: counterparties.contractorType }).from(counterparties).where(eq(counterparties.id, doc.counterpartyId));
+    if (c && CARRIER_TYPES.has(c.type ?? "")) {
+      const set: Partial<typeof shipments.$inferInsert> = {};
+      if (!sh.carrierId) set.carrierId = doc.counterpartyId;
+      if (doc.type === "contractor_invoice" && !sh.carrierInvoiceId && (sh.carrierId ?? doc.counterpartyId) === doc.counterpartyId) {
+        set.carrierInvoiceId = doc.id;
+      }
+      if (Object.keys(set).length) {
+        await tx.update(shipments).set(set).where(eq(shipments.id, sh.id));
+        if (set.carrierId) await addShipmentEvent(tx, sh.id, userId, "field", "carrierId", null, await nameOf(doc.counterpartyId));
+      }
+    }
   }
   return patch;
 }
 
 /** В сделке может быть только одно действующее поручение. */
-export async function assertSingleOrder(tx: DbOrTx, dealId: number, exceptId?: number) {
+export async function assertSingleOrder(tx: DbOrTx, shipmentId: number, exceptId?: number) {
   const [other] = await tx
     .select({ id: documents.id, number: documents.number })
     .from(documents)
     .where(
       and(
-        eq(documents.dealId, dealId),
+        eq(documents.shipmentId, shipmentId),
         eq(documents.type, "commission_order"),
         or(isNull(documents.status), ne(documents.status, "cancelled")),
         exceptId ? ne(documents.id, exceptId) : undefined,

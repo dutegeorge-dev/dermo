@@ -1,10 +1,10 @@
-/** Сделки: проверка полей, чтение с джойнами, журнал изменений, создание, автоподбор договоров. */
+/** Воронка продаж: проверка полей лида, чтение с джойнами, журнал изменений, создание. */
 
-import { and, asc, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { DEAL_FIELDS, type DealField, type FieldSpec } from "../../shared/deal-fields.ts";
-import { CLIENT_CONTRACT_BY_SCHEME, docSpec, type Scheme } from "../../shared/documents.ts";
+import { docSpec } from "../../shared/documents.ts";
 import type { DbOrTx } from "../db/client.ts";
 import { contacts, counterparties, dealEvents, deals, dealStatuses, documents, users } from "../db/schema.ts";
 import { audit } from "./audit.ts";
@@ -63,7 +63,6 @@ export async function parseField(tx: DbOrTx, field: DealField, value: unknown): 
     case "enum": {
       if (value === null || value === undefined || value === "") {
         if (field === "priority") return "medium";
-        if (field === "scheme") return "commission";
         return null;
       }
       if (!spec.values || !(String(value) in spec.values)) throw new HttpError(400, `${spec.label}: неизвестное значение`);
@@ -94,9 +93,9 @@ export async function parseField(tx: DbOrTx, field: DealField, value: unknown): 
   }
 }
 
-/** Совпадают ли старое и новое значение поля (numeric из БД приходит строкой «12.500»). */
+/** Совпадают ли старое и новое значение поля. */
 export function sameValue(field: DealField, before: unknown, after: unknown): boolean {
-  if (DEAL_FIELDS[field].kind === "number" && before != null && after != null) return Number(before) === Number(after);
+  void field;
   return JSON.stringify(before ?? null) === JSON.stringify(after ?? null);
 }
 
@@ -178,7 +177,6 @@ export async function getStage(tx: DbOrTx, key: string) {
 const assignee = alias(users, "assignee");
 const author = alias(users, "author");
 const client = alias(counterparties, "client");
-const supplier = alias(counterparties, "supplier");
 
 /** Колонки сделки для списков и карточки. */
 export const dealSelect = {
@@ -186,23 +184,10 @@ export const dealSelect = {
   number: deals.number,
   key: deals.key,
   title: deals.title,
-  scheme: deals.scheme,
   statusKey: deals.statusKey,
   outcome: deals.outcome,
   lostReason: deals.lostReason,
   product: deals.product,
-  hsCode: deals.hsCode,
-  weightKg: sql<number | null>`${deals.weightKg}::float8`,
-  volumeM3: sql<number | null>`${deals.volumeM3}::float8`,
-  pickupLocation: deals.pickupLocation,
-  deliveryLocation: deals.deliveryLocation,
-  goodsReadyDate: deals.goodsReadyDate,
-  route: deals.route,
-  contractParty: deals.contractParty,
-  exportLicense: deals.exportLicense,
-  certificates: deals.certificates,
-  certificateHolder: deals.certificateHolder,
-  chestnyZnak: deals.chestnyZnak,
   assigneeId: deals.assigneeId,
   assigneeName: assignee.name,
   dueDate: deals.dueDate,
@@ -215,10 +200,6 @@ export const dealSelect = {
   clientName: client.name,
   clientKind: client.kind,
   clientInn: client.inn,
-  supplierId: deals.supplierId,
-  supplierName: supplier.name,
-  clientContractId: deals.clientContractId,
-  supplierContractId: deals.supplierContractId,
   contactId: deals.contactId,
   contactName: contacts.name,
   contactPhone: contacts.phone,
@@ -229,6 +210,8 @@ export const dealSelect = {
   updatedAt: deals.updatedAt,
   closedAt: deals.closedAt,
   createdByName: author.name,
+  /** Сделки (отгрузки), выросшие из лида. */
+  shipmentCount: sql<number>`(select count(*)::int from shipments s where s.deal_id = ${deals.id})`,
 };
 
 export function dealQuery(tx: DbOrTx) {
@@ -238,13 +221,12 @@ export function dealQuery(tx: DbOrTx) {
     .leftJoin(assignee, eq(assignee.id, deals.assigneeId))
     .leftJoin(author, eq(author.id, deals.createdBy))
     .leftJoin(client, eq(client.id, deals.clientId))
-    .leftJoin(supplier, eq(supplier.id, deals.supplierId))
     .leftJoin(contacts, eq(contacts.id, deals.contactId))
     .$dynamic();
 }
 
-/** Колонки, по которым ищутся сделки (клиент и поставщик — через алиасы dealQuery). */
-export const dealSearchColumns = { client, supplier };
+/** Колонки, по которым ищутся лиды (клиент — через алиас dealQuery). */
+export const dealSearchColumns = { client };
 
 /** Позиция в конце колонки. */
 export async function endOfColumn(tx: DbOrTx, statusKey: string): Promise<number> {
@@ -261,57 +243,7 @@ export function outcomeForStage(isFinal: boolean, current: "won" | "lost" | null
   return isFinal ? { outcome: "won" as const, closedAt: new Date() } : { outcome: null, closedAt: null };
 }
 
-/** Действующий договор нужного типа с контрагентом: не аннулирован, не истёк, самый свежий. */
-export async function findActiveContract(
-  tx: DbOrTx,
-  type: string,
-  counterpartyId: number,
-  opts: { clientId?: number | null } = {},
-): Promise<number | null> {
-  const today = new Date().toISOString().slice(0, 10);
-  const rows = await tx
-    .select({ id: documents.id, clientId: documents.clientId })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.type, type),
-        eq(documents.counterpartyId, counterpartyId),
-        or(isNull(documents.status), ne(documents.status, "cancelled")),
-        or(isNull(documents.validUntil), sql`${documents.validUntil} >= ${today}`),
-      ),
-    )
-    .orderBy(desc(documents.date), desc(documents.id));
-  if (opts.clientId !== undefined) {
-    // Контракт клиента (ТЭУ) важнее нашего; наш — без клиента.
-    const own = rows.find((r) => r.clientId === opts.clientId) ?? rows.find((r) => r.clientId === null);
-    return own?.id ?? null;
-  }
-  return rows[0]?.id ?? null;
-}
-
-/**
- * Подставляет договор клиента и контракт поставщика, если они не выбраны вручную.
- * Возвращает, что подставил (для журнала).
- */
-export async function autoContracts(tx: DbOrTx, dealId: number): Promise<Partial<DealInsert>> {
-  const [deal] = await tx.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal) return {};
-  const patch: Partial<DealInsert> = {};
-  if (!deal.clientContractId && deal.clientId) {
-    const id = await findActiveContract(tx, CLIENT_CONTRACT_BY_SCHEME[deal.scheme as Scheme], deal.clientId);
-    if (id) patch.clientContractId = id;
-  }
-  if (!deal.supplierContractId && deal.supplierId) {
-    const id = await findActiveContract(tx, "supplier_contract", deal.supplierId, {
-      clientId: deal.scheme === "teu" ? deal.clientId : null,
-    });
-    if (id) patch.supplierContractId = id;
-  }
-  if (Object.keys(patch).length) await tx.update(deals).set(patch).where(eq(deals.id, dealId));
-  return patch;
-}
-
-/** Создание сделки: используется и формой, и загрузкой инвойса («новая сделка из документа»). */
+/** Создание лида в воронке. */
 export async function createDeal(
   tx: DbOrTx,
   userId: number | null,
@@ -331,7 +263,6 @@ export async function createDeal(
       createdBy: userId,
     })
     .returning({ id: deals.id, key: deals.key, number: deals.number, title: deals.title });
-  await autoContracts(tx, created.id);
   await addEvent(tx, created.id, userId, "created", null, null, stage.name);
   await audit(tx, {
     userId,

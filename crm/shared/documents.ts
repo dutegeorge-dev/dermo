@@ -210,6 +210,8 @@ export const DOC_TYPES = {
     group: "customs",
     party: null,
     validity: true,
+    // Позиции — на какие товары выдана: по ним сертификат виден в сделках с этим товаром.
+    items: true,
   },
   power_of_attorney: {
     label: "Доверенность",

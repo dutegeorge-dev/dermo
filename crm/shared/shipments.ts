@@ -99,4 +99,50 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
-export const shipmentLabel = (number: number) => `С-${String(number).padStart(3, "0")}`;
+/** Номер сделки — вторичен, основное имя — название груза. */
+export const shipmentLabel = (number: number) => `№ ${number}`;
+
+// ── Поля сделки ───────────────────────────────────────────────────────────
+
+export type ShipmentFieldKind = "text" | "longtext" | "number" | "date" | "enum" | "user" | "client" | "supplier" | "carrier" | "contact" | "document" | "deal";
+
+export type ShipmentFieldSpec = { label: string; kind: ShipmentFieldKind; values?: Record<string, string>; max?: number; required?: boolean };
+
+export const SCHEME_LABELS = { commission: "Комиссия", supply: "Поставка", teu: "ТЭУ" } as const;
+
+export const SHIPMENT_FIELDS = {
+  title: { label: "Название", kind: "text", max: 300, required: true },
+  scheme: { label: "Схема", kind: "enum", values: SCHEME_LABELS },
+  clientId: { label: "Клиент", kind: "client" },
+  contactId: { label: "Контакт", kind: "contact" },
+  supplierId: { label: "Поставщик", kind: "supplier" },
+  carrierId: { label: "Перевозчик", kind: "carrier" },
+  carrierInvoiceId: { label: "Инвойс перевозчика", kind: "document" },
+  clientContractId: { label: "Договор с клиентом", kind: "document" },
+  supplierContractId: { label: "Контракт с поставщиком", kind: "document" },
+  dealId: { label: "Лид из воронки", kind: "deal" },
+  assigneeId: { label: "Менеджер", kind: "user" },
+  containerNo: { label: "Номер контейнера", kind: "text", max: 20 },
+  hsCode: { label: "Код ТН ВЭД", kind: "text", max: 20 },
+  weightKg: { label: "Вес, кг", kind: "number" },
+  volumeM3: { label: "Объём, м³", kind: "number" },
+  transport: { label: "Транспорт", kind: "enum", values: TRANSPORTS },
+  pickupLocation: { label: "Откуда (Китай)", kind: "text", max: 300 },
+  deliveryLocation: { label: "Куда доставить", kind: "text", max: 300 },
+  depositDate: { label: "Депозит оплачен", kind: "date" },
+  exportLicense: { label: "Экспортная лицензия у поставщика", kind: "enum", values: { yes: "Есть", no: "Нет", we_arrange: "Оформляем сами" } },
+  certificates: { label: "Сертификаты", kind: "enum", values: { yes: "Есть", no: "Нет", in_progress: "Оформляем" } },
+  certificateHolder: { label: "Сертификат — на кого", kind: "text", max: 300 },
+  chestnyZnak: { label: "«Честный знак»", kind: "enum", values: { not_required: "Не требуется", required: "Нужна маркировка", applied: "Нанесена" } },
+  notes: { label: "Заметки", kind: "longtext", max: 20_000 },
+} as const satisfies Record<string, ShipmentFieldSpec>;
+
+export type ShipmentField = keyof typeof SHIPMENT_FIELDS;
+export const SHIPMENT_FIELD_NAMES = Object.keys(SHIPMENT_FIELDS) as ShipmentField[];
+
+/** Группы полей в карточке сделки. */
+export const SHIPMENT_FIELD_GROUPS: { title: string; fields: ShipmentField[] }[] = [
+  { title: "Груз", fields: ["containerNo", "hsCode", "weightKg", "volumeM3"] },
+  { title: "Маршрут", fields: ["transport", "pickupLocation", "deliveryLocation"] },
+  { title: "Разрешения и маркировка", fields: ["exportLicense", "certificates", "certificateHolder", "chestnyZnak"] },
+];

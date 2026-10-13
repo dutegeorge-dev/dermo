@@ -257,7 +257,6 @@ describe("CRM: сделки", () => {
     const created = await call(s, "POST", "/deals", {
       title: "Ламинат 2 фуры",
       product: "Ламинат LVT",
-      route: "auto",
       newClient: { name: "ООО Пол-Маркет", kind: "ooo", inn: "7701234567" },
       newContact: { name: "Сергей", phone: "+7 900 123-45-67", messenger: "telegram" },
     });
@@ -271,9 +270,11 @@ describe("CRM: сделки", () => {
     assert.equal(deal.deal.contactPhone, "+7 900 123-45-67");
     assert.equal(deal.deal.assigneeName, "Иван", "исполнитель по умолчанию — автор");
 
-    const patch = await call(s, "PATCH", `/deals/${key}`, { weightKg: "1 250,5", exportLicense: "we_arrange", labels: ["срочно", "срочно", " LVT "] });
-    assert.deepEqual(patch.json().changed.sort(), ["exportLicense", "labels", "weightKg"]);
-    assert.equal((await call(s, "PATCH", `/deals/${key}`, { route: "boat" })).statusCode, 400);
+    const patch = await call(s, "PATCH", `/deals/${key}`, { product: "Ламинат LVT 5 мм", priority: "high", labels: ["срочно", "срочно", " LVT "] });
+    assert.deepEqual(patch.json().changed.sort(), ["labels", "priority", "product"]);
+    assert.equal((await call(s, "PATCH", `/deals/${key}`, { priority: "boat" })).statusCode, 400);
+    // Поля груза и поставщика — не в воронке, а в сделке: игнорируются.
+    assert.deepEqual((await call(s, "PATCH", `/deals/${key}`, { weightKg: 100, supplierId: 1 })).json().changed, []);
 
     // Перенос на завершающий этап → успешно; обратно → снова в работе.
     assert.equal((await call(s, "POST", `/deals/${key}/move`, { statusKey: "done" })).statusCode, 200);
@@ -282,14 +283,13 @@ describe("CRM: сделки", () => {
     await call(s, "POST", `/deals/${key}/move`, { statusKey: "offer" });
     deal = (await call(s, "GET", `/deals/${key}`)).json();
     assert.equal(deal.deal.outcome, null);
-    assert.equal(deal.deal.weightKg, 1250.5);
-    assert.equal((await call(s, "PATCH", `/deals/${key}`, { weightKg: 1250.5 })).json().changed.length, 0);
+    assert.equal((await call(s, "PATCH", `/deals/${key}`, { product: "Ламинат LVT 5 мм" })).json().changed.length, 0);
     assert.deepEqual(deal.deal.labels, ["срочно", "LVT"]);
 
     const kinds = (deal.events as { kind: string; field: string | null; newValue: unknown }[]).map((e) => e.kind);
     assert.ok(kinds.includes("created") && kinds.includes("status_changed") && kinds.includes("field_changed"));
-    const lic = deal.events.find((e: { field: string | null }) => e.field === "exportLicense");
-    assert.equal(lic.newValue, "Оформляем сами");
+    const prio = deal.events.find((e: { field: string | null }) => e.field === "priority");
+    assert.equal(prio.newValue, "Высокий");
 
     // Порядок в колонке: вторая сделка встаёт перед первой.
     const second = (await call(s, "POST", "/deals", { title: "Мониторы", statusKey: "offer" })).json().deal.key;
@@ -356,7 +356,7 @@ describe("CRM: сделки", () => {
   });
 });
 
-describe("Документы: договор → инвойс → сделка → поручение", () => {
+describe("Документы: договор → инвойс → сделка (отгрузка) → поручение", () => {
   test("полная цепочка, план/факт, оплаты, товары, связи", async () => {
     const s = await login("ivan", "managerpass");
     const admin = await login("admin", "adminpass1");
@@ -398,18 +398,18 @@ describe("Документы: договор → инвойс → сделка �
         { name: "Artificial grass", quantity: "14 600", unit: "кв. м.", price: "9,49" },
         { name: "Glue", quantity: 10, unit: "шт.", price: 50, amount: 500 },
       ],
-      newDeal: { clientId: client.id },
+      newShipment: { clientId: client.id, title: "Трава зелёная 30 мм" },
     });
     assert.equal(inv.statusCode, 200, inv.body);
-    const dealKey = inv.json().deal.key as string;
+    const no = inv.json().shipment.number as number;
     const invoiceId = inv.json().document.id as number;
 
-    let deal = (await call(s, "GET", `/deals/${dealKey}`)).json();
-    assert.equal(deal.deal.title, "Artificial grass");
-    assert.equal(deal.deal.clientId, client.id);
-    assert.equal(deal.deal.supplierId, supplier.id, "поставщик подставился из инвойса");
-    assert.equal(deal.deal.clientContractId, commission.id, "договор комиссии подобран сам");
-    assert.equal(deal.deal.supplierContractId, contract.id, "контракт поставщика подобран сам");
+    let deal = (await call(s, "GET", `/shipments/${no}`)).json();
+    assert.equal(deal.shipment.title, "Трава зелёная 30 мм");
+    assert.equal(deal.shipment.clientId, client.id);
+    assert.equal(deal.shipment.supplierId, supplier.id, "поставщик подставился из инвойса");
+    assert.equal(deal.shipment.clientContractId, commission.id, "договор комиссии подобран сам");
+    assert.equal(deal.shipment.supplierContractId, contract.id, "контракт поставщика подобран сам");
     const invoice = (await call(s, "GET", `/documents/${invoiceId}`)).json();
     assert.equal(invoice.document.parentId, contract.id, "инвойс привязан к контракту");
     assert.equal(invoice.document.amount, 139054, "сумма = сумма позиций");
@@ -417,10 +417,10 @@ describe("Документы: договор → инвойс → сделка �
     assert.equal(invoice.items[0].productName, "Artificial grass", "товар создан в справочнике");
 
     // Поручение: № 01 по договору комиссии, товары из инвойса, смета.
-    const order = await call(s, "POST", `/deals/${dealKey}/order`);
+    const order = await call(s, "POST", `/shipments/${no}/order`);
     assert.equal(order.statusCode, 200, order.body);
     assert.equal(order.json().document.number, "01");
-    assert.equal((await call(s, "POST", `/deals/${dealKey}/order`)).statusCode, 409, "одна сделка — одно поручение");
+    assert.equal((await call(s, "POST", `/shipments/${no}/order`)).statusCode, 409, "одна сделка — одно поручение");
     const orderId = order.json().document.id as number;
     const orderDoc = (await call(s, "GET", `/documents/${orderId}`)).json();
     assert.deepEqual(orderDoc.items.map((i: { batchNo: string }) => i.batchNo), ["1", "2"]);
@@ -437,13 +437,20 @@ describe("Документы: договор → инвойс → сделка �
     assert.equal(docx.rawPayload.subarray(0, 2).toString(), "PK");
 
     // Счёт перевозчика и ДТ → факт; оплаты.
-    const carrierInv = (await call(s, "POST", "/documents", { type: "contractor_invoice", number: "TR-1", counterpartyId: carrier.id, dealId: deal.deal.id, currency: "CNY", amount: 61000 })).json().document;
-    await call(s, "POST", "/documents", { type: "customs_declaration", number: "10013160/011026/0000001", dealId: deal.deal.id, currency: "RUB", amount: 900000 });
+    const carrierInv = (await call(s, "POST", "/documents", { type: "contractor_invoice", number: "TR-1", counterpartyId: carrier.id, shipmentId: deal.shipment.id, currency: "CNY", amount: 61000 })).json().document;
+    await call(s, "POST", "/documents", { type: "customs_declaration", number: "10013160/011026/0000001", shipmentId: deal.shipment.id, currency: "RUB", amount: 900000 });
+    // Сертификат на товар без привязки к сделке — всё равно виден в ней по товару.
+    await call(s, "POST", "/documents", { type: "conformity", number: "ЕАЭС RU Д-CN.1", clientId: client.id, validUntil: "2028-01-01", items: [{ name: "artificial grass" }] });
     await call(s, "PATCH", `/documents/${invoiceId}`, { paymentStatus: "partial", paidAmount: 41716.2 });
     await call(s, "PATCH", `/documents/${carrierInv.id}`, { paymentStatus: "paid" });
 
-    deal = (await call(s, "GET", `/deals/${dealKey}`)).json();
+    deal = (await call(s, "GET", `/shipments/${no}`)).json();
     assert.ok(deal.parties.some((p: { id: number }) => p.id === carrier.id), "перевозчик попал в участники сделки");
+    assert.equal(deal.shipment.carrierId, carrier.id, "перевозчик сделки — из счёта");
+    assert.equal(deal.shipment.carrierInvoiceId, carrierInv.id, "инвойс перевозчика — из счёта");
+    assert.deepEqual(deal.items.map((i: { name: string }) => i.name), ["Artificial grass", "Glue"]);
+    assert.equal(deal.certificates.length, 1);
+    assert.equal(deal.certificates[0].number, "ЕАЭС RU Д-CN.1");
     const rows = Object.fromEntries((deal.finance.rows as { category: string; plan: unknown; fact: { amount: number; paid: number }[] }[]).map((r) => [r.category, r]));
     assert.deepEqual(rows.transport.plan, { amount: 60050, currency: "CNY" });
     assert.deepEqual(rows.transport.fact, [{ currency: "CNY", amount: 61000, paid: 61000 }]);
@@ -501,14 +508,15 @@ describe("Сделки (отгрузки) и календарь", () => {
     const supplier = await mk("supplier", "Test Supplier Co");
 
     // Перевозчик на месте клиента — ошибка.
-    const wrong = await call(s, "POST", "/shipments", { clientId: carrier.id });
+    const wrong = await call(s, "POST", "/shipments", { title: "X", clientId: carrier.id });
     assert.equal(wrong.statusCode, 400, wrong.body);
+    assert.equal((await call(s, "POST", "/shipments", { clientId: client.id })).statusCode, 400, "без названия груза нельзя");
 
     const created = await call(s, "POST", "/shipments", {
       clientId: client.id,
       supplierId: supplier.id,
       carrierId: carrier.id,
-      cargo: "Искусственная трава",
+      title: "Линолеум коричневый",
       transport: "rail",
       depositDate: "2026-10-01",
       milestones: { ready: { plan: "2026-10-10" }, loading: { plan: "2026-10-14" }, departure: { plan: "2026-10-16" }, arrival: { plan: "2026-11-01" } },
@@ -516,7 +524,8 @@ describe("Сделки (отгрузки) и календарь", () => {
     assert.equal(created.statusCode, 200, created.body);
     const sh = created.json().shipment;
     assert.equal(sh.stage, 1);
-    assert.equal(sh.label, "С-001");
+    assert.equal(sh.title, "Линолеум коричневый");
+    assert.equal(sh.label, `№ ${sh.number}`);
     assert.equal(sh.nextDate, "2026-10-10");
 
     // Производство окончено → этап 2, флажки остатка и фрахта ждут.
@@ -560,15 +569,32 @@ describe("Сделки (отгрузки) и календарь", () => {
     // Поиск по контейнеру и номеру.
     const found = (await call(s, "GET", "/search?q=TGBU12")).json().shipments;
     assert.equal(found[0].number, sh.number);
-    assert.equal((await call(s, "GET", "/shipments?q=С-001")).json().shipments.length, 1);
+    assert.equal((await call(s, "GET", "/shipments?q=линолеум")).json().shipments.length, 1);
+    assert.equal((await call(s, "GET", `/shipments?q=${sh.number}`)).json().shipments[0].number, sh.number);
 
     // Карточка с историей; закрытие вручную убирает из календаря.
     const card = (await call(s, "GET", `/shipments/${sh.number}`)).json();
     assert.ok(card.events.some((e: { kind: string; field: string }) => e.kind === "plan" && e.field === "arrival"));
     assert.ok(card.events.some((e: { kind: string }) => e.kind === "stage"));
+    // Доска: перенос на этап 5 ставит факты пройденных ключевых дат, обратно на 4 — снимает.
+    res = await call(s, "POST", `/shipments/${sh.number}/stage`, { stage: 5 });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(res.json().shipment.stage, 5);
+    assert.ok(res.json().shipment.milestones.arrival.fact);
+    res = await call(s, "POST", `/shipments/${sh.number}/stage`, { stage: 4 });
+    assert.equal(res.json().shipment.stage, 4);
+    assert.equal(res.json().shipment.milestones.arrival.fact, null);
+
+    // Поля груза правятся в сделке, с историей.
+    res = await call(s, "PATCH", `/shipments/${sh.number}`, { hsCode: "5904100000", weightKg: "18 500", certificates: "in_progress" });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(res.json().shipment.weightKg, 18500);
+    assert.equal((await call(s, "PATCH", `/shipments/${sh.number}`, { certificates: "maybe" })).statusCode, 400);
+
     await call(s, "POST", `/shipments/${sh.number}/status`, { status: "closed" });
-    assert.equal((await call(s, "GET", "/calendar")).json().events.length, 0);
-    assert.equal((await call(s, "GET", "/shipments")).json().shipments.length, 0);
-    assert.equal((await call(s, "GET", "/shipments?status=closed")).json().shipments.length, 1);
+    const ours = (list: { shipment?: { number: number }; number?: number }[]) => list.filter((e) => (e.shipment?.number ?? e.number) === sh.number);
+    assert.equal(ours((await call(s, "GET", "/calendar")).json().events).length, 0);
+    assert.equal(ours((await call(s, "GET", "/shipments")).json().shipments).length, 0);
+    assert.equal(ours((await call(s, "GET", "/shipments?status=closed")).json().shipments).length, 1);
   });
 });

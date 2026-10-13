@@ -143,7 +143,7 @@ export function DocumentPage() {
               </Row>
             )}
             {d.clientId && <Row label="Клиент"><Link to={`/clients/${d.clientId}`} className="link">{d.clientName}</Link></Row>}
-            {d.dealKey && <Row label="Сделка"><Link to={`/deals/${d.dealKey}`} className="link font-mono">{d.dealKey}</Link></Row>}
+            {d.shipmentNumber && <Row label="Сделка"><Link to={`/shipments/${d.shipmentNumber}`} className="link">{d.shipmentTitle || `№ ${d.shipmentNumber}`}</Link></Row>}
             {d.parentId && <Row label="Договор"><Link to={`/documents/${d.parentId}`} className="link">{data.parentLabel}</Link></Row>}
             {d.amount !== null && <Row label="Сумма"><b className="tabular-nums">{formatMoney(d.amount, d.currency)}</b></Row>}
             {spec?.payable && <Row label="Оплата"><PaymentControl key={`${d.paymentStatus}-${d.paidAmount}`} data={data} onSaved={refresh} /></Row>}
@@ -262,7 +262,7 @@ export function DocumentPage() {
           onConfirm={async () => {
             await api(`/documents/${docId}`, { method: "DELETE" });
             await queryClient.invalidateQueries();
-            navigate(d.dealKey ? `/deals/${d.dealKey}` : "/documents");
+            navigate(d.shipmentNumber ? `/shipments/${d.shipmentNumber}` : "/documents");
           }}
           onClose={() => setDeleting(false)}
         />

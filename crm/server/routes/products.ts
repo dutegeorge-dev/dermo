@@ -4,7 +4,7 @@ import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import { db } from "../db/client.ts";
-import { counterparties, deals, documentItems, documents, products } from "../db/schema.ts";
+import { counterparties, documentItems, documents, products, shipments } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
 
@@ -43,8 +43,8 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
           where i.product_id = "products"."id" and d.type = 'supplier_invoice' order by d.date desc nulls last, d.id desc limit 1)`,
         supplierCount: sql<number>`(select count(distinct d.counterparty_id)::int from document_items i join documents d on d.id = i.document_id
           where i.product_id = "products"."id" and d.type = 'supplier_invoice')`,
-        clientCount: sql<number>`(select count(distinct coalesce(d.client_id, dl.client_id))::int from document_items i
-          join documents d on d.id = i.document_id left join deals dl on dl.id = d.deal_id
+        clientCount: sql<number>`(select count(distinct coalesce(d.client_id, sh.client_id))::int from document_items i
+          join documents d on d.id = i.document_id left join shipments sh on sh.id = d.shipment_id
           where i.product_id = "products"."id")`,
       })
       .from(products)
@@ -77,9 +77,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         currency: documents.currency,
         counterpartyId: documents.counterpartyId,
         counterpartyName: counterparties.name,
-        clientId: sql<number | null>`coalesce(${documents.clientId}, ${deals.clientId})`,
-        clientName: sql<string | null>`(select c.name from counterparties c where c.id = coalesce(${documents.clientId}, ${deals.clientId}))`,
-        dealKey: deals.key,
+        clientId: sql<number | null>`coalesce(${documents.clientId}, ${shipments.clientId})`,
+        clientName: sql<string | null>`(select c.name from counterparties c where c.id = coalesce(${documents.clientId}, ${shipments.clientId}))`,
+        shipmentNumber: shipments.number,
+        shipmentTitle: shipments.title,
         quantity: sql<number | null>`${documentItems.quantity}::float8`,
         unit: documentItems.unit,
         price: sql<number | null>`${documentItems.price}::float8`,
@@ -88,7 +89,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       .from(documentItems)
       .innerJoin(documents, eq(documents.id, documentItems.documentId))
       .leftJoin(counterparties, eq(counterparties.id, documents.counterpartyId))
-      .leftJoin(deals, eq(deals.id, documents.dealId))
+      .leftJoin(shipments, eq(shipments.id, documents.shipmentId))
       .where(eq(documentItems.productId, id))
       .orderBy(desc(documents.date), desc(documents.id))
       .limit(500);

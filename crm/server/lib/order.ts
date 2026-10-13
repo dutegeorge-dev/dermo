@@ -12,7 +12,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { type CostLine, defaultCostLines } from "../../shared/documents.ts";
 import { CRM_ROOT } from "../config.ts";
 import type { DbOrTx } from "../db/client.ts";
-import { counterparties, deals, documentItems, documents } from "../db/schema.ts";
+import { counterparties, documentItems, documents, shipments } from "../db/schema.ts";
 import { HttpError } from "./http.ts";
 import { getCompany } from "./settings.ts";
 
@@ -27,15 +27,15 @@ export type OrderData = {
 };
 
 /** Черновик поручения по сделке: товары из инвойсов поставщика, смета — стандартная. */
-export async function buildOrderDraft(tx: DbOrTx, dealId: number) {
-  const [deal] = await tx.select().from(deals).where(eq(deals.id, dealId));
-  if (!deal) throw new HttpError(404, "Сделка не найдена");
-  if (deal.scheme !== "commission") throw new HttpError(400, "Поручение оформляется по договору комиссии — у сделки другая схема");
-  if (!deal.clientId) throw new HttpError(400, "Укажите в сделке клиента");
-  if (!deal.clientContractId) {
+export async function buildOrderDraft(tx: DbOrTx, shipmentId: number) {
+  const [shipment] = await tx.select().from(shipments).where(eq(shipments.id, shipmentId));
+  if (!shipment) throw new HttpError(404, "Сделка не найдена");
+  if (shipment.scheme !== "commission") throw new HttpError(400, "Поручение оформляется по договору комиссии — у сделки другая схема");
+  if (!shipment.clientId) throw new HttpError(400, "Укажите в сделке клиента");
+  if (!shipment.clientContractId) {
     throw new HttpError(400, "Нет договора комиссии с клиентом. Загрузите договор комиссии клиента — он подтянется в сделку сам.");
   }
-  const [contract] = await tx.select().from(documents).where(eq(documents.id, deal.clientContractId));
+  const [contract] = await tx.select().from(documents).where(eq(documents.id, shipment.clientContractId));
   if (!contract || contract.type !== "commission_contract") {
     throw new HttpError(400, "В сделке выбран не договор комиссии");
   }
@@ -43,7 +43,7 @@ export async function buildOrderDraft(tx: DbOrTx, dealId: number) {
   const invoices = await tx
     .select()
     .from(documents)
-    .where(and(eq(documents.dealId, dealId), eq(documents.type, "supplier_invoice")))
+    .where(and(eq(documents.shipmentId, shipmentId), eq(documents.type, "supplier_invoice")))
     .orderBy(asc(documents.date), asc(documents.id));
   const items = invoices.length
     ? await tx
@@ -60,17 +60,17 @@ export async function buildOrderDraft(tx: DbOrTx, dealId: number) {
 
   const costs = defaultCostLines(currency);
   costs[0].amount = goodsTotal ? Math.round(goodsTotal * 100) / 100 : null;
-  costs[1].name = `Оплата транспорта по маршруту ${[deal.pickupLocation, deal.deliveryLocation].filter(Boolean).join(" - ")}`.trim();
+  costs[1].name = `Оплата транспорта по маршруту ${[shipment.pickupLocation, shipment.deliveryLocation].filter(Boolean).join(" - ")}`.trim();
 
   const data: OrderData = {
     city: company.city || "г. Красногорск",
     incoterms: first.incoterms ?? "",
     paymentTerms: first.paymentTerms ?? "",
-    deliveryPoint: deal.deliveryLocation ?? "",
+    deliveryPoint: shipment.deliveryLocation ?? "",
     costs,
   };
   return {
-    deal,
+    shipment,
     contract,
     currency,
     amount: goodsTotal ? Math.round(goodsTotal * 100) / 100 : null,

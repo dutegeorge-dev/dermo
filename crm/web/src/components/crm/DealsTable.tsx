@@ -2,7 +2,7 @@
 
 import { Link, useLocation } from "react-router";
 
-import { PRIORITIES, ROUTES } from "../../../../shared/deal-fields.ts";
+import { PRIORITIES } from "../../../../shared/deal-fields.ts";
 import type { Deal, Stage } from "../../lib/types.ts";
 import { formatShortDate, isOverdue, StageChip } from "./common.tsx";
 
@@ -40,7 +40,7 @@ export function DealsTable({ deals, stages, sort, onSort }: { deals: Deal[]; sta
             <th className="px-3 py-2 font-medium">Исполнитель</th>
             <Th id="dueDate" label="Срок" sort={sort} onSort={onSort} />
             <Th id="priority" label="Приоритет" sort={sort} onSort={onSort} />
-            <th className="px-3 py-2 font-medium">Маршрут</th>
+            <th className="px-3 py-2 font-medium">Сделки</th>
             <Th id="updatedAt" label="Изменена" sort={sort} onSort={onSort} />
           </tr>
         </thead>
@@ -64,7 +64,7 @@ export function DealsTable({ deals, stages, sort, onSort }: { deals: Deal[]; sta
                   {formatShortDate(d.dueDate) || <span className="muted">—</span>}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">{PRIORITIES[d.priority]}</td>
-                <td className="whitespace-nowrap px-3 py-2">{d.route ? ROUTES[d.route as keyof typeof ROUTES] : <span className="muted">—</span>}</td>
+                <td className="whitespace-nowrap px-3 py-2">{d.shipmentCount > 0 ? <span className="text-xs text-green-700 dark:text-green-400">сделок: {d.shipmentCount}</span> : <span className="muted">—</span>}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs muted">{new Date(d.updatedAt).toLocaleDateString("ru-RU")}</td>
               </tr>
             );

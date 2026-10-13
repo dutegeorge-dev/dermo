@@ -53,7 +53,7 @@ export type CallQa = { q: string; a: string };
 export type CallTopic = { id: string; title: string; ask: string[]; qa: CallQa[]; updatedAt?: string };
 
 export type SearchResult = {
-  shipments: { number: number; containerNo: string | null; cargo: string; client: string | null; status: string; stage: number }[];
+  shipments: { number: number; containerNo: string | null; title: string; client: string | null; status: string; stage: number }[];
   deals: { key: string; title: string; client: string | null; status: string; outcome: string | null }[];
   clients: { id: number; name: string; inn: string | null; role: CounterpartyRole }[];
   documents: { id: number; type: string; number: string | null; date: string | null; party: string | null }[];
@@ -71,27 +71,10 @@ export type Deal = {
   number: number;
   key: string;
   title: string;
-  scheme: "commission" | "supply" | "teu";
-  supplierId: number | null;
-  supplierName: string | null;
-  clientContractId: number | null;
-  supplierContractId: number | null;
   statusKey: string;
   outcome: "won" | "lost" | null;
   lostReason: string | null;
   product: string | null;
-  hsCode: string | null;
-  weightKg: number | null;
-  volumeM3: number | null;
-  pickupLocation: string | null;
-  deliveryLocation: string | null;
-  goodsReadyDate: string | null;
-  route: string | null;
-  contractParty: string | null;
-  exportLicense: string | null;
-  certificates: string | null;
-  certificateHolder: string | null;
-  chestnyZnak: string | null;
   assigneeId: number | null;
   assigneeName: string | null;
   dueDate: string | null;
@@ -114,6 +97,7 @@ export type Deal = {
   updatedAt: string;
   closedAt: string | null;
   createdByName: string | null;
+  shipmentCount: number;
 };
 
 export type DealComment = { id: number; body: string; authorId: number | null; authorName: string | null; createdAt: string };
@@ -145,7 +129,7 @@ export type DealDocument = {
   date: string | null;
   seqNo: number | null;
   parentId: number | null;
-  dealId: number | null;
+  shipmentId: number | null;
   counterpartyId: number | null;
   counterpartyName: string | null;
   contractorType: string | null;
@@ -164,9 +148,8 @@ export type DealResponse = {
   comments: DealComment[];
   events: DealEvent[];
   attachments: Attachment[];
-  parties: DealParty[];
-  documents: DealDocument[];
-  finance: { orderId: number | null; rows: FinanceRow[]; clientInvoices: Money[] };
+  /** Сделки (отгрузки), выросшие из лида. */
+  shipments: { number: number; title: string; status: string; stage: number; containerNo: string | null }[];
 };
 
 export type CounterpartyRole = "client" | "supplier" | "contractor";
@@ -222,8 +205,9 @@ export type DocumentRow = {
   counterpartyRole: CounterpartyRole | null;
   clientId: number | null;
   clientName: string | null;
-  dealId: number | null;
-  dealKey: string | null;
+  shipmentId: number | null;
+  shipmentNumber: number | null;
+  shipmentTitle: string | null;
   parentId: number | null;
   parentNumber: string | null;
   parentType: string | null;
@@ -285,7 +269,8 @@ export type ProductLine = {
   counterpartyName: string | null;
   clientId: number | null;
   clientName: string | null;
-  dealKey: string | null;
+  shipmentNumber: number | null;
+  shipmentTitle: string | null;
   quantity: number | null;
   unit: string | null;
   price: number | null;
@@ -314,11 +299,37 @@ export type Shipment = {
   id: number;
   number: number;
   label: string;
+  title: string;
   status: "active" | "closed" | "cancelled";
   stage: number;
+  scheme: "commission" | "supply" | "teu";
+  clientId: number | null;
+  contactId: number | null;
+  supplierId: number | null;
+  carrierId: number | null;
+  carrierInvoiceId: number | null;
+  clientContractId: number | null;
+  supplierContractId: number | null;
+  dealId: number | null;
+  assigneeId: number | null;
+  containerNo: string | null;
+  hsCode: string | null;
+  weightKg: number | null;
+  volumeM3: number | null;
+  transport: string | null;
+  pickupLocation: string | null;
+  deliveryLocation: string | null;
+  depositDate: string | null;
+  exportLicense: string | null;
+  certificates: string | null;
+  certificateHolder: string | null;
+  chestnyZnak: string | null;
+  notes: string;
   client: Ref | null;
+  contact: { id: number; name: string; phone: string | null; messenger: string | null; messengerHandle: string | null; email: string | null } | null;
   supplier: Ref | null;
   carrier: Ref | null;
+  assignee: Ref | null;
   carrierInvoice: {
     id: number;
     number: string | null;
@@ -328,19 +339,49 @@ export type Shipment = {
     paymentStatus: "unpaid" | "partial" | "paid" | null;
   } | null;
   deal: { id: number; key: string; title: string } | null;
-  containerNo: string | null;
-  cargo: string;
-  transport: string | null;
-  route: string | null;
-  depositDate: string | null;
   flags: Record<string, string>;
-  notes: string;
+  documentCount: number;
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
   milestones: Record<string, { plan: string | null; fact: string | null }>;
   nextDate: string | null;
   pendingFlags: string[];
+};
+
+export type ShipmentItem = {
+  documentId: number;
+  type: string;
+  currency: string | null;
+  productId: number | null;
+  productName: string | null;
+  name: string;
+  hsCode: string | null;
+  quantity: number | null;
+  unit: string | null;
+  price: number | null;
+  amount: number | null;
+};
+
+export type ShipmentCertificate = {
+  id: number;
+  number: string | null;
+  date: string | null;
+  validUntil: string | null;
+  status: string | null;
+  holder: string | null;
+  products: string[];
+  fileCount: number;
+};
+
+export type ShipmentResponse = {
+  shipment: Shipment;
+  events: ShipmentEvent[];
+  parties: DealParty[];
+  documents: DealDocument[];
+  finance: { orderId: number | null; rows: FinanceRow[]; clientInvoices: Money[] };
+  items: ShipmentItem[];
+  certificates: ShipmentCertificate[];
 };
 
 export type ShipmentEvent = {
@@ -362,5 +403,5 @@ export type CalendarEvent = {
   done: boolean;
   payment: boolean;
   milestone: string | null;
-  shipment: { number: number; label: string; stage: number; containerNo: string | null; cargo: string; client: string | null; carrier: string | null };
+  shipment: { number: number; label: string; title: string; stage: number; containerNo: string | null; client: string | null; carrier: string | null };
 };

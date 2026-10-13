@@ -124,7 +124,7 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
   /** Файл документа. ?label=original|signed — как прислали / подписанный скан. */
   app.post("/documents/:id/files", async (request) => {
     const id = intParam((request.params as { id: string }).id);
-    const [doc] = await db.select({ id: documents.id, dealId: documents.dealId }).from(documents).where(eq(documents.id, id));
+    const [doc] = await db.select({ id: documents.id }).from(documents).where(eq(documents.id, id));
     if (!doc) throw new HttpError(404, "Документ не найден");
     const raw = (request.query as { label?: string }).label;
     const label = raw === "signed" || raw === "original" ? raw : null;

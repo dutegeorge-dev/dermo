@@ -5,15 +5,16 @@ import type { FastifyInstance } from "fastify";
 
 import { DOC_GROUPS, DOC_TYPES, type DocGroup, docSpec, PAYMENT_STATUSES } from "../../shared/documents.ts";
 import { db } from "../db/client.ts";
-import { attachments, counterparties, deals, documents, users } from "../db/schema.ts";
+import { attachments, documents, users } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
-import { addEvent, createDeal, documentLabel } from "../lib/deals.ts";
+import { documentLabel } from "../lib/deals.ts";
+import { addShipmentEvent, createShipment } from "../lib/shipments.ts";
 import {
   assertSingleOrder,
   documentItemsOf,
   documentListAliases,
   documentListQuery,
-  linkToDeal,
+  linkToShipment,
   nextSeqNo,
   pad2,
   parseDocumentFields,
@@ -31,7 +32,7 @@ async function getDocument(id: number) {
 export async function documentRoutes(app: FastifyInstance): Promise<void> {
   /**
    * Реестр. Фильтры: type (через запятую), group, counterparty, client (документы клиента —
-   * и где он сторона, и где указан клиентом), deal, parent, payment, expiring (дней), q.
+   * и где он сторона, и где указан клиентом), shipment, parent, payment, expiring (дней), q.
    */
   app.get("/documents", async (request) => {
     const q = request.query as Record<string, string | undefined>;
@@ -48,7 +49,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       const id = Number(q.client);
       filters.push(or(eq(documents.clientId, id), eq(documents.counterpartyId, id))!);
     }
-    if (q.deal && Number(q.deal) > 0) filters.push(eq(documents.dealId, Number(q.deal)));
+    if (q.shipment && Number(q.shipment) > 0) filters.push(eq(documents.shipmentId, Number(q.shipment)));
     if (q.parent && Number(q.parent) > 0) filters.push(eq(documents.parentId, Number(q.parent)));
     if (q.payment && q.payment in PAYMENT_STATUSES) filters.push(eq(documents.paymentStatus, q.payment as keyof typeof PAYMENT_STATUSES));
     if (q.payment === "debt") filters.push(inArray(documents.paymentStatus, ["unpaid", "partial"]));
@@ -122,7 +123,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
   /**
    * Новый документ. Дополнительно:
    *   items — позиции (товары находятся или создаются в справочнике);
-   *   newDeal: { clientId, title?, scheme? } — создать сделку и привязать документ к ней.
+   *   newShipment: { clientId, title, scheme? } — создать сделку и привязать документ к ней.
    */
   app.post("/documents", async (request) => {
     const user = currentUser(request);
@@ -135,36 +136,29 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       const fields = await parseDocumentFields(tx, input, type);
 
       // Новая сделка из документа (обычно — из инвойса поставщика).
-      let createdDealKey: string | null = null;
-      if (!fields.dealId && input.newDeal && typeof input.newDeal === "object") {
-        const nd = input.newDeal as { clientId?: unknown; title?: unknown; scheme?: unknown };
-        const clientId = nd.clientId ? Number(nd.clientId) : null;
-        if (clientId) {
-          const [c] = await tx.select({ id: counterparties.id }).from(counterparties).where(eq(counterparties.id, clientId));
-          if (!c) throw new HttpError(400, "Клиент не найден");
-        }
+      let created: { number: number } | null = null;
+      if (!fields.shipmentId && input.newShipment && typeof input.newShipment === "object") {
+        const ns = input.newShipment as { clientId?: unknown; title?: unknown; scheme?: unknown };
         const firstItem = Array.isArray(input.items) ? (input.items[0] as { name?: string } | undefined)?.name : undefined;
         const title =
-          (typeof nd.title === "string" && nd.title.trim()) ||
-          firstItem ||
-          `${spec.label}${fields.number ? ` № ${fields.number}` : ""}`;
-        const scheme = nd.scheme === "supply" || nd.scheme === "teu" ? nd.scheme : "commission";
-        const deal = await createDeal(
+          (typeof ns.title === "string" && ns.title.trim()) || firstItem || `${spec.label}${fields.number ? ` № ${fields.number}` : ""}`;
+        const sh = await createShipment(
           tx,
-          user.id,
           {
             title: String(title).slice(0, 300),
-            scheme,
-            clientId,
+            scheme: ns.scheme === "supply" || ns.scheme === "teu" ? ns.scheme : "commission",
+            clientId: ns.clientId ?? null,
             supplierId: spec.party === "supplier" ? (fields.counterpartyId ?? null) : null,
+            depositDate: new Date().toISOString().slice(0, 10),
           },
-          { ip: request.ip },
+          user.id,
         );
-        fields.dealId = deal.id;
-        createdDealKey = deal.key;
+        await audit(tx, { userId: user.id, action: "create", entityType: "shipment", entityId: sh.number, summary: `Создал сделку «${sh.title}» из документа`, ip: request.ip });
+        fields.shipmentId = sh.id;
+        created = { number: sh.number };
       }
 
-      if (type === "commission_order" && fields.dealId) await assertSingleOrder(tx, fields.dealId);
+      if (type === "commission_order" && fields.shipmentId) await assertSingleOrder(tx, fields.shipmentId);
       if (spec.numberedInParent && fields.parentId && !fields.seqNo) {
         fields.seqNo = await nextSeqNo(tx, fields.parentId, type);
         if (!fields.number) fields.number = pad2(fields.seqNo);
@@ -182,11 +176,11 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
         const total = await replaceItems(tx, user.id, doc.id, input.items);
         if (total !== null && fields.amount == null) patch.amount = String(total);
       }
-      Object.assign(patch, await linkToDeal(tx, user.id, doc));
+      Object.assign(patch, await linkToShipment(tx, user.id, doc));
       if (Object.keys(patch).length) await tx.update(documents).set(patch).where(eq(documents.id, doc.id));
 
       const label = await documentLabel(tx, doc.id);
-      if (doc.dealId) await addEvent(tx, doc.dealId, user.id, "document_added", null, null, label);
+      if (doc.shipmentId) await addShipmentEvent(tx, doc.shipmentId, user.id, "document_added", null, null, label);
       await audit(tx, {
         userId: user.id,
         action: "create",
@@ -195,9 +189,9 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
         summary: `Добавил документ: ${label}`,
         ip: request.ip,
       });
-      return { id: doc.id, dealKey: createdDealKey };
+      return { id: doc.id, created };
     });
-    return { document: { id: result.id }, deal: result.dealKey ? { key: result.dealKey } : null };
+    return { document: { id: result.id }, shipment: result.created };
   });
 
   app.patch("/documents/:id", async (request) => {
@@ -208,8 +202,8 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       const before = await getDocument(id);
       const spec = docSpec(before.type)!;
       const fields = await parseDocumentFields(tx, input, before.type);
-      if (before.type === "commission_order" && (fields.dealId ?? before.dealId) && fields.status !== "cancelled") {
-        await assertSingleOrder(tx, (fields.dealId ?? before.dealId)!, id);
+      if (before.type === "commission_order" && (fields.shipmentId ?? before.shipmentId) && fields.status !== "cancelled") {
+        await assertSingleOrder(tx, (fields.shipmentId ?? before.shipmentId)!, id);
       }
       if (fields.paymentStatus === "paid" && !("paidAt" in input) && !before.paidAt) fields.paidAt = new Date().toISOString().slice(0, 10);
       if (spec.items && Array.isArray(input.items)) {
@@ -221,17 +215,17 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
         .set({ ...fields, updatedAt: new Date() })
         .where(eq(documents.id, id));
       const after = await getDocument(id);
-      if (after.dealId !== before.dealId || after.counterpartyId !== before.counterpartyId) {
-        const patch = await linkToDeal(tx, user.id, after);
+      if (after.shipmentId !== before.shipmentId || after.counterpartyId !== before.counterpartyId) {
+        const patch = await linkToShipment(tx, user.id, after);
         if (Object.keys(patch).length) await tx.update(documents).set(patch).where(eq(documents.id, id));
-        if (after.dealId && after.dealId !== before.dealId) {
-          await addEvent(tx, after.dealId, user.id, "document_added", null, null, await documentLabel(tx, id));
+        if (after.shipmentId && after.shipmentId !== before.shipmentId) {
+          await addShipmentEvent(tx, after.shipmentId, user.id, "document_added", null, null, await documentLabel(tx, id));
         }
       }
-      if (after.dealId && fields.paymentStatus && fields.paymentStatus !== before.paymentStatus) {
-        await addEvent(
+      if (after.shipmentId && fields.paymentStatus && fields.paymentStatus !== before.paymentStatus) {
+        await addShipmentEvent(
           tx,
-          after.dealId,
+          after.shipmentId,
           user.id,
           "payment_changed",
           null,
@@ -262,10 +256,8 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       }
       const label = await documentLabel(tx, id);
       const keys = await deleteAttachmentRows(tx, "document", [id]);
-      await tx.update(deals).set({ clientContractId: null }).where(eq(deals.clientContractId, id));
-      await tx.update(deals).set({ supplierContractId: null }).where(eq(deals.supplierContractId, id));
       await tx.delete(documents).where(eq(documents.id, id));
-      if (doc.dealId) await addEvent(tx, doc.dealId, user.id, "document_removed", null, label, null);
+      if (doc.shipmentId) await addShipmentEvent(tx, doc.shipmentId, user.id, "document_removed", null, label, null);
       await audit(tx, {
         userId: user.id,
         action: "delete",

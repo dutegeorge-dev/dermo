@@ -1,6 +1,6 @@
 /**
  * Загрузка и правка документа: слева файл, справа форма.
- * /documents/new?type=&counterparty=&client=&deal=BARS-12 — новый,
+ * /documents/new?type=&counterparty=&client=&shipment=12 — новый,
  * /documents/:id/edit — правка.
  */
 
@@ -25,7 +25,7 @@ import {
   SCHEMES,
 } from "../../../../shared/documents.ts";
 import { CounterpartyPicker, ensureCounterparty, type Picked } from "../../components/crm/CounterpartyPicker.tsx";
-import { DealPicker, type PickedDeal } from "../../components/crm/DealPicker.tsx";
+import { type PickedShipment, ShipmentPicker } from "../../components/shipments/ShipmentPicker.tsx";
 import { docTitle } from "../../components/docs/common.tsx";
 import { CostsEditor } from "../../components/docs/CostsEditor.tsx";
 import { FileDrop, FilePreview } from "../../components/docs/FilePane.tsx";
@@ -33,14 +33,14 @@ import { emptyItem, itemAmount, ItemsEditor } from "../../components/docs/ItemsE
 import { detectCurrency, parseNumber } from "../../components/docs/paste.ts";
 import { ErrorBox, Spinner } from "../../components/ui.tsx";
 import { api, fileUrl } from "../../lib/api.ts";
-import type { Counterparty, DealResponse, DocItem, DocumentFull, DocumentRow } from "../../lib/types.ts";
+import type { Counterparty, DocItem, DocumentFull, DocumentRow, ShipmentResponse } from "../../lib/types.ts";
 
 type Initial = {
   existing: DocumentFull | null;
   type: DocType;
   party: Picked | null;
   client: Picked | null;
-  deal: PickedDeal | null;
+  deal: PickedShipment | null;
 };
 
 function Field({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
@@ -64,10 +64,10 @@ export function DocumentEditor() {
   });
   const cpParam = Number(params.get("counterparty")) || null;
   const clientParam = Number(params.get("client")) || null;
-  const dealParam = params.get("deal");
+  const dealParam = params.get("shipment");
   const cp = useQuery({ queryKey: ["counterparty", cpParam], queryFn: () => api<{ counterparty: Counterparty }>(`/counterparties/${cpParam}`), enabled: !!cpParam && !editId });
   const cl = useQuery({ queryKey: ["counterparty", clientParam], queryFn: () => api<{ counterparty: Counterparty }>(`/counterparties/${clientParam}`), enabled: !!clientParam && !editId });
-  const dl = useQuery({ queryKey: ["deal", dealParam], queryFn: () => api<DealResponse>(`/deals/${dealParam}`), enabled: !!dealParam && !editId });
+  const dl = useQuery({ queryKey: ["shipment", Number(dealParam)], queryFn: () => api<ShipmentResponse>(`/shipments/${dealParam}`), enabled: !!dealParam && !editId });
 
   const loading = existing.isLoading || cp.isLoading || cl.isLoading || dl.isLoading;
   const error = existing.error ?? cp.error ?? cl.error ?? dl.error;
@@ -81,7 +81,7 @@ export function DocumentEditor() {
         type: d.type as DocType,
         party: d.counterpartyId ? { id: d.counterpartyId, name: d.counterpartyName ?? "" } : null,
         client: d.clientId ? { id: d.clientId, name: d.clientName ?? "" } : null,
-        deal: d.dealId && d.dealKey ? { id: d.dealId, key: d.dealKey, title: "" } : null,
+        deal: d.shipmentId && d.shipmentNumber ? { id: d.shipmentId, number: d.shipmentNumber, title: d.shipmentTitle ?? "" } : null,
       };
     }
     let type = (params.get("type") as DocType) || null;
@@ -89,7 +89,8 @@ export function DocumentEditor() {
     if (!type && party) type = party.role === "supplier" ? "supplier_invoice" : party.role === "contractor" ? "contractor_invoice" : "commission_contract";
     if (!type && cl.data) type = "commission_contract";
     type ??= "supplier_invoice";
-    const deal = dl.data?.deal;
+    const sh = dl.data?.shipment;
+    const deal = sh ? { ...sh, clientName: sh.client?.name ?? null, supplierName: sh.supplier?.name ?? null } : null;
     const spec = docSpec(type)!;
     // Клиент из карточки клиента — это сторона договора, если документ «с клиентом».
     const clientCp = cl.data?.counterparty;
@@ -98,7 +99,7 @@ export function DocumentEditor() {
       type,
       party: party ? { id: party.id, name: party.name } : spec.party === "client" && clientCp ? { id: clientCp.id, name: clientCp.name } : spec.party === "client" && deal?.clientId ? { id: deal.clientId, name: deal.clientName ?? "" } : spec.party === "supplier" && deal?.supplierId ? { id: deal.supplierId, name: deal.supplierName ?? "" } : null,
       client: spec.party !== "client" && clientCp ? { id: clientCp.id, name: clientCp.name } : spec.party !== "client" && deal?.clientId ? { id: deal.clientId, name: deal.clientName ?? "" } : null,
-      deal: deal ? { id: deal.id, key: deal.key, title: deal.title } : null,
+      deal: deal ? { id: deal.id, number: deal.number, title: deal.title } : null,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, existing.data, cp.data, cl.data, dl.data]);
@@ -116,9 +117,10 @@ function EditorForm({ initial }: { initial: Initial }) {
   const spec = docSpec(type)!;
   const [party, setParty] = useState<Picked | null>(initial.party);
   const [client, setClient] = useState<Picked | null>(initial.client);
-  const [deal, setDeal] = useState<PickedDeal | null>(initial.deal);
+  const [deal, setDeal] = useState<PickedShipment | null>(initial.deal);
   const [newDeal, setNewDeal] = useState(!ex && !initial.deal && type === "supplier_invoice");
   const [scheme, setScheme] = useState<keyof typeof SCHEMES>("commission");
+  const [newTitle, setNewTitle] = useState("");
   const [parentId, setParentId] = useState<number | null>(ex?.parentId ?? null);
   const [number, setNumber] = useState(ex?.number ?? "");
   const [date, setDate] = useState(ex?.date ?? new Date().toISOString().slice(0, 10));
@@ -189,7 +191,7 @@ function EditorForm({ initial }: { initial: Initial }) {
         notes,
         data,
       };
-      if (!spec.contract) body.dealId = newDeal ? null : (deal?.id ?? null);
+      if (!spec.contract) body.shipmentId = newDeal ? null : (deal?.id ?? null);
       if (spec.items) body.items = usedItems;
       if (spec.payable) {
         body.amount = spec.items && usedItems.length ? null : amount.trim() ? parseNumber(amount) : null;
@@ -200,16 +202,16 @@ function EditorForm({ initial }: { initial: Initial }) {
       }
       if (spec.validity) body.validUntil = validUntil || null;
       if (spec.signable) body.status = status;
-      if (!ex && newDeal && !spec.contract) body.newDeal = { clientId, scheme };
+      if (!ex && newDeal && !spec.contract) body.newShipment = { clientId, scheme, title: newTitle.trim() || null };
 
       let docId = ex?.id;
-      let dealKey: string | null = null;
+      let created: number | null = null;
       if (ex) {
         await api(`/documents/${ex.id}`, { method: "PATCH", body });
       } else {
-        const res = await api<{ document: { id: number }; deal: { key: string } | null }>("/documents", { method: "POST", body });
+        const res = await api<{ document: { id: number }; shipment: { number: number } | null }>("/documents", { method: "POST", body });
         docId = res.document.id;
-        dealKey = res.deal?.key ?? null;
+        created = res.shipment?.number ?? null;
       }
       if (file && docId) {
         const form = new FormData();
@@ -217,7 +219,7 @@ function EditorForm({ initial }: { initial: Initial }) {
         await api(`/documents/${docId}/files?label=${fileLabel}`, { method: "POST", form });
       }
       await queryClient.invalidateQueries();
-      navigate(dealKey ? `/deals/${dealKey}` : `/documents/${docId}`);
+      navigate(created ? `/shipments/${created}` : deal && !ex ? `/shipments/${deal.number}` : `/documents/${docId}`);
     } catch (err) {
       setError(err);
       setBusy(false);
@@ -316,7 +318,11 @@ function EditorForm({ initial }: { initial: Initial }) {
                     <p className="sm:col-span-2">
                       Будет создана сделка: клиент — {client?.name ? <b>{client.name}</b> : <span className="muted">укажите выше</span>}, поставщик — {party?.name ? <b>{party.name}</b> : "—"}. Договор комиссии клиента и контракт поставщика подставятся сами.
                     </p>
-                    <label className="sm:col-start-2">
+                    <label>
+                      <span className="label">Название груза — как вы его называете</span>
+                      <input className="input" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={items.find((i) => i.name.trim())?.name || "Линолеум коричневый"} />
+                    </label>
+                    <label>
                       <span className="label">Схема</span>
                       <select className="input" value={scheme} onChange={(e) => setScheme(e.target.value as keyof typeof SCHEMES)}>
                         {Object.entries(SCHEMES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
@@ -324,7 +330,7 @@ function EditorForm({ initial }: { initial: Initial }) {
                     </label>
                   </div>
                 ) : (
-                  <DealPicker value={deal} onChange={setDeal} />
+                  <ShipmentPicker value={deal} onChange={setDeal} />
                 )}
               </div>
             )}

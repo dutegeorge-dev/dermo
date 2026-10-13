@@ -6,9 +6,10 @@ import type { FastifyInstance } from "fastify";
 import { COMPANY_KINDS, MESSENGERS } from "../../shared/deal-fields.ts";
 import { CONTRACTOR_TYPES, COUNTERPARTY_ROLES, type CounterpartyRole } from "../../shared/documents.ts";
 import { db } from "../db/client.ts";
-import { contacts, counterparties, dealParties, deals, documentItems, documents, products } from "../db/schema.ts";
+import { contacts, counterparties, deals, documentItems, documents, products, shipments } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { dealQuery } from "../lib/deals.ts";
+import { listShipments } from "../lib/shipment-query.ts";
 import { documentListQuery } from "../lib/documents.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
 
@@ -126,8 +127,8 @@ export async function counterpartyRoutes(app: FastifyInstance): Promise<void> {
         country: counterparties.country,
         email: counterparties.email,
         updatedAt: counterparties.updatedAt,
-        dealCount: sql<number>`(select count(*)::int from deals d where d.client_id = "counterparties"."id" or d.supplier_id = "counterparties"."id"
-          or exists (select 1 from deal_parties p where p.deal_id = d.id and p.counterparty_id = "counterparties"."id"))`,
+        dealCount: sql<number>`(select count(*)::int from shipments s where s.client_id = "counterparties"."id" or s.supplier_id = "counterparties"."id"
+          or exists (select 1 from shipment_parties p where p.shipment_id = s.id and p.counterparty_id = "counterparties"."id"))`,
         documentCount: sql<number>`(select count(*)::int from documents x where x.counterparty_id = "counterparties"."id" or x.client_id = "counterparties"."id")`,
         contactName: sql<string | null>`(select c.name from contacts c where c.counterparty_id = "counterparties"."id" order by c.is_primary desc, c.id limit 1)`,
         contactPhone: sql<string | null>`(select c.phone from contacts c where c.counterparty_id = "counterparties"."id" order by c.is_primary desc, c.id limit 1)`,
@@ -179,12 +180,14 @@ export async function counterpartyRoutes(app: FastifyInstance): Promise<void> {
     const [counterparty] = await db.select().from(counterparties).where(eq(counterparties.id, id));
     if (!counterparty) throw new HttpError(404, "Контрагент не найден");
 
-    const partyDealIds = db.select({ id: dealParties.dealId }).from(dealParties).where(eq(dealParties.counterpartyId, id));
-    const [contactList, dealList, docList] = await Promise.all([
+    const [contactList, dealList, shipmentList, docList] = await Promise.all([
       db.select().from(contacts).where(eq(contacts.counterpartyId, id)).orderBy(desc(contacts.isPrimary), asc(contacts.id)),
-      dealQuery(db)
-        .where(or(eq(deals.clientId, id), eq(deals.supplierId, id), inArray(deals.id, partyDealIds)))
-        .orderBy(desc(deals.createdAt)),
+      dealQuery(db).where(eq(deals.clientId, id)).orderBy(desc(deals.createdAt)),
+      listShipments(
+        db,
+        sql`(s.client_id = ${id} OR s.supplier_id = ${id} OR s.carrier_id = ${id}
+          OR EXISTS (SELECT 1 FROM shipment_parties p WHERE p.shipment_id = s.id AND p.counterparty_id = ${id}))`,
+      ),
       documentListQuery(db)
         .where(or(eq(documents.counterpartyId, id), eq(documents.clientId, id)))
         .orderBy(desc(documents.date), desc(documents.id))
@@ -196,7 +199,7 @@ export async function counterpartyRoutes(app: FastifyInstance): Promise<void> {
       counterparty.role === "supplier"
         ? and(eq(documents.counterpartyId, id), eq(documents.type, "supplier_invoice"))
         : and(
-            or(eq(documents.clientId, id), sql`${documents.dealId} in (select d.id from deals d where d.client_id = ${id})`),
+            or(eq(documents.clientId, id), sql`${documents.shipmentId} in (select s.id from shipments s where s.client_id = ${id})`),
             inArray(documents.type, ["supplier_invoice", "commission_order", "specification"]),
           );
     const productRows = await db
@@ -221,8 +224,8 @@ export async function counterpartyRoutes(app: FastifyInstance): Promise<void> {
       .limit(500);
 
     // Связанные контрагенты по сделкам: клиенту — его поставщики и подрядчики, поставщику — клиенты.
-    const dealIds = dealList.map((d) => d.id);
-    const related = dealIds.length
+    const shipmentIds = shipmentList.map((d) => d.id);
+    const related = shipmentIds.length
       ? await db
           .select({
             id: counterparties.id,
@@ -233,19 +236,19 @@ export async function counterpartyRoutes(app: FastifyInstance): Promise<void> {
           })
           .from(counterparties)
           .innerJoin(
-            deals,
+            shipments,
             or(
-              eq(deals.clientId, counterparties.id),
-              eq(deals.supplierId, counterparties.id),
-              sql`exists (select 1 from deal_parties p where p.deal_id = ${deals.id} and p.counterparty_id = "counterparties"."id")`,
+              eq(shipments.clientId, counterparties.id),
+              eq(shipments.supplierId, counterparties.id),
+              sql`exists (select 1 from shipment_parties p where p.shipment_id = ${shipments.id} and p.counterparty_id = "counterparties"."id")`,
             ),
           )
-          .where(and(inArray(deals.id, dealIds), sql`"counterparties"."id" <> ${id}`))
+          .where(and(inArray(shipments.id, shipmentIds), sql`"counterparties"."id" <> ${id}`))
           .groupBy(counterparties.id)
           .orderBy(asc(counterparties.name))
       : [];
 
-    return { counterparty, contacts: contactList, deals: dealList, documents: docList, products: productRows, related };
+    return { counterparty, contacts: contactList, deals: dealList, shipments: shipmentList, documents: docList, products: productRows, related };
   });
 
   app.patch("/counterparties/:id", async (request) => {
@@ -274,9 +277,11 @@ export async function counterpartyRoutes(app: FastifyInstance): Promise<void> {
     const id = intParam((request.params as { id: string }).id);
     const [{ n }] = await db
       .select({ n: count() })
-      .from(deals)
-      .where(or(eq(deals.clientId, id), eq(deals.supplierId, id)));
+      .from(shipments)
+      .where(or(eq(shipments.clientId, id), eq(shipments.supplierId, id), eq(shipments.carrierId, id)));
     if (n > 0) throw new HttpError(409, `Есть сделки с этим контрагентом (${n}) — удалить нельзя`);
+    const [{ l }] = await db.select({ l: count() }).from(deals).where(eq(deals.clientId, id));
+    if (l > 0) throw new HttpError(409, `Есть лиды в воронке с этим клиентом (${l}) — удалить нельзя`);
     const [{ d }] = await db
       .select({ d: count() })
       .from(documents)

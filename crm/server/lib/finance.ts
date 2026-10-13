@@ -9,16 +9,16 @@ import {
   type CostLine,
 } from "../../shared/documents.ts";
 import type { DbOrTx } from "../db/client.ts";
-import { counterparties, deals, documents } from "../db/schema.ts";
+import { counterparties, documents, shipments } from "../db/schema.ts";
 
-export type DealDocument = Awaited<ReturnType<typeof dealDocuments>>[number];
+export type DealDocument = Awaited<ReturnType<typeof shipmentDocuments>>[number];
 
 /** Документы сделки + договор клиента и контракт поставщика, выбранные в сделке. */
-export async function dealDocuments(db: DbOrTx, dealId: number) {
+export async function shipmentDocuments(db: DbOrTx, shipmentId: number) {
   const [deal] = await db
-    .select({ clientContractId: deals.clientContractId, supplierContractId: deals.supplierContractId })
-    .from(deals)
-    .where(eq(deals.id, dealId));
+    .select({ clientContractId: shipments.clientContractId, supplierContractId: shipments.supplierContractId })
+    .from(shipments)
+    .where(eq(shipments.id, shipmentId));
   const contractIds = [deal?.clientContractId, deal?.supplierContractId].filter((x): x is number => !!x);
   return db
     .select({
@@ -28,7 +28,7 @@ export async function dealDocuments(db: DbOrTx, dealId: number) {
       date: documents.date,
       seqNo: documents.seqNo,
       parentId: documents.parentId,
-      dealId: documents.dealId,
+      shipmentId: documents.shipmentId,
       counterpartyId: documents.counterpartyId,
       counterpartyName: counterparties.name,
       contractorType: counterparties.contractorType,
@@ -44,7 +44,7 @@ export async function dealDocuments(db: DbOrTx, dealId: number) {
     })
     .from(documents)
     .leftJoin(counterparties, eq(counterparties.id, documents.counterpartyId))
-    .where(contractIds.length ? or(eq(documents.dealId, dealId), inArray(documents.id, contractIds)) : eq(documents.dealId, dealId))
+    .where(contractIds.length ? or(eq(documents.shipmentId, shipmentId), inArray(documents.id, contractIds)) : eq(documents.shipmentId, shipmentId))
     .orderBy(documents.date, documents.id);
 }
 
@@ -85,7 +85,7 @@ export function costCategoryOf(doc: Pick<DealDocument, "type" | "data" | "contra
   return null;
 }
 
-export async function dealFinance(_db: DbOrTx, _dealId: number, docs: DealDocument[]) {
+export function shipmentFinance(docs: DealDocument[]) {
   const order = docs.find((d) => d.type === "commission_order" && d.status !== "cancelled");
   const plan = ((order?.data as { costs?: CostLine[] })?.costs ?? []) as CostLine[];
   const rows = new Map<CostCategory, FinanceRow>();

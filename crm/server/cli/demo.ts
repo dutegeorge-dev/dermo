@@ -15,7 +15,7 @@ import {
   contacts,
   counterparties,
   dealComments,
-  dealParties,
+  shipmentParties,
   deals,
   dealStatuses,
   documentItems,
@@ -27,9 +27,9 @@ import {
   shipments,
   users,
 } from "../db/schema.ts";
-import { addEvent, createDeal } from "../lib/deals.ts";
-import { linkToDeal, nextSeqNo, pad2, replaceItems } from "../lib/documents.ts";
-import { createShipment } from "../lib/shipments.ts";
+import { createDeal } from "../lib/deals.ts";
+import { linkToShipment, nextSeqNo, pad2, replaceItems } from "../lib/documents.ts";
+import { addShipmentEvent, createShipment } from "../lib/shipments.ts";
 import { addDays, MILESTONES, type MilestoneKey, SHIPMENT_STAGES } from "../../shared/shipments.ts";
 import { buildOrderDraft } from "../lib/order.ts";
 import { tiptapToText } from "../lib/text.ts";
@@ -49,7 +49,7 @@ async function cp(tx: DbOrTx, input: CpInput): Promise<number> {
   return row.id;
 }
 
-type Item = { name: string; quantity: number; unit: string; price: number; hsCode?: string };
+type Item = { name: string; quantity?: number; unit?: string; price?: number; hsCode?: string };
 
 async function doc(
   tx: DbOrTx,
@@ -69,20 +69,20 @@ async function doc(
     // Товары справочника — тоже с пометкой «демо», чтобы удалить вместе с остальным.
     for (const it of items) {
       const [found] = await tx.select({ id: products.id }).from(products).where(sql`lower(${products.name}) = lower(${it.name})`);
-      if (!found) await tx.insert(products).values({ name: it.name, hsCode: it.hsCode ?? null, unit: it.unit, notes: MARK });
+      if (!found) await tx.insert(products).values({ name: it.name, hsCode: it.hsCode ?? null, unit: it.unit ?? null, notes: MARK });
     }
     const total = await replaceItems(tx, userId, row.id, items);
     if (total !== null && values.amount == null) patch.amount = String(total);
   }
-  Object.assign(patch, await linkToDeal(tx, userId, row));
+  Object.assign(patch, await linkToShipment(tx, userId, row));
   if (Object.keys(patch).length) await tx.update(documents).set(patch).where(eq(documents.id, row.id));
-  if (row.dealId) await addEvent(tx, row.dealId, userId, "document_added", null, null, `${spec.label}${row.number ? ` № ${row.number}` : ""}`);
+  if (row.shipmentId) await addShipmentEvent(tx, row.shipmentId, userId, "document_added", null, null, `${spec.label}${row.number ? ` № ${row.number}` : ""}`);
   return row.id;
 }
 
 /** Поручение по сделке — как кнопка «Сформировать поручение», плюс заполненная смета. */
-async function order(tx: DbOrTx, userId: number | null, dealId: number, amounts: Partial<Record<CostLine["category"], number>>, status: string) {
-  const draft = await buildOrderDraft(tx, dealId);
+async function order(tx: DbOrTx, userId: number | null, shipmentId: number, amounts: Partial<Record<CostLine["category"], number>>, status: string) {
+  const draft = await buildOrderDraft(tx, shipmentId);
   for (const c of draft.data.costs) if (c.category in amounts) c.amount = amounts[c.category]!;
   return doc(
     tx,
@@ -90,8 +90,8 @@ async function order(tx: DbOrTx, userId: number | null, dealId: number, amounts:
     {
       type: "commission_order",
       date: day(-20),
-      counterpartyId: draft.deal.clientId,
-      dealId,
+      counterpartyId: draft.shipment.clientId,
+      shipmentId,
       parentId: draft.contract.id,
       currency: draft.currency,
       amount: draft.amount === null ? null : String(draft.amount),
@@ -173,84 +173,100 @@ export async function seedDemoDocuments(): Promise<void> {
     await doc(tx, userId, { type: "contractor_contract", number: "HSR-15", date: day(-180), counterpartyId: carrierCn, status: "signed", validUntil: day(185) });
     await doc(tx, userId, { type: "contractor_contract", number: "Б-44/26", date: day(-170), counterpartyId: broker, status: "signed", validUntil: day(195) });
 
-    const common = { labels: [MARK], source: "demo", description: "Демо-сделка с полной цепочкой документов. Удалить: npm run crm:seed -- --remove-demo" };
+    // Лиды воронки, из которых выросли сделки (в воронке — только работа с клиентом).
+    const lead = { labels: [MARK], source: "demo", description: "Демо-лид: переговоры прошли, клиент оплатил депозит — дальше всё в «Сделках»." };
+    const final = await stageKey(tx, 99);
+    const d1 = await createDeal(tx, userId, { ...lead, title: "ГринЛэнд — трава на стадион", clientId: greenland, product: "Искусственная трава 30 мм, ~15 000 м²" }, { statusKey: final });
+    const d2 = await createDeal(tx, userId, { ...lead, title: "Смирнов — LVT для магазина", clientId: smirnov, product: "Ламинат LVT 4 мм" }, { statusKey: final });
+    const d3 = await createDeal(tx, userId, { ...lead, title: "Светлый Дом — LED-панели", clientId: svetdom, product: "Панели LED 600×600" }, { statusKey: final });
+    const rail = { transport: "rail", pickupLocation: "Китай", deliveryLocation: "Москва" };
+    const base = { notes: MARK, assigneeId: userId };
 
-    // ── Сделка 1: искусственная трава, комиссия, заказ у поставщика ──────────
-    const d1 = await createDeal(tx, userId, {
-      ...common, title: "Искусственная трава, 14 600 м²", scheme: "commission", clientId: greenland, supplierId: turf,
-      product: "Искусственная трава 30 мм", hsCode: "5703300000", weightKg: "21500", volumeM3: "58", route: "rail",
-      pickupLocation: "Shijiazhuang", deliveryLocation: "Россия, Московская область, г. Балашиха", contractParty: "ours",
-      exportLicense: "yes", certificates: "in_progress", chestnyZnak: "not_required", dueDate: day(25), priority: "high",
-    }, { statusKey: await stageKey(tx, 4) });
+    // ── Сделка 1: искусственная трава, комиссия, ждём погрузку ─────────────
+    const s1 = await createShipment(tx, {
+      ...base, title: "Трава 30 мм зелёная", scheme: "commission", dealId: d1.id, clientId: greenland, supplierId: turf, carrierId: carrierCn,
+      containerNo: "DEMU1000011", hsCode: "5703300000", weightKg: "21500", volumeM3: "58", ...rail,
+      pickupLocation: "Shijiazhuang", deliveryLocation: "Московская обл., г. Балашиха",
+      exportLicense: "yes", certificates: "in_progress", certificateHolder: "ООО «ГринЛэнд»", chestnyZnak: "not_required",
+      depositDate: day(-20), milestones: demoMilestones(2, 2), flags: { balance: day(-1) },
+    }, userId);
     await doc(tx, userId, {
-      type: "supplier_invoice", number: "PI-SGT-0412", date: day(-22), counterpartyId: turf, dealId: d1.id, currency: "CNY",
+      type: "supplier_invoice", number: "PI-SGT-0412", date: day(-22), counterpartyId: turf, shipmentId: s1.id, currency: "CNY",
       paymentStatus: "partial", paidAmount: "41746.20", paidAt: day(-18),
       data: { incoterms: "EXW (Shijiazhuang, Китай)", paymentTerms: "30% депозит 70% до отгрузки" },
     }, [
       { name: "Artificial grass 30mm", quantity: 14600, unit: "кв. м.", price: 9.49, hsCode: "5703300000" },
       { name: "Glue for artificial grass", quantity: 50, unit: "шт.", price: 12, hsCode: "3506910000" },
     ]);
-    await order(tx, userId, d1.id, { transport: 60050, broker: 20000, terminal: 110000, customs: 900000, commission: 156000 }, "signed");
-    await tx.insert(dealParties).values({ dealId: d1.id, counterpartyId: carrierCn }).onConflictDoNothing();
-    await doc(tx, userId, { type: "contractor_invoice", number: "HSR-INV-0931", date: day(-5), counterpartyId: carrierCn, dealId: d1.id, currency: "CNY", amount: "61000", paymentStatus: "unpaid" });
-    await doc(tx, userId, { type: "packing_list", number: "PL-SGT-0412", date: day(-6), counterpartyId: turf, dealId: d1.id });
+    await order(tx, userId, s1.id, { transport: 60050, broker: 20000, terminal: 110000, customs: 900000, commission: 156000 }, "signed");
+    await doc(tx, userId, { type: "contractor_invoice", number: "HSR-INV-0931", date: day(-5), counterpartyId: carrierCn, shipmentId: s1.id, currency: "CNY", amount: "61000", paymentStatus: "unpaid" });
+    await doc(tx, userId, { type: "packing_list", number: "PL-SGT-0412", date: day(-6), counterpartyId: turf, shipmentId: s1.id });
+    // Сертификат на товар (не на сделку): виден во всех сделках с этой травой.
+    await doc(tx, userId, { type: "conformity", number: "ЕАЭС N RU Д-CN.РА01.В.54321/26", date: day(-120), clientId: greenland, validUntil: day(610) }, [
+      { name: "Artificial grass 30mm", hsCode: "5703300000" },
+    ]);
 
-    // ── Сделка 2: LVT, комиссия, доставка — почти закрыта ───────────────────
-    const d2 = await createDeal(tx, userId, {
-      ...common, title: "Ламинат LVT 4 мм, 2 400 м²", scheme: "commission", clientId: smirnov, supplierId: foshan,
-      product: "Ламинат LVT 4 мм", hsCode: "3918101000", weightKg: "19800", volumeM3: "34", route: "rail",
-      pickupLocation: "Foshan", deliveryLocation: "Москва", contractParty: "ours", exportLicense: "we_arrange",
-      certificates: "yes", certificateHolder: "ИП Смирнов А.В.", chestnyZnak: "applied", dueDate: day(6),
-    }, { statusKey: await stageKey(tx, 7) });
+    // ── Сделка 2: LVT, комиссия, выпущен — доставка клиенту ────────────────
+    const s2 = await createShipment(tx, {
+      ...base, title: "LVT 4 мм дуб", scheme: "commission", dealId: d2.id, clientId: smirnov, supplierId: foshan, carrierId: carrierCn,
+      containerNo: "DEMU1000022", hsCode: "3918101000", weightKg: "19800", volumeM3: "34", ...rail, pickupLocation: "Foshan",
+      exportLicense: "we_arrange", certificates: "yes", certificateHolder: "ИП Смирнов А.В.", chestnyZnak: "applied",
+      depositDate: day(-60), milestones: demoMilestones(6, 1, { slip: 1 }),
+      flags: { balance: day(-30), freight: day(-30), customs_payment: day(-5), customs_docs: day(-5) },
+    }, userId);
     await doc(tx, userId, {
-      type: "supplier_invoice", number: "PI-FN-2208", date: day(-70), counterpartyId: foshan, dealId: d2.id, currency: "CNY",
+      type: "supplier_invoice", number: "PI-FN-2208", date: day(-70), counterpartyId: foshan, shipmentId: s2.id, currency: "CNY",
       paymentStatus: "paid", paidAt: day(-60), data: { incoterms: "FOB (Shenzhen, Китай)", paymentTerms: "100% до отгрузки" },
     }, [
       { name: "LVT flooring 4mm Oak", quantity: 2400, unit: "кв. м.", price: 6.8, hsCode: "3918101000" },
       { name: "PVC skirting 2.4m", quantity: 1200, unit: "шт.", price: 1.1, hsCode: "3916209000" },
     ]);
-    await order(tx, userId, d2.id, { transport: 42000, broker: 25000, terminal: 85000, customs: 1240000, commission: 120000 }, "signed");
-    await doc(tx, userId, { type: "contractor_invoice", number: "HSR-INV-0812", date: day(-55), counterpartyId: carrierCn, dealId: d2.id, currency: "CNY", amount: "42000", paymentStatus: "paid", paidAt: day(-50) });
-    await doc(tx, userId, { type: "railway_bill", number: "СМГС 30458812", date: day(-45), counterpartyId: carrierCn, dealId: d2.id });
-    await doc(tx, userId, { type: "contractor_invoice", number: "421", date: day(-12), counterpartyId: broker, dealId: d2.id, currency: "RUB", amount: "25000", paymentStatus: "paid", paidAt: day(-10), data: { costCategory: "broker" } });
-    await doc(tx, userId, { type: "contractor_invoice", number: "С-1187", date: day(-11), counterpartyId: svh, dealId: d2.id, currency: "RUB", amount: "92400", paymentStatus: "unpaid" });
-    await doc(tx, userId, { type: "contractor_invoice", number: "ТС-5521", date: day(-3), counterpartyId: carrierRu, dealId: d2.id, currency: "RUB", amount: "38000", paymentStatus: "partial", paidAmount: "19000", paidAt: day(-2), data: { costCategory: "transport" } });
-    await doc(tx, userId, { type: "customs_declaration", number: "10013160/150926/3012345", date: day(-10), dealId: d2.id, currency: "RUB", amount: "1236480", paymentStatus: "paid", paidAt: day(-10) });
-    await doc(tx, userId, { type: "conformity", number: "ЕАЭС N RU Д-CN.РА01.В.12345/26", date: day(-90), clientId: smirnov, dealId: d2.id, validUntil: day(640) });
-    await doc(tx, userId, { type: "client_invoice", number: "118", date: day(-9), counterpartyId: smirnov, dealId: d2.id, currency: "RUB", amount: "120000", paymentStatus: "unpaid" });
+    await order(tx, userId, s2.id, { transport: 42000, broker: 25000, terminal: 85000, customs: 1240000, commission: 120000 }, "signed");
+    await doc(tx, userId, { type: "contractor_invoice", number: "HSR-INV-0812", date: day(-55), counterpartyId: carrierCn, shipmentId: s2.id, currency: "CNY", amount: "42000", paymentStatus: "paid", paidAt: day(-50) });
+    await doc(tx, userId, { type: "railway_bill", number: "СМГС 30458812", date: day(-45), counterpartyId: carrierCn, shipmentId: s2.id });
+    await doc(tx, userId, { type: "contractor_invoice", number: "421", date: day(-12), counterpartyId: broker, shipmentId: s2.id, currency: "RUB", amount: "25000", paymentStatus: "paid", paidAt: day(-10), data: { costCategory: "broker" } });
+    await doc(tx, userId, { type: "contractor_invoice", number: "С-1187", date: day(-11), counterpartyId: svh, shipmentId: s2.id, currency: "RUB", amount: "92400", paymentStatus: "unpaid" });
+    await doc(tx, userId, { type: "contractor_invoice", number: "ТС-5521", date: day(-3), counterpartyId: carrierRu, shipmentId: s2.id, currency: "RUB", amount: "38000", paymentStatus: "partial", paidAmount: "19000", paidAt: day(-2), data: { costCategory: "transport" } });
+    await doc(tx, userId, { type: "customs_declaration", number: "10013160/150926/3012345", date: day(-10), shipmentId: s2.id, currency: "RUB", amount: "1236480", paymentStatus: "paid", paidAt: day(-10) });
+    await doc(tx, userId, { type: "conformity", number: "ЕАЭС N RU Д-CN.РА01.В.12345/26", date: day(-90), clientId: smirnov, shipmentId: s2.id, validUntil: day(640) }, [
+      { name: "LVT flooring 4mm Oak", hsCode: "3918101000" },
+    ]);
+    await doc(tx, userId, { type: "client_invoice", number: "118", date: day(-9), counterpartyId: smirnov, shipmentId: s2.id, currency: "RUB", amount: "120000", paymentStatus: "unpaid" });
 
-    // ── Сделка 3: LED, ТЭУ, расчёт доставки ───────────────────────────────
-    const d3 = await createDeal(tx, userId, {
-      ...common, title: "Светодиодные панели, 300 шт.", scheme: "teu", clientId: svetdom, supplierId: brightled,
-      product: "Панели LED 600×600", hsCode: "9405110009", weightKg: "1800", volumeM3: "12", route: "auto",
-      pickupLocation: "Shenzhen", deliveryLocation: "Санкт-Петербург", contractParty: "client", exportLicense: "yes",
-      certificates: "no", chestnyZnak: "not_required", dueDate: day(12),
-    }, { statusKey: await stageKey(tx, 5) });
+    // ── Сделка 3: LED, ТЭУ, производство ──────────────────────────────────
+    const s3 = await createShipment(tx, {
+      ...base, title: "LED-панели 600×600", scheme: "teu", dealId: d3.id, clientId: svetdom, supplierId: brightled, carrierId: carrierRu,
+      hsCode: "9405110009", weightKg: "1800", volumeM3: "12", transport: "auto", pickupLocation: "Shenzhen", deliveryLocation: "Санкт-Петербург",
+      exportLicense: "yes", certificates: "no", chestnyZnak: "not_required", depositDate: day(-4), milestones: demoMilestones(1, 12),
+    }, userId);
     await doc(tx, userId, {
-      type: "supplier_invoice", number: "BL-PI-7781", date: day(-8), counterpartyId: brightled, dealId: d3.id, currency: "USD",
+      type: "supplier_invoice", number: "BL-PI-7781", date: day(-8), counterpartyId: brightled, shipmentId: s3.id, currency: "USD",
       paymentStatus: "unpaid", data: { incoterms: "FCA (Shenzhen, Китай)", paymentTerms: "50% / 50%" },
     }, [
       { name: "LED panel 600x600 40W", quantity: 300, unit: "шт.", price: 12.5, hsCode: "9405110009" },
       { name: "LED driver 40W", quantity: 300, unit: "шт.", price: 2.1, hsCode: "8504409000" },
     ]);
     const [teu] = await tx.select({ id: documents.id }).from(documents).where(and(eq(documents.type, "teu_contract"), eq(documents.counterpartyId, svetdom)));
-    await doc(tx, userId, { type: "teu_request", date: day(-7), counterpartyId: svetdom, dealId: d3.id, parentId: teu.id, status: "draft" });
-    await doc(tx, userId, { type: "client_invoice", number: "121", date: day(-4), counterpartyId: svetdom, dealId: d3.id, currency: "RUB", amount: "85000", paymentStatus: "unpaid" });
+    await doc(tx, userId, { type: "teu_request", date: day(-7), counterpartyId: svetdom, shipmentId: s3.id, parentId: teu.id, status: "draft" });
+    await doc(tx, userId, { type: "client_invoice", number: "121", date: day(-4), counterpartyId: svetdom, shipmentId: s3.id, currency: "RUB", amount: "85000", paymentStatus: "unpaid" });
+
+    // Брокер и СВХ — подрядчики сделки с LVT (перевозчики добавились сами).
+    for (const id of [broker, svh]) await tx.insert(shipmentParties).values({ shipmentId: s2.id, counterpartyId: id }).onConflictDoNothing();
 
     // Доверенность, истекающая скоро, — для фильтра «Истекают».
     await doc(tx, userId, { type: "power_of_attorney", number: "Д-17", date: day(-355), validUntil: day(10), data: { issuedTo: "Водитель-экспедитор Петров П.П., получение груза" } });
 
-    // Комментарии.
-    for (const [dealId, body] of [
-      [d1.id, "Поставщик подтвердил готовность к 20-му числу, ждём остаток оплаты от клиента."],
-      [d1.id, "Сертификат оформляем на клиента, документы отправили в лабораторию."],
-      [d2.id, "ДТ выпущена, груз на СВХ. Счёт СВХ передали клиенту."],
-      [d3.id, "Клиент просит сравнить авто и ж/д — расчёт до пятницы."],
+    // Комментарии: в сделках — по исполнению, в воронке — по переговорам.
+    for (const [shipmentId, body] of [
+      [s1.id, "Поставщик подтвердил готовность к 20-му числу, ждём остаток оплаты от клиента."],
+      [s1.id, "Сертификат оформляем на клиента, документы отправили в лабораторию."],
+      [s2.id, "ДТ выпущена, груз на СВХ. Счёт СВХ передали клиенту."],
     ] as const) {
-      await tx.insert(dealComments).values({ dealId, authorId: userId, body });
+      await addShipmentEvent(tx, shipmentId, userId, "comment", null, null, body);
     }
+    await tx.insert(dealComments).values({ dealId: d3.id, authorId: userId, body: "Клиент сравнивал авто и ж/д — выбрал авто, депозит оплачен." });
   });
-  console.log("  + демо-документооборот: 3 сделки, 10 контрагентов, договоры, инвойсы, поручения, счета, ДТ, сертификат");
+  console.log("  + демо-документооборот: 3 сделки с документами, 3 лида, 10 контрагентов, договоры, инвойсы, поручения, счета, ДТ, сертификаты");
 }
 
 // ── База знаний ───────────────────────────────────────────────────────────
@@ -403,16 +419,14 @@ function demoMilestones(stage: number, offset: number, opts: { slip?: number; no
 }
 
 export async function seedDemoShipments(): Promise<void> {
-  const [exists] = await db.select({ id: shipments.id }).from(shipments).where(eq(shipments.notes, MARK)).limit(1);
+  const [exists] = await db.select({ id: shipments.id }).from(shipments).where(and(eq(shipments.notes, MARK), eq(shipments.title, "Трава 40 мм оливковая"))).limit(1);
   if (exists) {
-    console.log("  = демо-сделки календаря уже есть");
+    console.log("  = демо-сделки (повторные заказы) уже есть");
     return;
   }
   const [admin] = await db.select({ id: users.id }).from(users).orderBy(asc(users.id)).limit(1);
   const userId = admin?.id ?? null;
   const byName = async (name: string) => (await db.select({ id: counterparties.id }).from(counterparties).where(eq(counterparties.name, name)).limit(1))[0]?.id ?? null;
-  const docBy = async (number: string) => (await db.select({ id: documents.id }).from(documents).where(and(eq(documents.number, number), eq(documents.notes, MARK))).limit(1))[0]?.id ?? null;
-  const dealBy = async (title: string) => (await db.select({ id: deals.id }).from(deals).where(eq(deals.title, title)).limit(1))[0]?.id ?? null;
 
   const greenland = await byName("ООО «ГринЛэнд»");
   const smirnov = await byName("ИП Смирнов А.В.");
@@ -421,30 +435,27 @@ export async function seedDemoShipments(): Promise<void> {
   const foshan = await byName("FOSHAN NANHAI FLOORING CO., LTD.");
   const brightled = await byName("SHENZHEN BRIGHTLED TECHNOLOGY CO., LTD.");
   const carrierCn = await byName("HEBEI SILK ROAD LOGISTICS CO., LTD.");
-  const carrierRu = await byName("ООО «ТрансСибирь»");
   if (!greenland || !carrierCn) {
     console.log("  ! нет демо-контрагентов — сделки календаря пропущены");
     return;
   }
-  const rail = { transport: "rail", route: "Китай → Забайкальск → Москва" };
+  const rail = { transport: "rail", pickupLocation: "Китай", deliveryLocation: "Москва" };
   const all = { balance: day(-30), freight: day(-30), customs_payment: day(-5), customs_docs: day(-5) };
+  // Повторные заказы — без воронки, сразу сделкой.
   const list: Record<string, unknown>[] = [
-    { clientId: greenland, supplierId: turf, carrierId: carrierCn, carrierInvoiceId: await docBy("HSR-INV-0931"), dealId: await dealBy("Искусственная трава, 14 600 м²"), containerNo: "DEMU1000011", cargo: "Искусственная трава 30 мм, 14 600 м²", ...rail, depositDate: day(-20), milestones: demoMilestones(2, 2), flags: { balance: day(-1) } },
-    { clientId: smirnov, supplierId: foshan, carrierId: carrierCn, carrierInvoiceId: await docBy("HSR-INV-0812"), dealId: await dealBy("Ламинат LVT 4 мм, 2 400 м²"), containerNo: "DEMU1000022", cargo: "Ламинат LVT 4 мм, 2 400 м²", ...rail, depositDate: day(-60), milestones: demoMilestones(6, 1, { slip: 1 }), flags: all },
-    { clientId: svetdom, supplierId: brightled, carrierId: carrierRu, cargo: "LED-панели 600×600, 300 шт.", transport: "auto", route: "Шэньчжэнь → Хоргос → Москва", depositDate: day(-4), milestones: demoMilestones(1, 12) },
-    { clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000033", cargo: "Искусственная трава 40 мм, 9 800 м² (повторный заказ)", ...rail, depositDate: day(-45), milestones: demoMilestones(4, 9), flags: { balance: day(-25), freight: day(-24) } },
-    { clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000044", cargo: "Плинтус ПВХ, 6 000 шт.", ...rail, depositDate: day(-50), milestones: demoMilestones(5, -1), flags: { balance: day(-30), freight: day(-30), customs_docs: day(-3) } },
-    { clientId: svetdom, supplierId: brightled, carrierId: carrierCn, containerNo: "DEMU1000055", cargo: "LED-драйверы 40 Вт, 1 200 шт.", transport: "sea", route: "Шэньчжэнь → Владивосток → Москва", depositDate: day(-25), milestones: demoMilestones(3, 4), flags: { balance: day(-8), freight: day(-8) } },
-    { clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000066", cargo: "Клей для искусственной травы, 400 шт.", ...rail, depositDate: day(-30), milestones: demoMilestones(4, 20), flags: { balance: day(-12), freight: day(-12) } },
-    { clientId: smirnov, supplierId: foshan, carrierId: carrierCn, cargo: "Ламинат LVT 5 мм, 1 800 м²", ...rail, depositDate: day(-28), milestones: demoMilestones(2, -2) },
-    { clientId: svetdom, supplierId: brightled, cargo: "Трековые светильники, 500 шт.", transport: "rail", depositDate: day(-1), milestones: demoMilestones(1, 30) },
-    { clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000077", cargo: "Искусственная трава 20 мм, 5 000 м²", ...rail, depositDate: day(-70), milestones: demoMilestones(7, -1), flags: all },
-    { clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000088", cargo: "Ламинат LVT 4 мм, 2 000 м²", ...rail, depositDate: day(-110), milestones: demoMilestones(7, -40), flags: all, status: "closed" },
+    { title: "Трава 40 мм оливковая", clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000033", hsCode: "5703300000", ...rail, depositDate: day(-45), milestones: demoMilestones(4, 9), flags: { balance: day(-25), freight: day(-24) } },
+    { title: "Плинтус ПВХ белый", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000044", hsCode: "3916209000", ...rail, depositDate: day(-50), milestones: demoMilestones(5, -1), flags: { balance: day(-30), freight: day(-30), customs_docs: day(-3) } },
+    { title: "LED-драйверы 40 Вт", scheme: "teu", clientId: svetdom, supplierId: brightled, carrierId: carrierCn, containerNo: "DEMU1000055", transport: "sea", pickupLocation: "Шэньчжэнь", deliveryLocation: "Москва (через Владивосток)", depositDate: day(-25), milestones: demoMilestones(3, 4), flags: { balance: day(-8), freight: day(-8) } },
+    { title: "Клей для травы", clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000066", ...rail, depositDate: day(-30), milestones: demoMilestones(4, 20), flags: { balance: day(-12), freight: day(-12) } },
+    { title: "LVT 5 мм ёлочка", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, hsCode: "3918101000", ...rail, depositDate: day(-28), milestones: demoMilestones(2, -2) },
+    { title: "Трековые светильники", scheme: "teu", clientId: svetdom, supplierId: brightled, transport: "rail", depositDate: day(-1), milestones: demoMilestones(1, 30) },
+    { title: "Трава 20 мм", clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000077", ...rail, depositDate: day(-70), milestones: demoMilestones(7, -1), flags: all },
+    { title: "LVT 4 мм серый", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000088", ...rail, depositDate: day(-110), milestones: demoMilestones(7, -40), flags: all, status: "closed" },
   ];
   await db.transaction(async (tx) => {
-    for (const input of list) await createShipment(tx, { ...input, notes: MARK }, userId);
+    for (const input of list) await createShipment(tx, { ...input, notes: MARK, assigneeId: userId }, userId);
   });
-  console.log(`  + демо-сделки для календаря: ${list.length}`);
+  console.log(`  + демо-сделки (повторные заказы): ${list.length}`);
 }
 
 export async function removeDemoExtras(): Promise<void> {
@@ -464,7 +475,13 @@ export async function removeDemoExtras(): Promise<void> {
     .where(
       and(
         eq(counterparties.notes, MARK),
-        notExists(db.select({ id: deals.id }).from(deals).where(or(eq(deals.clientId, counterparties.id), eq(deals.supplierId, counterparties.id)))),
+        notExists(db.select({ id: deals.id }).from(deals).where(eq(deals.clientId, counterparties.id))),
+        notExists(
+          db
+            .select({ id: shipments.id })
+            .from(shipments)
+            .where(or(eq(shipments.clientId, counterparties.id), eq(shipments.supplierId, counterparties.id), eq(shipments.carrierId, counterparties.id))),
+        ),
         notExists(db.select({ id: documents.id }).from(documents).where(or(eq(documents.counterpartyId, counterparties.id), eq(documents.clientId, counterparties.id)))),
       ),
     )

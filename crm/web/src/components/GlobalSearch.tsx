@@ -49,8 +49,8 @@ export function GlobalSearch() {
         key: `s-${sh.number}`,
         to: `/shipments/${sh.number}`,
         kind: "shipment" as const,
-        title: [shipmentLabel(sh.number), sh.containerNo, sh.cargo].filter(Boolean).join(" · "),
-        sub: `Сделка · ${sh.status === "active" ? stageSpec(sh.stage).name : sh.status === "closed" ? "закрыта" : "отменена"}${sh.client ? ` · ${sh.client}` : ""}`,
+        title: [sh.title, sh.containerNo].filter(Boolean).join(" · "),
+        sub: `Сделка ${shipmentLabel(sh.number)} · ${sh.status === "active" ? stageSpec(sh.stage).name : sh.status === "closed" ? "закрыта" : "отменена"}${sh.client ? ` · ${sh.client}` : ""}`,
         snippet: "",
       })),
       ...data.deals.map((d) => ({

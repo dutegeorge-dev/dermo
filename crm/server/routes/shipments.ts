@@ -1,152 +1,49 @@
-/** Сделки (отгрузки): список, карточка, ключевые даты, флажки, календарь. */
+/**
+ * Сделки (отгрузки): список и доска, полная карточка (поля, документы, товары,
+ * сертификаты, деньги, подрядчики, ключевые даты), флажки, календарь.
+ */
 
-import { and, desc, eq, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import {
   FLAG_KEYS,
   FLAGS,
   type FlagKey,
+  LAST_STAGE,
   MILESTONE_KEYS,
   MILESTONES,
   type MilestoneKey,
-  type Milestones,
+  SHIPMENT_FIELDS,
+  type ShipmentField,
   shipmentLabel,
   stageSpec,
 } from "../../shared/shipments.ts";
 import { db, type DbOrTx } from "../db/client.ts";
-import { shipmentEvents, shipments, users } from "../db/schema.ts";
+import { counterparties, documentItems, documents, products, shipmentEvents, shipmentParties, shipments, users } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
-import { body, currentUser, HttpError, requireAdmin } from "../lib/http.ts";
+import { shipmentDocuments, shipmentFinance } from "../lib/finance.ts";
+import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
+import { getShipmentDto, listShipments, type ShipmentDto } from "../lib/shipment-query.ts";
 import {
   addShipmentEvent,
-  checkLinks,
+  autoContracts,
   createShipment,
   loadMilestones,
+  moveToStage,
   parseShipmentFields,
   parseShipmentNumber,
+  sameShipmentValue,
   setFlag,
   setMilestone,
-  SHIPMENT_FIELDS,
-  type ShipmentField,
   shipmentDisplay,
 } from "../lib/shipments.ts";
-
-type Row = {
-  id: number;
-  number: number;
-  status: string;
-  stage: number;
-  client_id: number | null;
-  client_name: string | null;
-  supplier_id: number | null;
-  supplier_name: string | null;
-  carrier_id: number | null;
-  carrier_name: string | null;
-  carrier_invoice_id: number | null;
-  carrier_invoice_number: string | null;
-  carrier_invoice_date: string | null;
-  carrier_invoice_amount: number | null;
-  carrier_invoice_currency: string | null;
-  carrier_invoice_payment: string | null;
-  deal_id: number | null;
-  deal_key: string | null;
-  deal_title: string | null;
-  container_no: string | null;
-  cargo: string;
-  transport: string | null;
-  route: string | null;
-  deposit_date: string | null;
-  flags: Record<string, string>;
-  notes: string;
-  created_at: string;
-  updated_at: string;
-  closed_at: string | null;
-  milestones: Record<string, { plan: string | null; fact: string | null }> | null;
-};
-
-function listSql(where: SQL) {
-  return sql`
-    SELECT s.id, s.number, s.status, s.stage,
-           s.client_id, cl.name AS client_name, s.supplier_id, sp.name AS supplier_name,
-           s.carrier_id, cr.name AS carrier_name,
-           s.carrier_invoice_id, inv.number AS carrier_invoice_number, inv.date::text AS carrier_invoice_date,
-           inv.amount::float8 AS carrier_invoice_amount, inv.currency AS carrier_invoice_currency,
-           inv.payment_status::text AS carrier_invoice_payment,
-           s.deal_id, d.key AS deal_key, d.title AS deal_title,
-           s.container_no, s.cargo, s.transport, s.route, s.deposit_date::text, s.flags, s.notes,
-           s.created_at, s.updated_at, s.closed_at,
-           (SELECT json_object_agg(m.key, json_build_object('plan', m.plan::text, 'fact', m.fact::text))
-              FROM shipment_milestones m WHERE m.shipment_id = s.id) AS milestones
-    FROM shipments s
-    LEFT JOIN counterparties cl ON cl.id = s.client_id
-    LEFT JOIN counterparties sp ON sp.id = s.supplier_id
-    LEFT JOIN counterparties cr ON cr.id = s.carrier_id
-    LEFT JOIN documents inv ON inv.id = s.carrier_invoice_id
-    LEFT JOIN deals d ON d.id = s.deal_id
-    WHERE ${where}
-    ORDER BY s.number DESC`;
-}
-
-function toShipment(r: Row) {
-  const milestones: Milestones = {};
-  for (const key of MILESTONE_KEYS) milestones[key] = r.milestones?.[key] ?? { plan: null, fact: null };
-  const stage = stageSpec(r.stage);
-  const keyMilestone = stage.milestone ? milestones[stage.milestone]! : null;
-  return {
-    id: Number(r.id),
-    number: Number(r.number),
-    label: shipmentLabel(Number(r.number)),
-    status: r.status,
-    stage: Number(r.stage),
-    client: r.client_id ? { id: Number(r.client_id), name: r.client_name! } : null,
-    supplier: r.supplier_id ? { id: Number(r.supplier_id), name: r.supplier_name! } : null,
-    carrier: r.carrier_id ? { id: Number(r.carrier_id), name: r.carrier_name! } : null,
-    carrierInvoice: r.carrier_invoice_id
-      ? {
-          id: Number(r.carrier_invoice_id),
-          number: r.carrier_invoice_number,
-          date: r.carrier_invoice_date,
-          amount: r.carrier_invoice_amount,
-          currency: r.carrier_invoice_currency,
-          paymentStatus: r.carrier_invoice_payment,
-        }
-      : null,
-    deal: r.deal_id ? { id: Number(r.deal_id), key: r.deal_key!, title: r.deal_title! } : null,
-    containerNo: r.container_no,
-    cargo: r.cargo,
-    transport: r.transport,
-    route: r.route,
-    depositDate: r.deposit_date,
-    flags: r.flags ?? {},
-    notes: r.notes,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-    closedAt: r.closed_at,
-    milestones,
-    /** Плановая дата текущего этапа — «когда следующий шаг». */
-    nextDate: keyMilestone?.plan ?? null,
-    /** Неотмеченные флажки текущего и пройденных этапов. */
-    pendingFlags: FLAG_KEYS.filter((k) => !r.flags?.[k] && FLAGS[k].stage <= Number(r.stage)),
-  };
-}
-export type ShipmentDto = ReturnType<typeof toShipment>;
-
-async function listShipments(tx: DbOrTx, where: SQL): Promise<ShipmentDto[]> {
-  const result = await tx.execute<Row>(listSql(where));
-  return result.rows.map(toShipment);
-}
 
 async function findShipment(tx: DbOrTx, raw: unknown) {
   const number = parseShipmentNumber(raw);
   const [row] = await tx.select().from(shipments).where(eq(shipments.number, number));
   if (!row) throw new HttpError(404, "Сделка не найдена");
   return row;
-}
-
-async function getShipmentDto(tx: DbOrTx, id: number): Promise<ShipmentDto> {
-  const [dto] = await listShipments(tx, sql`s.id = ${id}`);
-  return dto;
 }
 
 export type CalendarEvent = {
@@ -159,7 +56,7 @@ export type CalendarEvent = {
   payment: boolean;
   /** Ключевая дата, к которой привязан флажок (её и двигаем). */
   milestone: MilestoneKey | null;
-  shipment: { number: number; label: string; stage: number; containerNo: string | null; cargo: string; client: string | null; carrier: string | null };
+  shipment: { number: number; label: string; title: string; stage: number; containerNo: string | null; client: string | null; carrier: string | null };
 };
 
 /**
@@ -173,9 +70,9 @@ export function calendarEvents(list: ShipmentDto[]): CalendarEvent[] {
     const ref = {
       number: sh.number,
       label: sh.label,
+      title: sh.title,
       stage: sh.stage,
       containerNo: sh.containerNo,
-      cargo: sh.cargo,
       client: sh.client?.name ?? null,
       carrier: sh.carrier?.name ?? null,
     };
@@ -203,6 +100,68 @@ export function calendarEvents(list: ShipmentDto[]): CalendarEvent[] {
   return events;
 }
 
+/** Товары сделки: позиции инвойсов поставщика (если их нет — поручения/спецификации). */
+async function shipmentItems(shipmentId: number) {
+  const rows = await db
+    .select({
+      documentId: documents.id,
+      type: documents.type,
+      currency: documents.currency,
+      productId: documentItems.productId,
+      productName: products.name,
+      name: documentItems.name,
+      hsCode: sql<string | null>`coalesce(${documentItems.hsCode}, ${products.hsCode})`,
+      quantity: sql<number | null>`${documentItems.quantity}::float8`,
+      unit: documentItems.unit,
+      price: sql<number | null>`${documentItems.price}::float8`,
+      amount: sql<number | null>`${documentItems.amount}::float8`,
+    })
+    .from(documentItems)
+    .innerJoin(documents, eq(documents.id, documentItems.documentId))
+    .leftJoin(products, eq(products.id, documentItems.productId))
+    .where(
+      and(
+        eq(documents.shipmentId, shipmentId),
+        inArray(documents.type, ["supplier_invoice", "commission_order", "specification"]),
+        sql`coalesce(${documents.status}, '') <> 'cancelled'`,
+      ),
+    )
+    .orderBy(asc(documents.date), asc(documents.id), asc(documentItems.position));
+  const invoices = rows.filter((r) => r.type === "supplier_invoice");
+  return invoices.length ? invoices : rows.filter((r) => r.type === (rows.some((x) => x.type === "commission_order") ? "commission_order" : "specification"));
+}
+
+/** Декларации соответствия / сертификаты: привязанные к сделке и выданные на её товары. */
+async function shipmentCertificates(shipmentId: number, productIds: number[]) {
+  const rows = await db
+    .select({
+      id: documents.id,
+      number: documents.number,
+      date: documents.date,
+      validUntil: documents.validUntil,
+      status: documents.status,
+      holder: counterparties.name,
+      products: sql<string[]>`coalesce((select array_agg(distinct coalesce(p.name, i.name)) from document_items i
+        left join products p on p.id = i.product_id where i.document_id = ${documents.id}), '{}')`,
+      fileCount: sql<number>`(select count(*)::int from attachments a where a.owner_type = 'document' and a.owner_id = ${documents.id})`,
+    })
+    .from(documents)
+    .leftJoin(counterparties, eq(counterparties.id, documents.counterpartyId))
+    .where(
+      and(
+        eq(documents.type, "conformity"),
+        or(
+          eq(documents.shipmentId, shipmentId),
+          productIds.length
+            ? sql`exists (select 1 from document_items i where i.document_id = ${documents.id} and i.product_id in (${sql.join(productIds.map((id) => sql`${id}`), sql`, `)}))`
+            : sql`false`,
+        ),
+      ),
+    )
+    .orderBy(desc(documents.validUntil), desc(documents.id));
+  return rows;
+}
+
 export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/shipments", async (request) => {
     const q = request.query as Record<string, string | undefined>;
@@ -210,15 +169,22 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
     const status = q.status ?? "active";
     if (status !== "all") conds.push(sql`s.status = ${status}`);
     if (q.stage && /^\d$/.test(q.stage)) conds.push(sql`s.stage = ${Number(q.stage)}`);
-    for (const [param, column] of [["clientId", sql`s.client_id`], ["supplierId", sql`s.supplier_id`], ["carrierId", sql`s.carrier_id`], ["dealId", sql`s.deal_id`]] as const) {
+    for (const [param, column] of [
+      ["clientId", sql`s.client_id`],
+      ["supplierId", sql`s.supplier_id`],
+      ["carrierId", sql`s.carrier_id`],
+      ["dealId", sql`s.deal_id`],
+      ["assigneeId", sql`s.assignee_id`],
+    ] as const) {
       const v = Number(q[param]);
       if (q[param] && Number.isSafeInteger(v)) conds.push(sql`${column} = ${v}`);
     }
+    if (q.assignee === "me") conds.push(sql`s.assignee_id = ${currentUser(request).id}`);
     const text = String(q.q ?? "").trim().slice(0, 100);
     if (text) {
       const like = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-      const num = /^(?:[сc]-?)?0*(\d{1,9})$/i.exec(text);
-      conds.push(sql`(s.container_no ILIKE ${like} OR s.cargo ILIKE ${like} OR s.route ILIKE ${like} OR cl.name ILIKE ${like}
+      const num = /^(?:[сc]-?|№\s*)?0*(\d{1,9})$/i.exec(text);
+      conds.push(sql`(s.title ILIKE ${like} OR s.container_no ILIKE ${like} OR s.hs_code ILIKE ${like} OR cl.name ILIKE ${like}
         OR sp.name ILIKE ${like} OR cr.name ILIKE ${like} ${num ? sql`OR s.number = ${Number(num[1])}` : sql``})`);
     }
     const list = await listShipments(db, conds.length ? sql.join(conds, sql` AND `) : sql`true`);
@@ -232,61 +198,92 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
     const user = currentUser(request);
     return db.transaction(async (tx) => {
       const row = await createShipment(tx, body(request), user.id);
-      await audit(tx, { userId: user.id, action: "create", entityType: "shipment", entityId: row.number, summary: `Создал сделку ${shipmentLabel(row.number)}`, ip: request.ip });
+      await audit(tx, { userId: user.id, action: "create", entityType: "shipment", entityId: row.number, summary: `Создал сделку «${row.title}»`, ip: request.ip });
       return { shipment: await getShipmentDto(tx, row.id) };
     });
   });
 
+  /** Карточка: вся информация по сделке. */
   app.get("/shipments/:number", async (request) => {
     const row = await findShipment(db, (request.params as { number: string }).number);
-    const events = await db
-      .select({
-        id: shipmentEvents.id,
-        kind: shipmentEvents.kind,
-        field: shipmentEvents.field,
-        oldValue: shipmentEvents.oldValue,
-        newValue: shipmentEvents.newValue,
-        createdAt: shipmentEvents.createdAt,
-        userName: users.name,
-      })
-      .from(shipmentEvents)
-      .leftJoin(users, eq(users.id, shipmentEvents.userId))
-      .where(eq(shipmentEvents.shipmentId, row.id))
-      .orderBy(desc(shipmentEvents.createdAt), desc(shipmentEvents.id))
-      .limit(300);
-    return { shipment: await getShipmentDto(db, row.id), events };
+    const [events, parties, docs, items] = await Promise.all([
+      db
+        .select({
+          id: shipmentEvents.id,
+          kind: shipmentEvents.kind,
+          field: shipmentEvents.field,
+          oldValue: shipmentEvents.oldValue,
+          newValue: shipmentEvents.newValue,
+          createdAt: shipmentEvents.createdAt,
+          userName: users.name,
+        })
+        .from(shipmentEvents)
+        .leftJoin(users, eq(users.id, shipmentEvents.userId))
+        .where(eq(shipmentEvents.shipmentId, row.id))
+        .orderBy(desc(shipmentEvents.createdAt), desc(shipmentEvents.id))
+        .limit(300),
+      db
+        .select({ id: counterparties.id, name: counterparties.name, role: counterparties.role, contractorType: counterparties.contractorType })
+        .from(shipmentParties)
+        .innerJoin(counterparties, eq(counterparties.id, shipmentParties.counterpartyId))
+        .where(eq(shipmentParties.shipmentId, row.id))
+        .orderBy(asc(counterparties.name)),
+      shipmentDocuments(db, row.id),
+      shipmentItems(row.id),
+    ]);
+    const productIds = [...new Set(items.map((i) => i.productId).filter((x): x is number => !!x))];
+    return {
+      shipment: await getShipmentDto(db, row.id),
+      events,
+      parties,
+      documents: docs,
+      finance: shipmentFinance(docs),
+      items,
+      certificates: await shipmentCertificates(row.id, productIds),
+    };
   });
 
+  /** Правка полей; каждое изменение — в историю. Сменили клиента/схему/поставщика — договоры подбираются заново. */
   app.patch("/shipments/:number", async (request) => {
     const user = currentUser(request);
     return db.transaction(async (tx) => {
       const row = await findShipment(tx, (request.params as { number: string }).number);
-      const v = parseShipmentFields(body(request));
-      await checkLinks(tx, v);
+      const v = await parseShipmentFields(tx, body(request));
       if ("containerNo" in v && !v.containerNo) {
         const ms = await loadMilestones(tx, row.id);
         if (ms.loading?.fact) throw new HttpError(400, "Груз уже погружен — номер контейнера обязателен");
       }
-      const changed: ShipmentField[] = [];
+      const changed: Record<string, unknown> = {};
       for (const field of Object.keys(v) as ShipmentField[]) {
-        const before = row[field] ?? null;
-        const after = v[field] ?? null;
-        if (before === after) continue;
-        changed.push(field);
-        if (field === "notes") {
-          await addShipmentEvent(tx, row.id, user.id, "field", field);
-        } else {
-          await addShipmentEvent(tx, row.id, user.id, "field", field, await shipmentDisplay(tx, field, before), await shipmentDisplay(tx, field, after));
-        }
+        const before = (row as Record<string, unknown>)[field] ?? null;
+        const after = (v as Record<string, unknown>)[field] ?? null;
+        if (sameShipmentValue(field, before, after)) continue;
+        changed[field] = after;
+        if (field === "notes") await addShipmentEvent(tx, row.id, user.id, "field", field);
+        else await addShipmentEvent(tx, row.id, user.id, "field", field, await shipmentDisplay(tx, field, before), await shipmentDisplay(tx, field, after));
       }
-      if (changed.length) {
-        await tx.update(shipments).set({ ...v, updatedAt: new Date() }).where(eq(shipments.id, row.id));
+      if (Object.keys(changed).length) {
+        if (("clientId" in changed || "scheme" in changed) && !("clientContractId" in changed)) changed.clientContractId = null;
+        if (("supplierId" in changed || "scheme" in changed) && !("supplierContractId" in changed)) changed.supplierContractId = null;
+        if ("clientId" in changed && !("contactId" in changed)) changed.contactId = null;
+        if ("carrierId" in changed && !("carrierInvoiceId" in changed)) changed.carrierInvoiceId = null;
+        await tx.update(shipments).set({ ...changed, updatedAt: new Date() }).where(eq(shipments.id, row.id));
+        if (changed.carrierId) {
+          await tx.insert(shipmentParties).values({ shipmentId: row.id, counterpartyId: changed.carrierId as number }).onConflictDoNothing();
+        }
+        const picked = await autoContracts(tx, row.id);
+        for (const [field, value] of Object.entries(picked) as [ShipmentField, unknown][]) {
+          await addShipmentEvent(tx, row.id, user.id, "field", field, null, await shipmentDisplay(tx, field, value));
+        }
         await audit(tx, {
           userId: user.id,
           action: "update",
           entityType: "shipment",
           entityId: row.number,
-          summary: `Изменил сделку ${shipmentLabel(row.number)}: ${changed.map((f) => SHIPMENT_FIELDS[f]).join(", ")}`,
+          summary: `Изменил сделку «${row.title}»: ${Object.keys(changed)
+            .filter((f) => f in SHIPMENT_FIELDS)
+            .map((f) => SHIPMENT_FIELDS[f as ShipmentField].label)
+            .join(", ")}`,
           ip: request.ip,
         });
       }
@@ -309,10 +306,31 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
         action: "update",
         entityType: "shipment",
         entityId: row.number,
-        summary: `${shipmentLabel(row.number)}: ${label} — ${"fact" in input ? `факт ${input.fact ?? "снят"}` : `план ${input.plan ?? "снят"}`}${shifted ? `, сдвинуто ещё ${shifted}` : ""}`,
+        summary: `«${row.title}»: ${label} — ${"fact" in input ? `факт ${input.fact ?? "снят"}` : `план ${input.plan ?? "снят"}`}${shifted ? `, сдвинуто ещё ${shifted}` : ""}`,
         ip: request.ip,
       });
       return { shipment: await getShipmentDto(tx, row.id), shifted };
+    });
+  });
+
+  /** Перенос карточки на доске на другой этап (факты ключевых дат ставятся / снимаются). */
+  app.post("/shipments/:number/stage", async (request) => {
+    const user = currentUser(request);
+    const stage = Number(body<{ stage: number }>(request).stage);
+    if (!Number.isInteger(stage) || stage < 1 || stage > LAST_STAGE) throw new HttpError(400, "Некорректный этап");
+    return db.transaction(async (tx) => {
+      const row = await findShipment(tx, (request.params as { number: string }).number);
+      if (row.status !== "active") throw new HttpError(400, "Сделка закрыта — сначала верните её в работу");
+      await moveToStage(tx, row, stage, user.id);
+      await audit(tx, {
+        userId: user.id,
+        action: "update",
+        entityType: "shipment",
+        entityId: row.number,
+        summary: `«${row.title}»: перенёс на этап «${stageSpec(stage).name}»`,
+        ip: request.ip,
+      });
+      return { shipment: await getShipmentDto(tx, row.id) };
     });
   });
 
@@ -329,7 +347,7 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
         action: "update",
         entityType: "shipment",
         entityId: row.number,
-        summary: `${shipmentLabel(row.number)}: ${FLAGS[key as FlagKey].label} — ${done ? "выполнено" : "снята отметка"}`,
+        summary: `«${row.title}»: ${FLAGS[key as FlagKey].label} — ${done ? "выполнено" : "снята отметка"}`,
         ip: request.ip,
       });
       return { shipment: await getShipmentDto(tx, row.id) };
@@ -350,9 +368,41 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
           .where(eq(shipments.id, row.id));
         await addShipmentEvent(tx, row.id, user.id, "status", null, row.status, status);
         const verb = { active: "Вернул в работу", closed: "Закрыл", cancelled: "Отменил" }[status];
-        await audit(tx, { userId: user.id, action: "update", entityType: "shipment", entityId: row.number, summary: `${verb} сделку ${shipmentLabel(row.number)}`, ip: request.ip });
+        await audit(tx, { userId: user.id, action: "update", entityType: "shipment", entityId: row.number, summary: `${verb} сделку «${row.title}»`, ip: request.ip });
       }
       return { shipment: await getShipmentDto(tx, row.id) };
+    });
+  });
+
+  // ── Подрядчики ───────────────────────────────────────────────────────────
+
+  app.post("/shipments/:number/parties", async (request) => {
+    const user = currentUser(request);
+    const counterpartyId = intParam(body<{ counterpartyId: number }>(request).counterpartyId, "counterpartyId");
+    return db.transaction(async (tx) => {
+      const row = await findShipment(tx, (request.params as { number: string }).number);
+      const [cp] = await tx.select().from(counterparties).where(eq(counterparties.id, counterpartyId));
+      if (!cp) throw new HttpError(404, "Контрагент не найден");
+      await tx.insert(shipmentParties).values({ shipmentId: row.id, counterpartyId }).onConflictDoNothing();
+      await addShipmentEvent(tx, row.id, user.id, "party_added", null, null, cp.name);
+      return { ok: true };
+    });
+  });
+
+  app.delete("/shipments/:number/parties/:id", async (request) => {
+    const user = currentUser(request);
+    const counterpartyId = intParam((request.params as { id: string }).id);
+    return db.transaction(async (tx) => {
+      const row = await findShipment(tx, (request.params as { number: string }).number);
+      const [removed] = await tx
+        .delete(shipmentParties)
+        .where(and(eq(shipmentParties.shipmentId, row.id), eq(shipmentParties.counterpartyId, counterpartyId)))
+        .returning();
+      if (removed) {
+        const [cp] = await tx.select({ name: counterparties.name }).from(counterparties).where(eq(counterparties.id, counterpartyId));
+        await addShipmentEvent(tx, row.id, user.id, "party_removed", null, cp?.name ?? null, null);
+      }
+      return { ok: true };
     });
   });
 
@@ -368,14 +418,14 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/shipments/:number", async (request) => {
     const admin = requireAdmin(request);
     const row = await findShipment(db, (request.params as { number: string }).number);
-    await db.delete(shipments).where(and(eq(shipments.id, row.id)));
-    await audit(db, { userId: admin.id, action: "delete", entityType: "shipment", entityId: row.number, summary: `Удалил сделку ${shipmentLabel(row.number)}`, ip: request.ip });
+    await db.delete(shipments).where(eq(shipments.id, row.id));
+    await audit(db, { userId: admin.id, action: "delete", entityType: "shipment", entityId: row.number, summary: `Удалил сделку «${row.title}» (${shipmentLabel(row.number)})`, ip: request.ip });
     return { ok: true };
   });
 
   /** Календарь: события всех сделок в работе. Группировку по неделям делает интерфейс. */
   app.get("/calendar", async () => {
     const list = await listShipments(db, sql`s.status = 'active'`);
-    return { events: calendarEvents(list), today: new Date().toISOString().slice(0, 10) };
+    return { events: calendarEvents(list) };
   });
 }

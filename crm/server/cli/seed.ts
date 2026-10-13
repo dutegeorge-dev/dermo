@@ -144,7 +144,7 @@ const DEMO_DEALS = [
 async function seedDemo(): Promise<void> {
   const [exists] = await db.select({ id: deals.id }).from(deals).where(eq(deals.source, "demo")).limit(1);
   if (exists) {
-    console.log("  = демо-сделки уже есть (удалить: --remove-demo)");
+    console.log("  = демо-воронка уже есть (удалить: --remove-demo)");
     return;
   }
   const stages = await db.select().from(dealStatuses).orderBy(asc(dealStatuses.position));
@@ -175,20 +175,10 @@ async function seedDemo(): Promise<void> {
           outcome: stage.isFinal ? "won" : null,
           closedAt: stage.isFinal ? new Date() : null,
           product: d.product,
-          hsCode: d.hsCode,
-          weightKg: String(d.weightKg),
-          volumeM3: String(d.volumeM3),
-          pickupLocation: "Гуанчжоу",
-          deliveryLocation: "Москва",
-          route: d.route,
-          contractParty: "ours",
-          exportLicense: "exportLicense" in d ? d.exportLicense : "yes",
-          certificates: "certificates" in d ? d.certificates : "yes",
-          chestnyZnak: "chestnyZnak" in d ? d.chestnyZnak : "not_required",
           dueDate: due,
           priority: i % 4 === 0 ? "high" : "medium",
           labels: ["демо"],
-          description: "Тестовая сделка для знакомства с CRM. Удалить: npm run crm:seed -- --remove-demo",
+          description: "Тестовый лид для знакомства с воронкой. Удалить: npm run crm:seed -- --remove-demo",
           boardPosition: (i + 1) * 1024,
           source: "demo",
         })
@@ -196,7 +186,7 @@ async function seedDemo(): Promise<void> {
       await tx.insert(dealEvents).values({ dealId: deal.id, kind: "created", newValue: stage.name });
     }
   });
-  console.log(`  + демо: ${DEMO_DEALS.length} сделок, ${clientIds.size} клиентов`);
+  console.log(`  + демо-воронка: ${DEMO_DEALS.length} лидов, ${clientIds.size} клиентов`);
 }
 
 async function removeDemo(): Promise<void> {
@@ -211,7 +201,7 @@ async function removeDemo(): Promise<void> {
       ),
     )
     .returning({ id: counterparties.id });
-  console.log(`  − удалено демо-сделок: ${removed.length}, демо-клиентов: ${orphanDemoClients.length}`);
+  console.log(`  − удалено демо-лидов: ${removed.length}, демо-клиентов: ${orphanDemoClients.length}`);
 }
 
 /** Реквизиты ООО ТЛК БАРС для шаблонов — из договоров компании. Только если ещё не заданы. */

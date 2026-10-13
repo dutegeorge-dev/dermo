@@ -252,8 +252,6 @@ export const messengerKind = pgEnum("messenger_kind", [
   "wechat",
   "other",
 ]);
-export const dealRoute = pgEnum("deal_route", ["auto", "rail", "air", "sea", "multimodal"]);
-export const contractParty = pgEnum("contract_party", ["ours", "client"]);
 export const exportLicense = pgEnum("export_license", ["yes", "no", "we_arrange"]);
 export const certificateStatus = pgEnum("certificate_status", ["yes", "no", "in_progress"]);
 export const chestnyZnak = pgEnum("chestny_znak", ["not_required", "required", "applied"]);
@@ -355,16 +353,8 @@ export const deals = pgTable(
       .default(sql`nextval('deal_number_seq')`),
     key: text("key").generatedAlwaysAs(sql`'BARS-' || ("number"::text)`),
     title: text("title").notNull(),
-    /** Схема работы с клиентом: комиссия, поставка, ТЭУ. */
-    scheme: dealScheme("scheme").notNull().default("commission"),
     clientId: integer("client_id").references(() => counterparties.id, { onDelete: "set null" }),
     contactId: integer("contact_id").references(() => contacts.id, { onDelete: "set null" }),
-    supplierId: integer("supplier_id").references(() => counterparties.id, { onDelete: "set null" }),
-    /** Договор с клиентом (комиссии / поставки / ТЭУ) и контракт с поставщиком. */
-    clientContractId: integer("client_contract_id").references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
-    supplierContractId: integer("supplier_contract_id").references((): AnyPgColumn => documents.id, {
-      onDelete: "set null",
-    }),
     statusKey: text("status_key")
       .notNull()
       .default("new_request")
@@ -372,19 +362,8 @@ export const deals = pgTable(
     /** null — в работе; won — дошла до завершающего этапа; lost — отказ (на любом этапе). */
     outcome: dealOutcome("outcome"),
     lostReason: text("lost_reason"),
+    /** Что хочет клиент (запрос / КП). Фактический груз — в сделке (shipments). */
     product: text("product"),
-    hsCode: text("hs_code"),
-    weightKg: numeric("weight_kg", { precision: 14, scale: 3 }),
-    volumeM3: numeric("volume_m3", { precision: 14, scale: 3 }),
-    pickupLocation: text("pickup_location"),
-    deliveryLocation: text("delivery_location"),
-    goodsReadyDate: date("goods_ready_date"),
-    route: dealRoute("route"),
-    contractParty: contractParty("contract_party"),
-    exportLicense: exportLicense("export_license"),
-    certificates: certificateStatus("certificates"),
-    certificateHolder: text("certificate_holder"),
-    chestnyZnak: chestnyZnak("chestny_znak"),
     assigneeId: integer("assignee_id").references(() => users.id, { onDelete: "set null" }),
     dueDate: date("due_date"),
     priority: dealPriority("priority").notNull().default("medium"),
@@ -441,19 +420,6 @@ export const dealEvents = pgTable(
 );
 
 /** Подрядчики сделки (перевозчики, брокер, СВХ…) — кроме клиента и поставщика. */
-export const dealParties = pgTable(
-  "deal_parties",
-  {
-    dealId: integer("deal_id")
-      .notNull()
-      .references(() => deals.id, { onDelete: "cascade" }),
-    counterpartyId: integer("counterparty_id")
-      .notNull()
-      .references(() => counterparties.id, { onDelete: "cascade" }),
-    createdAt: createdAt(),
-  },
-  (t) => [primaryKey({ columns: [t.dealId, t.counterpartyId] })],
-);
 
 // ── Документы и товары ──────────────────────────────────────────────────────
 
@@ -491,7 +457,8 @@ export const documents = pgTable(
     counterpartyId: integer("counterparty_id").references(() => counterparties.id, { onDelete: "set null" }),
     /** Клиент, к которому относится документ (для документов поставщиков и подрядчиков). */
     clientId: integer("client_id").references(() => counterparties.id, { onDelete: "set null" }),
-    dealId: integer("deal_id").references((): AnyPgColumn => deals.id, { onDelete: "set null" }),
+    /** Сделка (отгрузка), к которой относится документ. */
+    shipmentId: integer("shipment_id").references((): AnyPgColumn => shipments.id, { onDelete: "set null" }),
     /** Договор, к которому относится документ: приложение, инвойс по контракту и т.п. */
     parentId: integer("parent_id").references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
     /** Порядковый номер внутри договора (поручение № 09 к договору комиссии). */
@@ -514,7 +481,7 @@ export const documents = pgTable(
     index("documents_type_idx").on(t.type, t.date),
     index("documents_counterparty_idx").on(t.counterpartyId),
     index("documents_client_idx").on(t.clientId),
-    index("documents_deal_idx").on(t.dealId),
+    index("documents_shipment_idx").on(t.shipmentId),
     index("documents_parent_idx").on(t.parentId),
     index("documents_valid_idx").on(t.validUntil),
   ],
@@ -575,13 +542,28 @@ export const shipments = pgTable(
     clientId: integer("client_id").references(() => counterparties.id, { onDelete: "set null" }),
     supplierId: integer("supplier_id").references(() => counterparties.id, { onDelete: "set null" }),
     carrierId: integer("carrier_id").references(() => counterparties.id, { onDelete: "set null" }),
-    carrierInvoiceId: integer("carrier_invoice_id").references(() => documents.id, { onDelete: "set null" }),
+    carrierInvoiceId: integer("carrier_invoice_id").references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
     /** Лид из воронки продаж, из которого пришла сделка (необязательно). */
     dealId: integer("deal_id").references(() => deals.id, { onDelete: "set null" }),
+    /** Название груза — как вы его называете: «Линолеум коричневый». */
+    title: text("title").notNull().default(""),
+    scheme: dealScheme("scheme").notNull().default("commission"),
+    contactId: integer("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    assigneeId: integer("assignee_id").references(() => users.id, { onDelete: "set null" }),
+    /** Договор с клиентом (комиссии / поставки / ТЭУ) и контракт с поставщиком. */
+    clientContractId: integer("client_contract_id").references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
+    supplierContractId: integer("supplier_contract_id").references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
     containerNo: text("container_no"),
-    cargo: text("cargo").notNull().default(""),
+    hsCode: text("hs_code"),
+    weightKg: numeric("weight_kg", { precision: 14, scale: 3 }),
+    volumeM3: numeric("volume_m3", { precision: 14, scale: 3 }),
     transport: text("transport"),
-    route: text("route"),
+    pickupLocation: text("pickup_location"),
+    deliveryLocation: text("delivery_location"),
+    exportLicense: exportLicense("export_license"),
+    certificates: certificateStatus("certificates"),
+    certificateHolder: text("certificate_holder"),
+    chestnyZnak: chestnyZnak("chestny_znak"),
     depositDate: date("deposit_date"),
     /** Отмеченные флажки ожиданий: ключ → дата отметки. */
     flags: jsonb("flags").$type<Record<string, string>>().notNull().default({}),
@@ -596,6 +578,21 @@ export const shipments = pgTable(
     index("shipments_client_idx").on(t.clientId),
     index("shipments_carrier_idx").on(t.carrierId),
   ],
+);
+
+/** Подрядчики сделки: перевозчики, брокер, СВХ… */
+export const shipmentParties = pgTable(
+  "shipment_parties",
+  {
+    shipmentId: integer("shipment_id")
+      .notNull()
+      .references(() => shipments.id, { onDelete: "cascade" }),
+    counterpartyId: integer("counterparty_id")
+      .notNull()
+      .references(() => counterparties.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.shipmentId, t.counterpartyId] })],
 );
 
 /** Ключевые даты сделки: план и факт. */

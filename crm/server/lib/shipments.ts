@@ -1,7 +1,12 @@
-/** Сделки (отгрузки): создание, ключевые даты, пересчёт этапа, история. */
+/**
+ * Сделки (отгрузки): поля, создание, ключевые даты, пересчёт этапа, история,
+ * автоподбор договоров. Всё, что относится к исполнению заказа (документы,
+ * поручение, план/факт), привязано к сделке, а не к лиду воронки.
+ */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 
+import { CLIENT_CONTRACT_BY_SCHEME, type Scheme } from "../../shared/documents.ts";
 import {
   addDays,
   daysBetween,
@@ -11,12 +16,18 @@ import {
   MILESTONES,
   type MilestoneKey,
   type Milestones,
+  SHIPMENT_FIELDS,
+  type ShipmentField,
+  type ShipmentFieldSpec,
   stageOf,
-  TRANSPORTS,
 } from "../../shared/shipments.ts";
 import type { DbOrTx } from "../db/client.ts";
-import { counterparties, deals, documents, shipmentEvents, shipmentMilestones, shipments } from "../db/schema.ts";
+import { contacts, counterparties, deals, documents, shipmentEvents, shipmentMilestones, shipments, users } from "../db/schema.ts";
+import { documentLabel } from "./deals.ts";
 import { HttpError } from "./http.ts";
+
+type ShipmentInsert = typeof shipments.$inferInsert;
+export type ShipmentRow = typeof shipments.$inferSelect;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -28,53 +39,135 @@ export function parseDate(value: unknown, name: string): string | null {
   return value;
 }
 
+/** Номер из адреса: «12», «№12», «С-012» → 12. */
 export function parseShipmentNumber(raw: unknown): number {
-  const m = /^(?:[сc]-?)?0*(\d{1,9})$/i.exec(String(raw ?? "").trim());
+  const m = /^(?:[сc]-?|№\s*)?0*(\d{1,9})$/i.exec(String(raw ?? "").trim());
   if (!m) throw new HttpError(400, "Некорректный номер сделки");
   return Number(m[1]);
 }
 
-const s = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) || null : null);
+const ROLE_OF = { client: "client", supplier: "supplier", carrier: "contractor" } as const;
 
-const optId = (v: unknown, name: string): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
-  if (!Number.isSafeInteger(n) || n <= 0) throw new HttpError(400, `Некорректное поле ${name}`);
-  return n;
-};
-
-/** Поля сделки, которые можно задать при создании и правке. */
-export const SHIPMENT_FIELDS = {
-  clientId: "Клиент",
-  supplierId: "Поставщик",
-  carrierId: "Перевозчик",
-  carrierInvoiceId: "Инвойс перевозчика",
-  dealId: "Лид из воронки",
-  containerNo: "Номер контейнера",
-  cargo: "Груз",
-  transport: "Транспорт",
-  route: "Маршрут",
-  depositDate: "Депозит оплачен",
-  notes: "Заметки",
-} as const;
-export type ShipmentField = keyof typeof SHIPMENT_FIELDS;
-
-export function parseShipmentFields(input: Record<string, unknown>): Partial<typeof shipments.$inferInsert> {
-  const v: Partial<typeof shipments.$inferInsert> = {};
-  for (const f of ["clientId", "supplierId", "carrierId", "carrierInvoiceId", "dealId"] as const) {
-    if (f in input) v[f] = optId(input[f], f);
+async function idOf(tx: DbOrTx, value: unknown, spec: ShipmentFieldSpec): Promise<number | null> {
+  if (value === null || value === undefined || value === "") return null;
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, `${spec.label}: неверное значение`);
+  switch (spec.kind) {
+    case "client":
+    case "supplier":
+    case "carrier": {
+      const [c] = await tx.select({ role: counterparties.role }).from(counterparties).where(eq(counterparties.id, id));
+      if (!c) throw new HttpError(400, `${spec.label}: контрагент не найден`);
+      if (c.role !== ROLE_OF[spec.kind]) throw new HttpError(400, `${spec.label}: выбран контрагент другого типа`);
+      return id;
+    }
+    case "contact": {
+      const [c] = await tx.select({ id: contacts.id }).from(contacts).where(eq(contacts.id, id));
+      if (!c) throw new HttpError(400, `${spec.label}: не найден`);
+      return id;
+    }
+    case "document": {
+      const [d] = await tx.select({ id: documents.id }).from(documents).where(eq(documents.id, id));
+      if (!d) throw new HttpError(400, `${spec.label}: документ не найден`);
+      return id;
+    }
+    case "deal": {
+      const [d] = await tx.select({ id: deals.id }).from(deals).where(eq(deals.id, id));
+      if (!d) throw new HttpError(400, `${spec.label}: не найден`);
+      return id;
+    }
+    case "user": {
+      const [u] = await tx.select({ id: users.id }).from(users).where(and(eq(users.id, id), eq(users.isActive, true)));
+      if (!u) throw new HttpError(400, "Менеджер не найден или отключён");
+      return id;
+    }
+    default:
+      return id;
   }
-  if ("containerNo" in input) v.containerNo = s(input.containerNo, 50)?.toUpperCase().replace(/\s+/g, "") ?? null;
-  if ("cargo" in input) v.cargo = s(input.cargo, 1000) ?? "";
-  if ("transport" in input) {
-    const t = s(input.transport, 20);
-    if (t && !(t in TRANSPORTS)) throw new HttpError(400, "Некорректный вид транспорта");
-    v.transport = t;
+}
+
+async function parseField(tx: DbOrTx, field: ShipmentField, value: unknown): Promise<unknown> {
+  const spec: ShipmentFieldSpec = SHIPMENT_FIELDS[field];
+  switch (spec.kind) {
+    case "text": {
+      if (value !== null && value !== undefined && typeof value !== "string" && typeof value !== "number") {
+        throw new HttpError(400, `${spec.label}: ожидается текст`);
+      }
+      let text = String(value ?? "").trim().replace(/\s+/g, " ").slice(0, spec.max ?? 1000);
+      if (field === "containerNo") text = text.toUpperCase().replace(/\s+/g, "");
+      if (spec.required && !text) throw new HttpError(400, `Укажите поле «${spec.label}»`);
+      return field === "title" ? text : text || null;
+    }
+    case "longtext":
+      return typeof value === "string" ? value.replace(/\r\n/g, "\n").slice(0, spec.max ?? 20_000) : "";
+    case "number": {
+      if (value === null || value === undefined || value === "") return null;
+      const n = Number(String(value).replace(",", ".").replace(/\s/g, ""));
+      if (!Number.isFinite(n) || n < 0 || n > 1e9) throw new HttpError(400, `${spec.label}: введите число`);
+      return String(n);
+    }
+    case "date":
+      return parseDate(value, spec.label);
+    case "enum": {
+      if (value === null || value === undefined || value === "") return field === "scheme" ? "commission" : null;
+      if (!spec.values || !(String(value) in spec.values)) throw new HttpError(400, `${spec.label}: неизвестное значение`);
+      return String(value);
+    }
+    default:
+      return idOf(tx, value, spec);
   }
-  if ("route" in input) v.route = s(input.route, 300);
-  if ("depositDate" in input) v.depositDate = parseDate(input.depositDate, "депозит");
-  if ("notes" in input) v.notes = typeof input.notes === "string" ? input.notes.slice(0, 10000) : "";
-  return v;
+}
+
+/** Значения известных полей из тела запроса. */
+export async function parseShipmentFields(tx: DbOrTx, input: Record<string, unknown>): Promise<Partial<ShipmentInsert>> {
+  const out: Record<string, unknown> = {};
+  for (const field of Object.keys(SHIPMENT_FIELDS) as ShipmentField[]) {
+    if (field in input) out[field] = await parseField(tx, field, input[field]);
+  }
+  return out as Partial<ShipmentInsert>;
+}
+
+export function sameShipmentValue(field: ShipmentField, before: unknown, after: unknown): boolean {
+  if (SHIPMENT_FIELDS[field].kind === "number" && before != null && after != null) return Number(before) === Number(after);
+  return JSON.stringify(before ?? null) === JSON.stringify(after ?? null);
+}
+
+/** Человекочитаемое значение поля — для истории. */
+export async function shipmentDisplay(tx: DbOrTx, field: ShipmentField, value: unknown): Promise<string | null> {
+  if (value === null || value === undefined || value === "") return null;
+  const spec: ShipmentFieldSpec = SHIPMENT_FIELDS[field];
+  switch (spec.kind) {
+    case "number":
+      return String(Number(value)).replace(".", ",");
+    case "enum":
+      return spec.values?.[String(value)] ?? String(value);
+    case "client":
+    case "supplier":
+    case "carrier": {
+      const [c] = await tx.select({ name: counterparties.name }).from(counterparties).where(eq(counterparties.id, Number(value)));
+      return c?.name ?? `#${value}`;
+    }
+    case "contact": {
+      const [c] = await tx.select({ name: contacts.name }).from(contacts).where(eq(contacts.id, Number(value)));
+      return c?.name ?? `#${value}`;
+    }
+    case "user": {
+      const [u] = await tx.select({ name: users.name }).from(users).where(eq(users.id, Number(value)));
+      return u?.name ?? `#${value}`;
+    }
+    case "document":
+      return documentLabel(tx, Number(value));
+    case "deal": {
+      const [d] = await tx.select({ key: deals.key, title: deals.title }).from(deals).where(eq(deals.id, Number(value)));
+      return d ? `${d.key} · ${d.title}` : `#${value}`;
+    }
+    case "longtext": {
+      const text = String(value);
+      return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+    }
+    default:
+      return String(value);
+  }
 }
 
 export async function addShipmentEvent(
@@ -88,6 +181,55 @@ export async function addShipmentEvent(
 ): Promise<void> {
   await tx.insert(shipmentEvents).values({ shipmentId, userId, kind, field, oldValue, newValue });
 }
+
+// ── Договоры ──────────────────────────────────────────────────────────────
+
+/** Действующий договор нужного типа с контрагентом: не аннулирован, не истёк, самый свежий. */
+export async function findActiveContract(
+  tx: DbOrTx,
+  type: string,
+  counterpartyId: number,
+  opts: { clientId?: number | null } = {},
+): Promise<number | null> {
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await tx
+    .select({ id: documents.id, clientId: documents.clientId })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.type, type),
+        eq(documents.counterpartyId, counterpartyId),
+        or(isNull(documents.status), ne(documents.status, "cancelled")),
+        or(isNull(documents.validUntil), sql`${documents.validUntil} >= ${today}`),
+      ),
+    )
+    .orderBy(desc(documents.date), desc(documents.id));
+  if (opts.clientId !== undefined) {
+    // Контракт клиента (ТЭУ) важнее нашего; наш — без клиента.
+    const own = rows.find((r) => r.clientId === opts.clientId) ?? rows.find((r) => r.clientId === null);
+    return own?.id ?? null;
+  }
+  return rows[0]?.id ?? null;
+}
+
+/** Подставляет договор клиента и контракт поставщика, если они не выбраны. Возвращает, что подставил. */
+export async function autoContracts(tx: DbOrTx, shipmentId: number): Promise<Partial<ShipmentInsert>> {
+  const [s] = await tx.select().from(shipments).where(eq(shipments.id, shipmentId));
+  if (!s) return {};
+  const patch: Partial<ShipmentInsert> = {};
+  if (!s.clientContractId && s.clientId) {
+    const id = await findActiveContract(tx, CLIENT_CONTRACT_BY_SCHEME[s.scheme as Scheme], s.clientId);
+    if (id) patch.clientContractId = id;
+  }
+  if (!s.supplierContractId && s.supplierId) {
+    const id = await findActiveContract(tx, "supplier_contract", s.supplierId, { clientId: s.scheme === "teu" ? s.clientId : null });
+    if (id) patch.supplierContractId = id;
+  }
+  if (Object.keys(patch).length) await tx.update(shipments).set(patch).where(eq(shipments.id, shipmentId));
+  return patch;
+}
+
+// ── Ключевые даты ─────────────────────────────────────────────────────────
 
 export async function loadMilestones(tx: DbOrTx, shipmentId: number): Promise<Milestones> {
   const rows = await tx.select().from(shipmentMilestones).where(eq(shipmentMilestones.shipmentId, shipmentId));
@@ -117,35 +259,12 @@ export async function refreshStage(tx: DbOrTx, shipmentId: number, userId: numbe
   return stage;
 }
 
-/** Проверки ссылок: роли контрагентов, инвойс перевозчика. */
-export async function checkLinks(tx: DbOrTx, v: Partial<typeof shipments.$inferInsert>): Promise<void> {
-  const roles = { clientId: "client", supplierId: "supplier", carrierId: "contractor" } as const;
-  for (const [field, role] of Object.entries(roles) as [keyof typeof roles, string][]) {
-    const id = v[field];
-    if (!id) continue;
-    const [c] = await tx.select({ role: counterparties.role }).from(counterparties).where(eq(counterparties.id, id));
-    if (!c) throw new HttpError(400, `${SHIPMENT_FIELDS[field]}: контрагент не найден`);
-    if (c.role !== role) throw new HttpError(400, `${SHIPMENT_FIELDS[field]}: выбран контрагент другого типа`);
-  }
-  if (v.carrierInvoiceId) {
-    const [d] = await tx.select({ id: documents.id }).from(documents).where(eq(documents.id, v.carrierInvoiceId));
-    if (!d) throw new HttpError(400, "Инвойс перевозчика не найден");
-  }
-  if (v.dealId) {
-    const [d] = await tx.select({ id: deals.id }).from(deals).where(eq(deals.id, v.dealId));
-    if (!d) throw new HttpError(400, "Лид из воронки не найден");
-  }
-}
-
 export type MilestoneInput = Partial<Record<MilestoneKey, { plan?: unknown; fact?: unknown }>>;
 
-export async function createShipment(
-  tx: DbOrTx,
-  input: Record<string, unknown>,
-  userId: number | null,
-): Promise<typeof shipments.$inferSelect> {
-  const v = parseShipmentFields(input);
-  await checkLinks(tx, v);
+/** Новая сделка. title обязателен; договоры подбираются сами. */
+export async function createShipment(tx: DbOrTx, input: Record<string, unknown>, userId: number | null): Promise<ShipmentRow> {
+  const v = await parseShipmentFields(tx, input);
+  if (!v.title) throw new HttpError(400, "Укажите название груза");
   const flags: Record<string, string> = {};
   if (input.flags && typeof input.flags === "object") {
     for (const [k, d] of Object.entries(input.flags as Record<string, unknown>)) {
@@ -154,20 +273,28 @@ export async function createShipment(
   }
   const [row] = await tx
     .insert(shipments)
-    .values({ ...v, flags, createdBy: userId, ...(input.status === "closed" ? { status: "closed", closedAt: new Date() } : {}) })
+    .values({
+      ...v,
+      title: v.title,
+      assigneeId: "assigneeId" in v ? v.assigneeId : userId,
+      flags,
+      createdBy: userId,
+      ...(input.status === "closed" ? { status: "closed", closedAt: new Date() } : {}),
+    })
     .returning();
   const ms = (input.milestones ?? {}) as MilestoneInput;
   for (const m of MILESTONES) {
-    const plan = parseDate(ms[m.key]?.plan, m.label);
-    const fact = parseDate(ms[m.key]?.fact, m.label);
-    await upsertMilestone(tx, row.id, m.key, plan, fact);
+    await upsertMilestone(tx, row.id, m.key, parseDate(ms[m.key]?.plan, m.label), parseDate(ms[m.key]?.fact, m.label));
   }
   const milestones = await loadMilestones(tx, row.id);
   if (milestones.loading?.fact && !row.containerNo) throw new HttpError(400, "Груз погружен — укажите номер контейнера");
   const stage = stageOf(milestones);
   await tx.update(shipments).set({ stage }).where(eq(shipments.id, row.id));
+  if (row.carrierId) await tx.execute(sql`INSERT INTO shipment_parties (shipment_id, counterparty_id) VALUES (${row.id}, ${row.carrierId}) ON CONFLICT DO NOTHING`);
+  await autoContracts(tx, row.id);
   await addShipmentEvent(tx, row.id, userId, "created");
-  return { ...row, stage };
+  const [fresh] = await tx.select().from(shipments).where(eq(shipments.id, row.id));
+  return fresh;
 }
 
 /**
@@ -176,7 +303,7 @@ export async function createShipment(
  */
 export async function setMilestone(
   tx: DbOrTx,
-  shipment: typeof shipments.$inferSelect,
+  shipment: ShipmentRow,
   key: MilestoneKey,
   input: { plan?: unknown; fact?: unknown; shift?: unknown },
   userId: number | null,
@@ -219,39 +346,26 @@ export async function setMilestone(
   return { shifted };
 }
 
-export async function setFlag(
-  tx: DbOrTx,
-  shipment: typeof shipments.$inferSelect,
-  key: FlagKey,
-  done: boolean,
-  userId: number | null,
-): Promise<void> {
+/**
+ * Перенос карточки на доске на этап target: факты ключевых дат пройденных
+ * этапов ставятся сегодняшним днём (если не стоят), следующих — снимаются.
+ */
+export async function moveToStage(tx: DbOrTx, shipment: ShipmentRow, target: number, userId: number | null): Promise<void> {
+  const milestones = await loadMilestones(tx, shipment.id);
+  const today = new Date().toISOString().slice(0, 10);
+  for (const m of MILESTONES) {
+    if (m.optional) continue;
+    const d = milestones[m.key]!;
+    if (m.stage < target && !d.fact) await setMilestone(tx, shipment, m.key, { fact: today }, userId);
+    if (m.stage >= target && d.fact) await setMilestone(tx, shipment, m.key, { fact: null }, userId);
+  }
+}
+
+export async function setFlag(tx: DbOrTx, shipment: ShipmentRow, key: FlagKey, done: boolean, userId: number | null): Promise<void> {
   const flags = { ...shipment.flags };
   if (done === Boolean(flags[key])) return;
   if (done) flags[key] = new Date().toISOString().slice(0, 10);
   else delete flags[key];
-  await tx.update(shipments).set({ flags, updatedAt: new Date() }).where(and(eq(shipments.id, shipment.id)));
+  await tx.update(shipments).set({ flags, updatedAt: new Date() }).where(eq(shipments.id, shipment.id));
   await addShipmentEvent(tx, shipment.id, userId, "flag", key, !done, done);
-}
-
-/** Название контрагента / документа / лида для истории изменений. */
-export async function shipmentDisplay(tx: DbOrTx, field: ShipmentField, value: unknown): Promise<unknown> {
-  if (value === null || value === undefined) return null;
-  if (field === "clientId" || field === "supplierId" || field === "carrierId") {
-    const [c] = await tx.select({ name: counterparties.name }).from(counterparties).where(eq(counterparties.id, Number(value)));
-    return c?.name ?? value;
-  }
-  if (field === "carrierInvoiceId") {
-    const [d] = await tx
-      .select({ label: sql<string>`coalesce('№ ' || ${documents.number}, 'без номера')` })
-      .from(documents)
-      .where(eq(documents.id, Number(value)));
-    return d ? `Инвойс ${d.label}` : value;
-  }
-  if (field === "dealId") {
-    const [d] = await tx.select({ key: deals.key, title: deals.title }).from(deals).where(eq(deals.id, Number(value)));
-    return d ? `${d.key} · ${d.title}` : value;
-  }
-  if (field === "transport") return TRANSPORTS[value as keyof typeof TRANSPORTS] ?? value;
-  return value;
 }

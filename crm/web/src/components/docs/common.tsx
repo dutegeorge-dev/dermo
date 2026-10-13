@@ -98,8 +98,8 @@ export function DocumentsTable({ rows, hide = [] }: { rows: DocumentRow[]; hide?
                 </td>
               )}
               {!hide.includes("deal") && (
-                <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">
-                  {d.dealKey ? <Link to={`/deals/${d.dealKey}`} className="link">{d.dealKey}</Link> : <span className="muted">—</span>}
+                <td className="max-w-48 truncate px-3 py-2 text-xs">
+                  {d.shipmentNumber ? <Link to={`/shipments/${d.shipmentNumber}`} className="link">{d.shipmentTitle || `№ ${d.shipmentNumber}`}</Link> : <span className="muted">—</span>}
                 </td>
               )}
               <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{d.amount !== null ? formatMoney(d.amount, d.currency) : ""}</td>
