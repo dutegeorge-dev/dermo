@@ -188,7 +188,7 @@ export async function seedDemoDocuments(): Promise<void> {
       containerNo: "DEMU1000011", hsCode: "5703300000", weightKg: "21500", volumeM3: "58", ...rail,
       pickupLocation: "Shijiazhuang", deliveryLocation: "Московская обл., г. Балашиха",
       exportLicense: "yes", certificates: "in_progress", certificateHolder: "ООО «ГринЛэнд»", chestnyZnak: "not_required",
-      depositDate: day(-20), milestones: demoMilestones(2, 2), flags: { balance: day(-1) },
+      milestones: demoMilestones(3, 2), flags: { balance: day(-1) },
     }, userId);
     await doc(tx, userId, {
       type: "supplier_invoice", number: "PI-SGT-0412", date: day(-22), counterpartyId: turf, shipmentId: s1.id, currency: "CNY",
@@ -211,7 +211,7 @@ export async function seedDemoDocuments(): Promise<void> {
       ...base, title: "LVT 4 мм дуб", scheme: "commission", dealId: d2.id, clientId: smirnov, supplierId: foshan, carrierId: carrierCn,
       containerNo: "DEMU1000022", hsCode: "3918101000", weightKg: "19800", volumeM3: "34", ...rail, pickupLocation: "Foshan",
       exportLicense: "we_arrange", certificates: "yes", certificateHolder: "ИП Смирнов А.В.", chestnyZnak: "applied",
-      depositDate: day(-60), milestones: demoMilestones(6, 1, { slip: 1 }),
+      milestones: demoMilestones(7, 1, { slip: 1 }),
       flags: { balance: day(-30), freight: day(-30), customs_payment: day(-5), customs_docs: day(-5) },
     }, userId);
     await doc(tx, userId, {
@@ -237,7 +237,7 @@ export async function seedDemoDocuments(): Promise<void> {
     const s3 = await createShipment(tx, {
       ...base, title: "LED-панели 600×600", scheme: "teu", dealId: d3.id, clientId: svetdom, supplierId: brightled, carrierId: carrierRu,
       hsCode: "9405110009", weightKg: "1800", volumeM3: "12", transport: "auto", pickupLocation: "Shenzhen", deliveryLocation: "Санкт-Петербург",
-      exportLicense: "yes", certificates: "no", chestnyZnak: "not_required", depositDate: day(-4), milestones: demoMilestones(1, 12),
+      exportLicense: "yes", certificates: "no", chestnyZnak: "not_required", milestones: demoMilestones(2, 12),
     }, userId);
     await doc(tx, userId, {
       type: "supplier_invoice", number: "BL-PI-7781", date: day(-8), counterpartyId: brightled, shipmentId: s3.id, currency: "USD",
@@ -383,7 +383,7 @@ export async function seedDemoKb(): Promise<void> {
 // ── Сделки (отгрузки) для календаря ──────────────────────────────────────
 
 /** Типичные интервалы между ключевыми датами, дней. */
-const GAPS: Partial<Record<MilestoneKey, number>> = { ready: 0, loading: 4, departure: 3, border: 8, arrival: 10, release: 4, delivery: 3 };
+const GAPS: Partial<Record<MilestoneKey, number>> = { deposit: 0, ready: 25, loading: 4, departure: 3, border: 8, arrival: 10, release: 4, delivery: 3 };
 
 /**
  * Даты сделки на этапе stage: плановая дата текущей точки — через offset дней
@@ -443,14 +443,16 @@ export async function seedDemoShipments(): Promise<void> {
   const all = { balance: day(-30), freight: day(-30), customs_payment: day(-5), customs_docs: day(-5) };
   // Повторные заказы — без воронки, сразу сделкой.
   const list: Record<string, unknown>[] = [
-    { title: "Трава 40 мм оливковая", clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000033", hsCode: "5703300000", ...rail, depositDate: day(-45), milestones: demoMilestones(4, 9), flags: { balance: day(-25), freight: day(-24) } },
-    { title: "Плинтус ПВХ белый", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000044", hsCode: "3916209000", ...rail, depositDate: day(-50), milestones: demoMilestones(5, -1), flags: { balance: day(-30), freight: day(-30), customs_docs: day(-3) } },
-    { title: "LED-драйверы 40 Вт", scheme: "teu", clientId: svetdom, supplierId: brightled, carrierId: carrierCn, containerNo: "DEMU1000055", transport: "sea", pickupLocation: "Шэньчжэнь", deliveryLocation: "Москва (через Владивосток)", depositDate: day(-25), milestones: demoMilestones(3, 4), flags: { balance: day(-8), freight: day(-8) } },
-    { title: "Клей для травы", clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000066", ...rail, depositDate: day(-30), milestones: demoMilestones(4, 20), flags: { balance: day(-12), freight: day(-12) } },
-    { title: "LVT 5 мм ёлочка", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, hsCode: "3918101000", ...rail, depositDate: day(-28), milestones: demoMilestones(2, -2) },
-    { title: "Трековые светильники", scheme: "teu", clientId: svetdom, supplierId: brightled, transport: "rail", depositDate: day(-1), milestones: demoMilestones(1, 30) },
-    { title: "Трава 20 мм", clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000077", ...rail, depositDate: day(-70), milestones: demoMilestones(7, -1), flags: all },
-    { title: "LVT 4 мм серый", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000088", ...rail, depositDate: day(-110), milestones: demoMilestones(7, -40), flags: all, status: "closed" },
+    { title: "Трава 40 мм оливковая", clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000033", hsCode: "5703300000", ...rail, milestones: demoMilestones(5, 9), flags: { balance: day(-25), freight: day(-24) } },
+    { title: "Плинтус ПВХ белый", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000044", hsCode: "3916209000", ...rail, milestones: demoMilestones(6, -1), flags: { balance: day(-30), freight: day(-30), customs_docs: day(-3) } },
+    { title: "LED-драйверы 40 Вт", scheme: "teu", clientId: svetdom, supplierId: brightled, carrierId: carrierCn, containerNo: "DEMU1000055", transport: "sea", pickupLocation: "Шэньчжэнь", deliveryLocation: "Москва (через Владивосток)", milestones: demoMilestones(4, 4), flags: { balance: day(-8), freight: day(-8) } },
+    { title: "Клей для травы", clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000066", ...rail, milestones: demoMilestones(5, 20), flags: { balance: day(-12), freight: day(-12) } },
+    { title: "LVT 5 мм ёлочка", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, hsCode: "3918101000", ...rail, milestones: demoMilestones(3, -2) },
+    { title: "Трековые светильники", scheme: "teu", clientId: svetdom, supplierId: brightled, transport: "rail", milestones: demoMilestones(2, 30) },
+    // Заказ сформирован, ждём депозит: инвойса и поручения ещё нет — видно, что сделать.
+    { title: "Линолеум коричневый", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, ...rail, milestones: demoMilestones(1, 3) },
+    { title: "Трава 20 мм", clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000077", ...rail, milestones: demoMilestones(8, -1), flags: all },
+    { title: "LVT 4 мм серый", clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000088", ...rail, milestones: demoMilestones(8, -40), flags: all, status: "closed" },
   ];
   await db.transaction(async (tx) => {
     for (const input of list) await createShipment(tx, { ...input, notes: MARK, assigneeId: userId }, userId);

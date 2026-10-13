@@ -50,7 +50,7 @@ function eventText(e: ShipmentEvent): string {
 /** Горизонтальная лента 7 этапов. */
 export function Stepper({ stage, status }: { stage: number; status: string }) {
   return (
-    <ol className="mb-5 grid grid-cols-7 gap-1">
+    <ol className="mb-5 grid gap-1" style={{ gridTemplateColumns: `repeat(${SHIPMENT_STAGES.length}, minmax(0, 1fr))` }}>
       {SHIPMENT_STAGES.map((s) => {
         const done = s.no < stage || (s.no === stage && stage === SHIPMENT_STAGES.length);
         const current = s.no === stage && status === "active";

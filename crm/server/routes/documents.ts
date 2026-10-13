@@ -149,7 +149,6 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
             scheme: ns.scheme === "supply" || ns.scheme === "teu" ? ns.scheme : "commission",
             clientId: ns.clientId ?? null,
             supplierId: spec.party === "supplier" ? (fields.counterpartyId ?? null) : null,
-            depositDate: new Date().toISOString().slice(0, 10),
           },
           user.id,
         );

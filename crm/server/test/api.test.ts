@@ -406,6 +406,7 @@ describe("Документы: договор → инвойс → сделка (
 
     let deal = (await call(s, "GET", `/shipments/${no}`)).json();
     assert.equal(deal.shipment.title, "Трава зелёная 30 мм");
+    assert.equal(deal.shipment.stage, 1, "сделка из инвойса ждёт депозит — поручение выпускаем до оплаты");
     assert.equal(deal.shipment.clientId, client.id);
     assert.equal(deal.shipment.supplierId, supplier.id, "поставщик подставился из инвойса");
     assert.equal(deal.shipment.clientContractId, commission.id, "договор комиссии подобран сам");
@@ -518,20 +519,24 @@ describe("Сделки (отгрузки) и календарь", () => {
       carrierId: carrier.id,
       title: "Линолеум коричневый",
       transport: "rail",
-      depositDate: "2026-10-01",
-      milestones: { ready: { plan: "2026-10-10" }, loading: { plan: "2026-10-14" }, departure: { plan: "2026-10-16" }, arrival: { plan: "2026-11-01" } },
+      milestones: { deposit: { plan: "2026-10-03" }, ready: { plan: "2026-10-10" }, loading: { plan: "2026-10-14" }, departure: { plan: "2026-10-16" }, arrival: { plan: "2026-11-01" } },
     });
     assert.equal(created.statusCode, 200, created.body);
     const sh = created.json().shipment;
-    assert.equal(sh.stage, 1);
+    assert.equal(sh.stage, 1, "заказ сформирован — ждём депозит");
     assert.equal(sh.title, "Линолеум коричневый");
     assert.equal(sh.label, `№ ${sh.number}`);
-    assert.equal(sh.nextDate, "2026-10-10");
+    assert.equal(sh.nextDate, "2026-10-03");
 
-    // Производство окончено → этап 2, флажки остатка и фрахта ждут.
-    let res = await call(s, "PUT", `/shipments/${sh.number}/milestones/ready`, { fact: "2026-10-11" });
-    assert.equal(res.statusCode, 200, res.body);
+    // Депозит оплачен → производство.
+    let res = await call(s, "PUT", `/shipments/${sh.number}/milestones/deposit`, { fact: "2026-10-02" });
     assert.equal(res.json().shipment.stage, 2);
+    assert.equal(res.json().shipment.nextDate, "2026-10-10");
+
+    // Производство окончено → готов к отгрузке, флажки остатка и фрахта ждут.
+    res = await call(s, "PUT", `/shipments/${sh.number}/milestones/ready`, { fact: "2026-10-11" });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(res.json().shipment.stage, 3);
     assert.deepEqual(res.json().shipment.pendingFlags, ["balance", "freight"]);
 
     // Погрузку без контейнера не отметить.
@@ -549,7 +554,7 @@ describe("Сделки (отгрузки) и календарь", () => {
 
     await call(s, "PATCH", `/shipments/${sh.number}`, { containerNo: "tgbu 1234567" });
     res = await call(s, "PUT", `/shipments/${sh.number}/milestones/loading`, { fact: "2026-10-17" });
-    assert.equal(res.json().shipment.stage, 3);
+    assert.equal(res.json().shipment.stage, 4);
     assert.equal(res.json().shipment.containerNo, "TGBU1234567");
     res = await call(s, "PATCH", `/shipments/${sh.number}`, { containerNo: "" });
     assert.equal(res.statusCode, 400, "после погрузки контейнер не стереть");
@@ -576,13 +581,13 @@ describe("Сделки (отгрузки) и календарь", () => {
     const card = (await call(s, "GET", `/shipments/${sh.number}`)).json();
     assert.ok(card.events.some((e: { kind: string; field: string }) => e.kind === "plan" && e.field === "arrival"));
     assert.ok(card.events.some((e: { kind: string }) => e.kind === "stage"));
-    // Доска: перенос на этап 5 ставит факты пройденных ключевых дат, обратно на 4 — снимает.
-    res = await call(s, "POST", `/shipments/${sh.number}/stage`, { stage: 5 });
+    // Доска: перенос на этап 6 ставит факты пройденных ключевых дат, обратно на 5 — снимает.
+    res = await call(s, "POST", `/shipments/${sh.number}/stage`, { stage: 6 });
     assert.equal(res.statusCode, 200, res.body);
-    assert.equal(res.json().shipment.stage, 5);
+    assert.equal(res.json().shipment.stage, 6);
     assert.ok(res.json().shipment.milestones.arrival.fact);
-    res = await call(s, "POST", `/shipments/${sh.number}/stage`, { stage: 4 });
-    assert.equal(res.json().shipment.stage, 4);
+    res = await call(s, "POST", `/shipments/${sh.number}/stage`, { stage: 5 });
+    assert.equal(res.json().shipment.stage, 5);
     assert.equal(res.json().shipment.milestones.arrival.fact, null);
 
     // Поля груза правятся в сделке, с историей.

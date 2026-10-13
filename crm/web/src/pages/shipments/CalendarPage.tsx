@@ -5,13 +5,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { type DragEvent, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, Navigate } from "react-router";
 
 import { addDays, FLAGS, type FlagKey, milestoneSpec, stageSpec } from "../../../../shared/shipments.ts";
 import { dateKey, DueLabel, EventDialog, today, useShipmentActions } from "../../components/shipments/common.tsx";
 import { IconCheck, IconChevronLeft, IconChevronRight, IconSearch } from "../../components/Icons.tsx";
-import { Content } from "../../components/Layout.tsx";
-import { EmptyState, ErrorBox, PageHeader, Spinner } from "../../components/ui.tsx";
+import { EmptyState, ErrorBox, Spinner } from "../../components/ui.tsx";
 import { api, errorMessage } from "../../lib/api.ts";
 import type { CalendarEvent } from "../../lib/types.ts";
 
@@ -51,6 +50,11 @@ function matches(e: CalendarEvent, q: string, onlyPayments: boolean): boolean {
   if (!q) return true;
   const hay = [e.shipment.title, e.shipment.label, e.shipment.containerNo, e.shipment.client, e.shipment.carrier, e.title].join(" ").toLowerCase();
   return hay.includes(q.toLowerCase());
+}
+
+/** Коротко, что сделать: «Оплатить остаток», «Погрузка», «Выпуск». */
+function shortTitle(e: CalendarEvent): string {
+  return e.kind === "flag" ? (FLAGS[e.key as FlagKey]?.short ?? e.title) : (milestoneSpec(e.key)?.short ?? e.title);
 }
 
 /** Событие текущего этапа сделки (или флажок, который уже пора выполнить). */
@@ -253,7 +257,7 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
             return (
               <div
                 key={day}
-                className={`min-h-[92px] min-w-0 border-slate-200 p-1 dark:border-neutral-800 ${i % 7 ? "border-l" : ""} ${i >= 7 ? "border-t" : ""} ${
+                className={`min-h-[110px] min-w-0 border-slate-200 p-1 dark:border-neutral-800 ${i % 7 ? "border-l" : ""} ${i >= 7 ? "border-t" : ""} ${
                   inMonth ? "" : "bg-slate-50/70 dark:bg-neutral-950/40"
                 } ${dragOver === day ? "bg-accent-soft dark:bg-accent/20" : ""}`}
                 onDragOver={(e) => {
@@ -276,13 +280,17 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
                         draggable={!e.done && Boolean(e.milestone)}
                         onDragStart={(d) => d.dataTransfer.setData("text/plain", e.id)}
                         onClick={() => onOpen(e)}
-                        className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight ${
-                          e.done ? "text-slate-400 line-through dark:text-neutral-500" : "text-slate-800 dark:text-neutral-100"
+                        className={`block w-full rounded px-1 py-0.5 text-left text-[11px] leading-tight ${
+                          e.done ? "text-slate-400 dark:text-neutral-500" : "text-slate-800 dark:text-neutral-100"
                         } ${overdue ? "ring-1 ring-red-500" : ""}`}
                         style={{ background: e.done ? undefined : `${eventColor(e)}26`, borderLeft: `3px solid ${eventColor(e)}` }}
                         title={`${e.title} — ${e.shipment.title} ${e.shipment.containerNo ?? ""} ${e.shipment.client ?? ""}`}
                       >
-                        <span className="font-medium">{e.shipment.title}</span> · {e.title}
+                        <span className={`block font-semibold ${e.done ? "line-through" : ""}`}>
+                          {e.done ? "✓ " : e.payment ? "₽ " : ""}
+                          {shortTitle(e)}
+                        </span>
+                        <span className="block truncate opacity-80">{e.shipment.title}</span>
                       </button>
                     );
                   })}
@@ -313,7 +321,8 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
   );
 }
 
-export function CalendarPage() {
+/** Календарь сделок — вид на странице «Сделки». */
+export function CalendarView() {
   const [view, setViewState] = useState<View>(readView);
   const [q, setQ] = useState("");
   const [onlyPayments, setOnlyPayments] = useState(false);
@@ -355,25 +364,7 @@ export function CalendarPage() {
   );
 
   return (
-    <Content wide>
-      <PageHeader
-        title="Календарь"
-        meta={
-          <>
-            Даты и оплаты по всем{" "}
-            <Link to="/shipments" className="link">
-              сделкам в работе
-            </Link>
-            . Нажмите на событие, чтобы отметить выполнение или перенести.
-          </>
-        }
-        actions={
-          <div className="inline-flex overflow-hidden rounded-md border border-slate-300 dark:border-neutral-700">
-            {tab("list", "По неделям")}
-            {tab("month", "Месяц")}
-          </div>
-        }
-      />
+    <div>
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {stats.map((s) => (
           <div key={s.label} className="panel px-3 py-2">
@@ -383,6 +374,10 @@ export function CalendarPage() {
         ))}
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex overflow-hidden rounded-md border border-slate-300 dark:border-neutral-700">
+          {tab("list", "По неделям")}
+          {tab("month", "Месяц")}
+        </div>
         <label className="relative block w-full max-w-xs">
           <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input type="search" className="input pl-8" placeholder="Груз, контейнер, клиент" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -400,8 +395,14 @@ export function CalendarPage() {
         </EmptyState>
       )}
       {data && data.events.length > 0 && (view === "list" ? <ListView events={events} onOpen={(e) => setOpenId(e.id)} /> : <MonthView events={events} onOpen={(e) => setOpenId(e.id)} />)}
+      <p className="mt-3 text-xs muted">Нажмите на событие, чтобы отметить выполнение или перенести дату.</p>
       {opened && <EventDialog key={opened.id + String(opened.date) + String(opened.done)} event={opened} onClose={() => setOpenId(null)} />}
-    </Content>
+    </div>
   );
+}
+
+/** Старый адрес /calendar — теперь вид «Календарь» в «Сделках». */
+export function CalendarPage() {
+  return <Navigate to="/shipments?view=calendar" replace />;
 }
 

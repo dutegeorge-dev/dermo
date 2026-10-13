@@ -2,11 +2,12 @@
  * Сделки (отгрузки): этапы, ключевые даты и флажки ожиданий — общий справочник
  * для сервера и интерфейса.
  *
- * Сделка начинается с оплаты депозита. Этап не выбирается руками, а следует из
- * проставленных фактических дат: есть факт «готовность товара» → этап 2 и т.д.
+ * Сделка начинается, когда сформирован заказ (инвойс поставщика → поручение
+ * клиенту), и ждёт оплаты депозита. Этап не выбирается руками, а следует из
+ * проставленных фактических дат: есть факт «депозит оплачен» → этап 2 и т.д.
  */
 
-export type MilestoneKey = "ready" | "loading" | "departure" | "border" | "transshipment" | "arrival" | "release" | "delivery";
+export type MilestoneKey = "deposit" | "ready" | "loading" | "departure" | "border" | "transshipment" | "arrival" | "release" | "delivery";
 export type FlagKey = "balance" | "freight" | "customs_payment" | "customs_docs";
 
 export type StageSpec = {
@@ -22,13 +23,14 @@ export type StageSpec = {
 };
 
 export const SHIPMENT_STAGES: StageSpec[] = [
-  { no: 1, name: "Производство", color: "#a78bfa", milestone: "ready", flags: [], doing: "Поставщик производит товар. Ждём, когда товар будет готов." },
-  { no: 2, name: "Готов к отгрузке", color: "#f59e0b", milestone: "loading", flags: ["balance", "freight"], doing: "Товар готов. Оплачиваем остаток поставщику и фрахт, грузим в контейнер." },
-  { no: 3, name: "Погружен, ждёт отправки", color: "#38bdf8", milestone: "departure", flags: [], doing: "Контейнер загружен. Ждём отправку поезда / судна." },
-  { no: 4, name: "В пути", color: "#3b82f6", milestone: "arrival", flags: [], doing: "Груз едет. Можно отмечать границу и перегруз. Ждём прибытия на таможню." },
-  { no: 5, name: "На таможне", color: "#f97316", milestone: "release", flags: ["customs_payment", "customs_docs"], doing: "Груз на таможне. Оплачиваем таможенные платежи, подаём документы, ждём выпуск." },
-  { no: 6, name: "Выпущен, доставка клиенту", color: "#14b8a6", milestone: "delivery", flags: [], doing: "Таможня выпустила груз. Везём клиенту." },
-  { no: 7, name: "Доставлен", color: "#22c55e", milestone: null, flags: [], doing: "Груз у клиента. Проверьте оплаты и закройте сделку." },
+  { no: 1, name: "Заказ сформирован", color: "#94a3b8", milestone: "deposit", flags: [], doing: "Инвойс поставщика получен — выпускаем поручение и отправляем клиенту. Ждём, когда клиент оплатит депозит." },
+  { no: 2, name: "Производство", color: "#a78bfa", milestone: "ready", flags: [], doing: "Депозит оплачен, поставщик производит товар. Ждём, когда товар будет готов." },
+  { no: 3, name: "Готов к отгрузке", color: "#f59e0b", milestone: "loading", flags: ["balance", "freight"], doing: "Товар готов. Оплачиваем остаток поставщику и фрахт, грузим в контейнер." },
+  { no: 4, name: "Погружен, ждёт отправки", color: "#38bdf8", milestone: "departure", flags: [], doing: "Контейнер загружен. Ждём отправку поезда / судна." },
+  { no: 5, name: "В пути", color: "#3b82f6", milestone: "arrival", flags: [], doing: "Груз едет. Можно отмечать границу и перегруз. Ждём прибытия на таможню." },
+  { no: 6, name: "На таможне", color: "#f97316", milestone: "release", flags: ["customs_payment", "customs_docs"], doing: "Груз на таможне. Оплачиваем таможенные платежи, подаём документы, ждём выпуск." },
+  { no: 7, name: "Выпущен, доставка клиенту", color: "#14b8a6", milestone: "delivery", flags: [], doing: "Таможня выпустила груз. Везём клиенту." },
+  { no: 8, name: "Доставлен", color: "#22c55e", milestone: null, flags: [], doing: "Груз у клиента. Проверьте оплаты и закройте сделку." },
 ];
 
 export const LAST_STAGE = SHIPMENT_STAGES.length;
@@ -38,6 +40,8 @@ export type MilestoneSpec = {
   label: string;
   /** Подпись события в календаре. */
   event: string;
+  /** Коротко — для клетки календаря. */
+  short: string;
   /** Как звучит, когда случилось: «Груз погружен». */
   done: string;
   stage: number;
@@ -47,23 +51,24 @@ export type MilestoneSpec = {
 
 /** В хронологическом порядке: «сдвинуть следующие» идёт по этому списку. */
 export const MILESTONES: MilestoneSpec[] = [
-  { key: "ready", label: "Готовность товара", event: "Готовность товара", done: "Товар готов", stage: 1 },
-  { key: "loading", label: "Погрузка", event: "Погрузка", done: "Груз погружен", stage: 2 },
-  { key: "departure", label: "Отправка", event: "Отправка поезда / судна", done: "Поезд / судно отправлен", stage: 3 },
-  { key: "border", label: "Граница", event: "Прохождение границы", done: "Прошёл границу", stage: 4, optional: true },
-  { key: "transshipment", label: "Перегруз", event: "Перегруз", done: "Перегружен", stage: 4, optional: true },
-  { key: "arrival", label: "Прибытие", event: "Прибытие на таможню", done: "Прибыл на таможню", stage: 4 },
-  { key: "release", label: "Выпуск", event: "Выпуск груза", done: "Выпущен таможней", stage: 5 },
-  { key: "delivery", label: "Доставка клиенту", event: "Доставка клиенту", done: "Доставлен клиенту", stage: 6 },
+  { key: "deposit", label: "Депозит", short: "Депозит", event: "Оплата депозита клиентом", done: "Депозит оплачен", stage: 1 },
+  { key: "ready", label: "Готовность товара", short: "Товар готов", event: "Готовность товара", done: "Товар готов", stage: 2 },
+  { key: "loading", label: "Погрузка", short: "Погрузка", event: "Погрузка", done: "Груз погружен", stage: 3 },
+  { key: "departure", label: "Отправка", short: "Отправка", event: "Отправка поезда / судна", done: "Поезд / судно отправлен", stage: 4 },
+  { key: "border", label: "Граница", short: "Граница", event: "Прохождение границы", done: "Прошёл границу", stage: 5, optional: true },
+  { key: "transshipment", label: "Перегруз", short: "Перегруз", event: "Перегруз", done: "Перегружен", stage: 5, optional: true },
+  { key: "arrival", label: "Прибытие", short: "Прибытие", event: "Прибытие на таможню", done: "Прибыл на таможню", stage: 5 },
+  { key: "release", label: "Выпуск", short: "Выпуск", event: "Выпуск груза", done: "Выпущен таможней", stage: 6 },
+  { key: "delivery", label: "Доставка клиенту", short: "Доставка", event: "Доставка клиенту", done: "Доставлен клиенту", stage: 7 },
 ];
 
 export const MILESTONE_KEYS = MILESTONES.map((m) => m.key);
 
-export const FLAGS: Record<FlagKey, { label: string; todo: string; done: string; stage: number; payment: boolean }> = {
-  balance: { label: "Остаток поставщику", todo: "Оплатить остаток поставщику", done: "Остаток поставщику оплачен", stage: 2, payment: true },
-  freight: { label: "Фрахт", todo: "Оплатить фрахт", done: "Фрахт оплачен", stage: 2, payment: true },
-  customs_payment: { label: "Таможенные платежи", todo: "Оплатить таможенные платежи", done: "Таможенные платежи оплачены", stage: 5, payment: true },
-  customs_docs: { label: "Документы", todo: "Документы для таможни", done: "Документы для таможни поданы", stage: 5, payment: false },
+export const FLAGS: Record<FlagKey, { label: string; short: string; todo: string; done: string; stage: number; payment: boolean }> = {
+  balance: { label: "Остаток поставщику", short: "Оплатить остаток", todo: "Оплатить остаток поставщику", done: "Остаток поставщику оплачен", stage: 3, payment: true },
+  freight: { label: "Фрахт", short: "Оплатить фрахт", todo: "Оплатить фрахт", done: "Фрахт оплачен", stage: 3, payment: true },
+  customs_payment: { label: "Таможенные платежи", short: "Оплатить таможню", todo: "Оплатить таможенные платежи", done: "Таможенные платежи оплачены", stage: 6, payment: true },
+  customs_docs: { label: "Документы", short: "Документы на таможню", todo: "Документы для таможни", done: "Документы для таможни поданы", stage: 6, payment: false },
 };
 
 export const FLAG_KEYS = Object.keys(FLAGS) as FlagKey[];
@@ -133,7 +138,6 @@ export const SHIPMENT_FIELDS = {
   transport: { label: "Транспорт", kind: "enum", values: TRANSPORTS },
   pickupLocation: { label: "Откуда (Китай)", kind: "text", max: 300 },
   deliveryLocation: { label: "Куда доставить", kind: "text", max: 300 },
-  depositDate: { label: "Депозит оплачен", kind: "date" },
   exportLicense: { label: "Экспортная лицензия у поставщика", kind: "enum", values: { yes: "Есть", no: "Нет", we_arrange: "Оформляем сами" } },
   certificates: { label: "Сертификаты", kind: "enum", values: { yes: "Есть", no: "Нет", in_progress: "Оформляем" } },
   certificateHolder: { label: "Сертификат — на кого", kind: "text", max: 300 },

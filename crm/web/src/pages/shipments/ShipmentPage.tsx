@@ -207,7 +207,7 @@ export function ShipmentPage() {
       <ErrorBox error={error} />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
-          <StageTimeline shipment={s} saveField={save} />
+          <StageTimeline data={data} saveField={save} />
           <FinanceBlock data={data} />
           <GoodsBlock data={data} />
           <ShipmentDocs data={data} />

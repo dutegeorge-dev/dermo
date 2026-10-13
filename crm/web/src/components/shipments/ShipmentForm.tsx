@@ -58,7 +58,7 @@ export async function formPayload(f: ShipmentFormState): Promise<Record<string, 
     transport: f.transport || null,
     pickupLocation: f.pickupLocation,
     deliveryLocation: f.deliveryLocation,
-    depositDate: f.depositDate || null,
+    ...(f.depositDate ? { milestones: { deposit: { fact: f.depositDate } } } : {}),
   };
 }
 
@@ -112,7 +112,7 @@ export function ShipmentForm({ value, onChange }: { value: ShipmentFormState; on
         </select>
       </label>
       <label className="block">
-        <span className="label">Депозит оплачен</span>
+        <span className="label">Депозит уже оплачен? (дата)</span>
         <input type="date" className="input" value={value.depositDate} onChange={(e) => set("depositDate", e.target.value)} />
       </label>
       <label className="block">

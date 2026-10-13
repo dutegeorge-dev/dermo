@@ -6,11 +6,12 @@
  */
 
 import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 
 import { daysBetween, FLAGS, type FlagKey, MILESTONES, type MilestoneSpec, SHIPMENT_STAGES, type StageSpec } from "../../../../shared/shipments.ts";
-import { errorMessage } from "../../lib/api.ts";
-import type { Shipment } from "../../lib/types.ts";
-import { formatDay } from "../docs/common.tsx";
+import { api, BASE, errorMessage } from "../../lib/api.ts";
+import type { ShipmentResponse } from "../../lib/types.ts";
+import { formatDay, StatusChip } from "../docs/common.tsx";
 import { IconCheck } from "../Icons.tsx";
 import { DueLabel, today, useShipmentActions } from "./common.tsx";
 
@@ -18,8 +19,10 @@ type SaveField = (patch: Record<string, unknown>) => Promise<void>;
 
 const milestoneOf = (stage: StageSpec): MilestoneSpec | undefined => MILESTONES.find((m) => m.key === stage.milestone);
 
-export function StageTimeline({ shipment, saveField }: { shipment: Shipment; saveField: SaveField }) {
-  const { milestone, flag } = useShipmentActions();
+export function StageTimeline({ data, saveField }: { data: ShipmentResponse; saveField: SaveField }) {
+  const shipment = data.shipment;
+  const { milestone, flag, refresh } = useShipmentActions();
+  const navigate = useNavigate();
   const [shift, setShift] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -94,11 +97,28 @@ export function StageTimeline({ shipment, saveField }: { shipment: Shipment; sav
                       <p className="mt-0.5 text-sm text-slate-700 dark:text-neutral-300">{st.doing}</p>
                     </div>
 
-                    {(st.flags.length > 0 || st.no === 2) && (
+                    {st.no === 1 && (
+                      <OrderChecklist
+                        data={data}
+                        disabled={!active}
+                        onCreateOrder={async () => {
+                          setError(null);
+                          try {
+                            const res = await api<{ document: { id: number } }>(`/shipments/${shipment.number}/order`, { method: "POST" });
+                            refresh(shipment.number);
+                            navigate(`/documents/${res.document.id}/edit`);
+                          } catch (e) {
+                            setError(errorMessage(e));
+                          }
+                        }}
+                      />
+                    )}
+
+                    {(st.flags.length > 0 || st.no === 3) && (
                       <div className="space-y-1.5">
                         <div className="text-xs font-semibold muted">Что нужно сделать</div>
                         {st.flags.map((k) => flagItem(k))}
-                        {st.no === 2 && <ContainerItem containerNo={shipment.containerNo} disabled={!active} onSave={(v) => void saveField({ containerNo: v })} />}
+                        {st.no === 3 && <ContainerItem containerNo={shipment.containerNo} disabled={!active} onSave={(v) => void saveField({ containerNo: v })} />}
                       </div>
                     )}
 
@@ -321,6 +341,79 @@ function ContainerItem({ containerNo, disabled, onSave }: { containerNo: string 
       <button type="button" className="btn btn-sm" disabled={!value.trim() || disabled} onClick={() => onSave(value)}>
         Сохранить
       </button>
+    </div>
+  );
+}
+
+function Check({ done, children }: { done: boolean; children: React.ReactNode }) {
+  return (
+    <div className={`flex flex-wrap items-center gap-2 text-sm ${done ? "" : "font-medium"}`}>
+      <input type="checkbox" className="h-4 w-4" checked={done} readOnly />
+      {children}
+    </div>
+  );
+}
+
+/** Этап 1: инвойс поставщика → поручение клиенту → подписанное поручение (до оплаты депозита). */
+function OrderChecklist({ data, disabled, onCreateOrder }: { data: ShipmentResponse; disabled: boolean; onCreateOrder: () => Promise<void> }) {
+  const sh = data.shipment;
+  const invoices = data.documents.filter((d) => d.type === "supplier_invoice");
+  const order = data.documents.find((d) => d.id === data.finance.orderId);
+  const commission = sh.scheme === "commission";
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-semibold muted">Что нужно сделать</div>
+      <Check done={invoices.length > 0}>
+        <span className={invoices.length ? "muted line-through" : ""}>Загрузить инвойс поставщика</span>
+        {invoices.map((d) => (
+          <Link key={d.id} to={`/documents/${d.id}`} className="text-xs link">
+            № {d.number ?? "б/н"}
+          </Link>
+        ))}
+        {invoices.length === 0 && (
+          <Link to={`/documents/new?type=supplier_invoice&shipment=${sh.number}`} className="btn btn-sm">
+            + Инвойс поставщика
+          </Link>
+        )}
+      </Check>
+      {commission ? (
+        <>
+          <Check done={Boolean(order)}>
+            <span className={order ? "muted line-through" : ""}>Сформировать поручение и отправить клиенту</span>
+            {order ? (
+              <>
+                <Link to={`/documents/${order.id}`} className="text-xs link">
+                  Поручение № {order.number}
+                </Link>
+                <a className="btn btn-sm" href={`${BASE}/api/documents/${order.id}/docx`}>
+                  DOCX
+                </a>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={disabled || invoices.length === 0}
+                title={invoices.length === 0 ? "Сначала загрузите инвойс поставщика — товары и суммы берутся из него" : undefined}
+                onClick={() => void onCreateOrder()}
+              >
+                Сформировать поручение
+              </button>
+            )}
+          </Check>
+          <Check done={order?.status === "signed"}>
+            <span className={order?.status === "signed" ? "muted line-through" : ""}>Получить подписанное поручение</span>
+            {order && <StatusChip status={order.status} />}
+            {order && order.status !== "signed" && (
+              <Link to={`/documents/${order.id}`} className="text-xs link">
+                загрузить скан
+              </Link>
+            )}
+          </Check>
+        </>
+      ) : (
+        <p className="text-xs muted">Схема «{sh.scheme === "teu" ? "ТЭУ" : "Поставка"}» — поручение не нужно; документы для клиента — в блоке «Документы».</p>
+      )}
     </div>
   );
 }

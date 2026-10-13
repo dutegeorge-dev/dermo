@@ -222,9 +222,6 @@ export function ShipmentFields({ data, save, run }: { data: ShipmentResponse; sa
         <Row label="Схема">
           <FieldInput field="scheme" value={sh.scheme} save={save} />
         </Row>
-        <Row label="Депозит оплачен">
-          <FieldInput field="depositDate" value={sh.depositDate} save={save} />
-        </Row>
       </section>
 
       <section className="panel space-y-3 p-4">

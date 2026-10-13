@@ -43,6 +43,13 @@
       "when": 1791883329905,
       "tag": "0005_shipment_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791885916835,
+      "tag": "0006_deposit_stage",
+      "breakpoints": true
     }
   ]
 }

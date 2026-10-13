@@ -6,8 +6,9 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { FLAGS, type FlagKey, MILESTONES, SHIPMENT_STAGES, stageSpec } from "../../../../shared/shipments.ts";
 import { Avatar } from "../../components/crm/common.tsx";
-import { IconBoard, IconList, IconPlus, IconSearch } from "../../components/Icons.tsx";
-import { DueLabel, ShipmentStage, StageBar, today } from "../../components/shipments/common.tsx";
+import { IconBoard, IconCalendar, IconList, IconPlus, IconSearch } from "../../components/Icons.tsx";
+import { CalendarView } from "./CalendarPage.tsx";
+import { DueLabel, ShipmentStage, StageBar } from "../../components/shipments/common.tsx";
 import { emptyForm, formPayload, ShipmentForm, type ShipmentFormState } from "../../components/shipments/ShipmentForm.tsx";
 import { ConfirmDialog, EmptyState, ErrorBox, Modal, Spinner } from "../../components/ui.tsx";
 import { api, errorMessage } from "../../lib/api.ts";
@@ -15,11 +16,12 @@ import { useAuth } from "../../lib/auth.tsx";
 import type { Shipment } from "../../lib/types.ts";
 
 type Counts = { status: string; stage: number; n: number }[];
-type View = "board" | "table";
+type View = "board" | "table" | "calendar";
 
 function readView(): View {
   try {
-    return localStorage.getItem("crm.shipments.view") === "table" ? "table" : "board";
+    const v = localStorage.getItem("crm.shipments.view");
+    return v === "table" || v === "calendar" ? v : "board";
   } catch {
     return "board";
   }
@@ -28,7 +30,7 @@ function readView(): View {
 function CreateShipmentDialog({ initial, onClose }: { initial: Partial<ShipmentFormState>; onClose: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<ShipmentFormState>(() => ({ ...emptyForm(), depositDate: today(), ...initial }));
+  const [form, setForm] = useState<ShipmentFormState>(() => ({ ...emptyForm(), ...initial }));
   const [plans, setPlans] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,8 @@ function CreateShipmentDialog({ initial, onClose }: { initial: Partial<ShipmentF
     setError(null);
     try {
       const payload = await formPayload(form);
-      const milestones = Object.fromEntries(Object.entries(plans).filter(([, v]) => v).map(([k, v]) => [k, { plan: v }]));
+      const milestones: Record<string, { plan?: string; fact?: string }> = { ...((payload.milestones as Record<string, { fact?: string }>) ?? {}) };
+      for (const [k, v] of Object.entries(plans)) if (v) milestones[k] = { ...milestones[k], plan: v };
       const { shipment } = await api<{ shipment: Shipment }>("/shipments", { method: "POST", body: { ...payload, milestones } });
       void queryClient.invalidateQueries({ queryKey: ["shipments"] });
       void queryClient.invalidateQueries({ queryKey: ["calendar"] });
@@ -66,7 +69,7 @@ function CreateShipmentDialog({ initial, onClose }: { initial: Partial<ShipmentF
         </>
       }
     >
-      <p className="mb-3 text-xs muted">Сделка начинается с оплаты депозита. Документы, товары, ТН ВЭД и деньги добавляются в карточке.</p>
+      <p className="mb-3 text-xs muted">Сделка начинается, когда сформирован заказ: инвойс поставщика → поручение клиенту → депозит. Документы, товары, ТН ВЭД и деньги — в карточке.</p>
       <ShipmentForm value={form} onChange={setForm} />
       <div className="mt-4 border-t border-slate-200 pt-3 dark:border-neutral-800">
         <div className="mb-2 text-sm font-medium">Плановые даты</div>
@@ -271,7 +274,8 @@ function Table({ rows, status }: { rows: Shipment[]; status: string }) {
 export function ShipmentsPage() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
-  const [view, setViewState] = useState<View>(readView);
+  const viewParam = params.get("view");
+  const [view, setViewState] = useState<View>(() => (viewParam === "calendar" || viewParam === "table" || viewParam === "board" ? viewParam : readView()));
   const status = view === "board" ? "active" : (params.get("status") ?? "active");
   const stage = view === "board" ? "" : (params.get("stage") ?? "");
   const mine = params.get("mine") === "1";
@@ -294,6 +298,7 @@ export function ShipmentsPage() {
   };
   const setView = (v: View) => {
     setViewState(v);
+    if (params.get("view")) setFilter({ view: "" });
     try {
       localStorage.setItem("crm.shipments.view", v);
     } catch {
@@ -328,17 +333,19 @@ export function ShipmentsPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="mr-auto">
           <h1 className="page-title">Сделки</h1>
-          <p className="text-sm muted">Начинаются с оплаты депозита. Этап меняется сам, когда отмечаете фактические даты.</p>
+          <p className="text-sm muted">От сформированного заказа до доставки. Этап меняется сам, когда отмечаете, что случилось.</p>
         </div>
         <div className="inline-flex overflow-hidden rounded-md border border-slate-300 dark:border-neutral-700">
           {tab("board", "Доска", <IconBoard size={14} />)}
           {tab("table", "Список", <IconList size={14} />)}
+          {tab("calendar", "Календарь", <IconCalendar size={14} />)}
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
           <IconPlus size={14} /> Новая сделка
         </button>
       </div>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      {view === "calendar" && <CalendarView />}
+      <div className={`mb-3 flex flex-wrap items-center gap-2 ${view === "calendar" ? "hidden" : ""}`}>
         <label className="relative block w-full max-w-xs">
           <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input type="search" className="input pl-8" placeholder="Груз, контейнер, клиент, ТН ВЭД" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -372,8 +379,8 @@ export function ShipmentsPage() {
           </button>
         )}
       </div>
-      {isLoading && <Spinner />}
-      <ErrorBox error={error} />
+      {isLoading && view !== "calendar" && <Spinner />}
+      {view !== "calendar" && <ErrorBox error={error} />}
       {data && rows.length === 0 && view === "table" && (
         <EmptyState title={q || stage || status !== "active" ? "Ничего не найдено" : "Сделок в работе нет"}>Создайте сделку, когда клиент оплатил депозит.</EmptyState>
       )}

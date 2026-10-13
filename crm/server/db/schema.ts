@@ -537,7 +537,7 @@ export const shipments = pgTable(
       .default(sql`nextval('shipment_number_seq')`),
     /** active — в работе; closed — закрыта вручную; cancelled — отменена. */
     status: text("status").notNull().default("active"),
-    /** 1–7, вычисляется из фактических дат (shared/shipments.ts → stageOf). */
+    /** 1–8, вычисляется из фактических дат (shared/shipments.ts → stageOf). */
     stage: integer("stage").notNull().default(1),
     clientId: integer("client_id").references(() => counterparties.id, { onDelete: "set null" }),
     supplierId: integer("supplier_id").references(() => counterparties.id, { onDelete: "set null" }),
@@ -564,7 +564,6 @@ export const shipments = pgTable(
     certificates: certificateStatus("certificates"),
     certificateHolder: text("certificate_holder"),
     chestnyZnak: chestnyZnak("chestny_znak"),
-    depositDate: date("deposit_date"),
     /** Отмеченные флажки ожиданий: ключ → дата отметки. */
     flags: jsonb("flags").$type<Record<string, string>>().notNull().default({}),
     notes: text("notes").notNull().default(""),
