@@ -17,16 +17,18 @@ export type StageSpec = {
   milestone: MilestoneKey | null;
   /** Чего ждём на этом этапе (флажки). */
   flags: FlagKey[];
+  /** Что происходит на этапе — простыми словами. */
+  doing: string;
 };
 
 export const SHIPMENT_STAGES: StageSpec[] = [
-  { no: 1, name: "Производство", color: "#a78bfa", milestone: "ready", flags: [] },
-  { no: 2, name: "Готов к отгрузке", color: "#f59e0b", milestone: "loading", flags: ["balance", "freight"] },
-  { no: 3, name: "Погружен, ждёт отправки", color: "#38bdf8", milestone: "departure", flags: [] },
-  { no: 4, name: "В пути", color: "#3b82f6", milestone: "arrival", flags: [] },
-  { no: 5, name: "На таможне", color: "#f97316", milestone: "release", flags: ["customs_payment", "customs_docs"] },
-  { no: 6, name: "Выпущен, доставка клиенту", color: "#14b8a6", milestone: "delivery", flags: [] },
-  { no: 7, name: "Доставлен", color: "#22c55e", milestone: null, flags: [] },
+  { no: 1, name: "Производство", color: "#a78bfa", milestone: "ready", flags: [], doing: "Поставщик производит товар. Ждём, когда товар будет готов." },
+  { no: 2, name: "Готов к отгрузке", color: "#f59e0b", milestone: "loading", flags: ["balance", "freight"], doing: "Товар готов. Оплачиваем остаток поставщику и фрахт, грузим в контейнер." },
+  { no: 3, name: "Погружен, ждёт отправки", color: "#38bdf8", milestone: "departure", flags: [], doing: "Контейнер загружен. Ждём отправку поезда / судна." },
+  { no: 4, name: "В пути", color: "#3b82f6", milestone: "arrival", flags: [], doing: "Груз едет. Можно отмечать границу и перегруз. Ждём прибытия на таможню." },
+  { no: 5, name: "На таможне", color: "#f97316", milestone: "release", flags: ["customs_payment", "customs_docs"], doing: "Груз на таможне. Оплачиваем таможенные платежи, подаём документы, ждём выпуск." },
+  { no: 6, name: "Выпущен, доставка клиенту", color: "#14b8a6", milestone: "delivery", flags: [], doing: "Таможня выпустила груз. Везём клиенту." },
+  { no: 7, name: "Доставлен", color: "#22c55e", milestone: null, flags: [], doing: "Груз у клиента. Проверьте оплаты и закройте сделку." },
 ];
 
 export const LAST_STAGE = SHIPMENT_STAGES.length;
@@ -36,6 +38,8 @@ export type MilestoneSpec = {
   label: string;
   /** Подпись события в календаре. */
   event: string;
+  /** Как звучит, когда случилось: «Груз погружен». */
+  done: string;
   stage: number;
   /** Необязательная отметка в пути — на этап не влияет. */
   optional?: boolean;
@@ -43,23 +47,23 @@ export type MilestoneSpec = {
 
 /** В хронологическом порядке: «сдвинуть следующие» идёт по этому списку. */
 export const MILESTONES: MilestoneSpec[] = [
-  { key: "ready", label: "Готовность товара", event: "Готовность товара", stage: 1 },
-  { key: "loading", label: "Погрузка", event: "Погрузка", stage: 2 },
-  { key: "departure", label: "Отправка", event: "Отправка поезда / судна", stage: 3 },
-  { key: "border", label: "Граница", event: "Прохождение границы", stage: 4, optional: true },
-  { key: "transshipment", label: "Перегруз", event: "Перегруз", stage: 4, optional: true },
-  { key: "arrival", label: "Прибытие", event: "Прибытие на таможню", stage: 4 },
-  { key: "release", label: "Выпуск", event: "Выпуск груза", stage: 5 },
-  { key: "delivery", label: "Доставка клиенту", event: "Доставка клиенту", stage: 6 },
+  { key: "ready", label: "Готовность товара", event: "Готовность товара", done: "Товар готов", stage: 1 },
+  { key: "loading", label: "Погрузка", event: "Погрузка", done: "Груз погружен", stage: 2 },
+  { key: "departure", label: "Отправка", event: "Отправка поезда / судна", done: "Поезд / судно отправлен", stage: 3 },
+  { key: "border", label: "Граница", event: "Прохождение границы", done: "Прошёл границу", stage: 4, optional: true },
+  { key: "transshipment", label: "Перегруз", event: "Перегруз", done: "Перегружен", stage: 4, optional: true },
+  { key: "arrival", label: "Прибытие", event: "Прибытие на таможню", done: "Прибыл на таможню", stage: 4 },
+  { key: "release", label: "Выпуск", event: "Выпуск груза", done: "Выпущен таможней", stage: 5 },
+  { key: "delivery", label: "Доставка клиенту", event: "Доставка клиенту", done: "Доставлен клиенту", stage: 6 },
 ];
 
 export const MILESTONE_KEYS = MILESTONES.map((m) => m.key);
 
-export const FLAGS: Record<FlagKey, { label: string; todo: string; stage: number; payment: boolean }> = {
-  balance: { label: "Остаток поставщику", todo: "Оплатить остаток поставщику", stage: 2, payment: true },
-  freight: { label: "Фрахт", todo: "Оплатить фрахт", stage: 2, payment: true },
-  customs_payment: { label: "Таможенные платежи", todo: "Оплатить таможенные платежи", stage: 5, payment: true },
-  customs_docs: { label: "Документы", todo: "Документы для таможни", stage: 5, payment: false },
+export const FLAGS: Record<FlagKey, { label: string; todo: string; done: string; stage: number; payment: boolean }> = {
+  balance: { label: "Остаток поставщику", todo: "Оплатить остаток поставщику", done: "Остаток поставщику оплачен", stage: 2, payment: true },
+  freight: { label: "Фрахт", todo: "Оплатить фрахт", done: "Фрахт оплачен", stage: 2, payment: true },
+  customs_payment: { label: "Таможенные платежи", todo: "Оплатить таможенные платежи", done: "Таможенные платежи оплачены", stage: 5, payment: true },
+  customs_docs: { label: "Документы", todo: "Документы для таможни", done: "Документы для таможни поданы", stage: 5, payment: false },
 };
 
 export const FLAG_KEYS = Object.keys(FLAGS) as FlagKey[];

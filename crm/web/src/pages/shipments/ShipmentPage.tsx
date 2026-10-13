@@ -9,13 +9,13 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { formatMoney } from "../../../../shared/documents.ts";
-import { FLAGS, type FlagKey, SHIPMENT_STAGES } from "../../../../shared/shipments.ts";
 import { formatDay, ValidityChip } from "../../components/docs/common.tsx";
 import { IconCheck } from "../../components/Icons.tsx";
 import { ShipmentStage } from "../../components/shipments/common.tsx";
 import { FinanceBlock, ShipmentDocs } from "../../components/shipments/ShipmentDocs.tsx";
 import { ShipmentFields } from "../../components/shipments/ShipmentFields.tsx";
-import { FlagsPanel, History, MilestonesTable, Stepper } from "../../components/shipments/ShipmentParts.tsx";
+import { History, Stepper } from "../../components/shipments/ShipmentParts.tsx";
+import { StageTimeline } from "../../components/shipments/StageTimeline.tsx";
 import { ConfirmDialog, ErrorBox, Spinner } from "../../components/ui.tsx";
 import { api } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
@@ -205,23 +205,12 @@ export function ShipmentPage() {
       </div>
       <Stepper stage={s.stage} status={s.status} />
       <ErrorBox error={error} />
-      {s.status === "active" && s.stage === SHIPMENT_STAGES.length && (
-        <p className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/30 dark:text-green-300">
-          Груз доставлен. Проверьте оплаты и закройте сделку.
-        </p>
-      )}
-      {s.status === "active" && s.pendingFlags.length > 0 && (
-        <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-          Ждём: {s.pendingFlags.map((f) => FLAGS[f as FlagKey].label.toLowerCase()).join(", ")}
-        </p>
-      )}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
+          <StageTimeline shipment={s} saveField={save} />
           <FinanceBlock data={data} />
           <GoodsBlock data={data} />
           <ShipmentDocs data={data} />
-          <MilestonesTable shipment={s} />
-          <FlagsPanel shipment={s} />
           <History shipment={s} events={data.events} />
         </div>
         <div className="min-w-0">
