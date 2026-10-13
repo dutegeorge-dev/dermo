@@ -24,10 +24,13 @@ import {
   kbPageVersions,
   kbSpaces,
   products,
+  shipments,
   users,
 } from "../db/schema.ts";
 import { addEvent, createDeal } from "../lib/deals.ts";
 import { linkToDeal, nextSeqNo, pad2, replaceItems } from "../lib/documents.ts";
+import { createShipment } from "../lib/shipments.ts";
+import { addDays, MILESTONES, type MilestoneKey, SHIPMENT_STAGES } from "../../shared/shipments.ts";
 import { buildOrderDraft } from "../lib/order.ts";
 import { tiptapToText } from "../lib/text.ts";
 
@@ -361,7 +364,92 @@ export async function seedDemoKb(): Promise<void> {
   console.log(`  + демо-страницы базы знаний: ${ids.size}`);
 }
 
+// ── Сделки (отгрузки) для календаря ──────────────────────────────────────
+
+/** Типичные интервалы между ключевыми датами, дней. */
+const GAPS: Partial<Record<MilestoneKey, number>> = { ready: 0, loading: 4, departure: 3, border: 8, arrival: 10, release: 4, delivery: 3 };
+
+/**
+ * Даты сделки на этапе stage: плановая дата текущей точки — через offset дней
+ * от сегодня, остальные — по типичным интервалам; прошлые точки выполнены.
+ */
+function demoMilestones(stage: number, offset: number, opts: { slip?: number; noBorder?: boolean } = {}) {
+  const keys = MILESTONES.map((m) => m.key).filter((k) => k in GAPS && !(opts.noBorder && k === "border"));
+  const current = SHIPMENT_STAGES[stage - 1].milestone;
+  const anchorIdx = current ? keys.indexOf(current) : keys.length;
+  const plans: string[] = [];
+  const base = day(offset);
+  // Даты от якоря назад и вперёд (на последнем этапе якорь — доставка).
+  let d = base;
+  for (let i = Math.min(anchorIdx, keys.length - 1); i >= 0; i--) {
+    plans[i] = d;
+    d = addDays(d, -(GAPS[keys[i]] ?? 0));
+  }
+  d = plans[Math.min(anchorIdx, keys.length - 1)];
+  for (let i = anchorIdx + 1; i < keys.length; i++) {
+    d = addDays(d, GAPS[keys[i]] ?? 0);
+    plans[i] = d;
+  }
+  const today = day(0);
+  const result: Record<string, { plan: string; fact?: string }> = {};
+  keys.forEach((k, i) => {
+    const plan = plans[i];
+    const before = i < anchorIdx;
+    // Отметка «граница» на этапе «в пути» — выполнена, если дата прошла.
+    const passedBorder = k === "border" && current === "arrival" && plan < today;
+    result[k] = before || passedBorder ? { plan, fact: addDays(plan, opts.slip ?? 0) } : { plan };
+  });
+  return result;
+}
+
+export async function seedDemoShipments(): Promise<void> {
+  const [exists] = await db.select({ id: shipments.id }).from(shipments).where(eq(shipments.notes, MARK)).limit(1);
+  if (exists) {
+    console.log("  = демо-сделки календаря уже есть");
+    return;
+  }
+  const [admin] = await db.select({ id: users.id }).from(users).orderBy(asc(users.id)).limit(1);
+  const userId = admin?.id ?? null;
+  const byName = async (name: string) => (await db.select({ id: counterparties.id }).from(counterparties).where(eq(counterparties.name, name)).limit(1))[0]?.id ?? null;
+  const docBy = async (number: string) => (await db.select({ id: documents.id }).from(documents).where(and(eq(documents.number, number), eq(documents.notes, MARK))).limit(1))[0]?.id ?? null;
+  const dealBy = async (title: string) => (await db.select({ id: deals.id }).from(deals).where(eq(deals.title, title)).limit(1))[0]?.id ?? null;
+
+  const greenland = await byName("ООО «ГринЛэнд»");
+  const smirnov = await byName("ИП Смирнов А.В.");
+  const svetdom = await byName("ООО «Светлый Дом»");
+  const turf = await byName("SHIJIAZHUANG GREEN TURF CO., LTD.");
+  const foshan = await byName("FOSHAN NANHAI FLOORING CO., LTD.");
+  const brightled = await byName("SHENZHEN BRIGHTLED TECHNOLOGY CO., LTD.");
+  const carrierCn = await byName("HEBEI SILK ROAD LOGISTICS CO., LTD.");
+  const carrierRu = await byName("ООО «ТрансСибирь»");
+  if (!greenland || !carrierCn) {
+    console.log("  ! нет демо-контрагентов — сделки календаря пропущены");
+    return;
+  }
+  const rail = { transport: "rail", route: "Китай → Забайкальск → Москва" };
+  const all = { balance: day(-30), freight: day(-30), customs_payment: day(-5), customs_docs: day(-5) };
+  const list: Record<string, unknown>[] = [
+    { clientId: greenland, supplierId: turf, carrierId: carrierCn, carrierInvoiceId: await docBy("HSR-INV-0931"), dealId: await dealBy("Искусственная трава, 14 600 м²"), containerNo: "DEMU1000011", cargo: "Искусственная трава 30 мм, 14 600 м²", ...rail, depositDate: day(-20), milestones: demoMilestones(2, 2), flags: { balance: day(-1) } },
+    { clientId: smirnov, supplierId: foshan, carrierId: carrierCn, carrierInvoiceId: await docBy("HSR-INV-0812"), dealId: await dealBy("Ламинат LVT 4 мм, 2 400 м²"), containerNo: "DEMU1000022", cargo: "Ламинат LVT 4 мм, 2 400 м²", ...rail, depositDate: day(-60), milestones: demoMilestones(6, 1, { slip: 1 }), flags: all },
+    { clientId: svetdom, supplierId: brightled, carrierId: carrierRu, cargo: "LED-панели 600×600, 300 шт.", transport: "auto", route: "Шэньчжэнь → Хоргос → Москва", depositDate: day(-4), milestones: demoMilestones(1, 12) },
+    { clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000033", cargo: "Искусственная трава 40 мм, 9 800 м² (повторный заказ)", ...rail, depositDate: day(-45), milestones: demoMilestones(4, 9), flags: { balance: day(-25), freight: day(-24) } },
+    { clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000044", cargo: "Плинтус ПВХ, 6 000 шт.", ...rail, depositDate: day(-50), milestones: demoMilestones(5, -1), flags: { balance: day(-30), freight: day(-30), customs_docs: day(-3) } },
+    { clientId: svetdom, supplierId: brightled, carrierId: carrierCn, containerNo: "DEMU1000055", cargo: "LED-драйверы 40 Вт, 1 200 шт.", transport: "sea", route: "Шэньчжэнь → Владивосток → Москва", depositDate: day(-25), milestones: demoMilestones(3, 4), flags: { balance: day(-8), freight: day(-8) } },
+    { clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000066", cargo: "Клей для искусственной травы, 400 шт.", ...rail, depositDate: day(-30), milestones: demoMilestones(4, 20), flags: { balance: day(-12), freight: day(-12) } },
+    { clientId: smirnov, supplierId: foshan, carrierId: carrierCn, cargo: "Ламинат LVT 5 мм, 1 800 м²", ...rail, depositDate: day(-28), milestones: demoMilestones(2, -2) },
+    { clientId: svetdom, supplierId: brightled, cargo: "Трековые светильники, 500 шт.", transport: "rail", depositDate: day(-1), milestones: demoMilestones(1, 30) },
+    { clientId: greenland, supplierId: turf, carrierId: carrierCn, containerNo: "DEMU1000077", cargo: "Искусственная трава 20 мм, 5 000 м²", ...rail, depositDate: day(-70), milestones: demoMilestones(7, -1), flags: all },
+    { clientId: smirnov, supplierId: foshan, carrierId: carrierCn, containerNo: "DEMU1000088", cargo: "Ламинат LVT 4 мм, 2 000 м²", ...rail, depositDate: day(-110), milestones: demoMilestones(7, -40), flags: all, status: "closed" },
+  ];
+  await db.transaction(async (tx) => {
+    for (const input of list) await createShipment(tx, { ...input, notes: MARK }, userId);
+  });
+  console.log(`  + демо-сделки для календаря: ${list.length}`);
+}
+
 export async function removeDemoExtras(): Promise<void> {
+  const ships = await db.delete(shipments).where(eq(shipments.notes, MARK)).returning({ id: shipments.id });
+  if (ships.length) console.log(`  − демо-сделок календаря: ${ships.length}`);
   const docs = await db.delete(documents).where(eq(documents.notes, MARK)).returning({ id: documents.id });
   const pages = await db
     .delete(kbPages)

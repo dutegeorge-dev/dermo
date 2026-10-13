@@ -25,7 +25,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
   app.get("/", async (request) => {
     const q = String((request.query as { q?: string }).q ?? "").trim().slice(0, 200);
     const tsq = buildPrefixQuery(q);
-    if (!tsq) return { pages: [], callTopics: [], deals: [], clients: [], documents: [], products: [] };
+    if (!tsq) return { pages: [], callTopics: [], deals: [], shipments: [], clients: [], documents: [], products: [] };
     const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
     const pages = await db.execute<{
@@ -67,6 +67,16 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY d.outcome NULLS FIRST, d.updated_at DESC
       LIMIT 10`);
 
+    const shipNum = /^(?:[сc]-?)?0*(\d{1,9})$/i.exec(q);
+    const shipmentRows = await db.execute<{ number: number; container_no: string | null; cargo: string; client: string | null; status: string; stage: number }>(sql`
+      SELECT s.number, s.container_no, s.cargo, c.name AS client, s.status, s.stage
+      FROM shipments s
+      LEFT JOIN counterparties c ON c.id = s.client_id
+      WHERE s.container_no ILIKE ${like} OR s.cargo ILIKE ${like} OR c.name ILIKE ${like}
+         ${shipNum ? sql`OR s.number = ${Number(shipNum[1])}` : sql``}
+      ORDER BY (s.status = 'active') DESC, s.number DESC
+      LIMIT 10`);
+
     const clientRows = await db.execute<{ id: number; name: string; inn: string | null; role: string }>(sql`
       SELECT c.id, c.name, c.inn, c.role FROM counterparties c
       WHERE c.name ILIKE ${like} OR c.inn ILIKE ${like} OR c.full_name ILIKE ${like}
@@ -89,6 +99,14 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
 
     return {
       deals: dealRows.rows,
+      shipments: shipmentRows.rows.map((r) => ({
+        number: Number(r.number),
+        containerNo: r.container_no,
+        cargo: r.cargo,
+        client: r.client,
+        status: r.status,
+        stage: Number(r.stage),
+      })),
       clients: clientRows.rows.map((r) => ({ ...r, id: Number(r.id) })),
       documents: docRows.rows.map((r) => ({ ...r, id: Number(r.id) })),
       products: productRows.rows.map((r) => ({ id: Number(r.id), name: r.name, hsCode: r.hs_code })),

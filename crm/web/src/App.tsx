@@ -21,6 +21,9 @@ import { DocumentPage } from "./pages/docs/DocumentPage.tsx";
 import { DocumentsPage } from "./pages/docs/DocumentsPage.tsx";
 import { SettingsPage } from "./pages/SettingsPage.tsx";
 import { DealsPage } from "./pages/crm/DealsPage.tsx";
+import { CalendarPage } from "./pages/shipments/CalendarPage.tsx";
+import { ShipmentPage } from "./pages/shipments/ShipmentPage.tsx";
+import { ShipmentsPage } from "./pages/shipments/ShipmentsPage.tsx";
 import { NotFoundPage } from "./pages/misc.tsx";
 import { ProfilePage } from "./pages/ProfilePage.tsx";
 import { UsersPage } from "./pages/UsersPage.tsx";
@@ -60,6 +63,9 @@ const router = createBrowserRouter(
             },
             { path: "calls", element: <CallScriptPage /> },
             { path: "calls/history", element: <CallScriptHistory /> },
+            { path: "calendar", element: <CalendarPage /> },
+            { path: "shipments", element: <ShipmentsPage /> },
+            { path: "shipments/:number", element: <ShipmentPage /> },
             { path: "deals", element: <DealsPage />, children: [{ path: ":key" }] },
             { path: "clients", element: <CounterpartiesPage key="client" role="client" /> },
             { path: "clients/:id", element: <CounterpartyPage key="client" role="client" /> },

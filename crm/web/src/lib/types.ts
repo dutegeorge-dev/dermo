@@ -53,6 +53,7 @@ export type CallQa = { q: string; a: string };
 export type CallTopic = { id: string; title: string; ask: string[]; qa: CallQa[]; updatedAt?: string };
 
 export type SearchResult = {
+  shipments: { number: number; containerNo: string | null; cargo: string; client: string | null; status: string; stage: number }[];
   deals: { key: string; title: string; client: string | null; status: string; outcome: string | null }[];
   clients: { id: number; name: string; inn: string | null; role: CounterpartyRole }[];
   documents: { id: number; type: string; number: string | null; date: string | null; party: string | null }[];
@@ -304,3 +305,62 @@ export type Contact = {
 };
 
 export type DirectoryUser = { id: number; name: string; isActive: boolean };
+
+// ── Сделки (отгрузки) и календарь ─────────────────────────────────────────
+
+export type Ref = { id: number; name: string };
+
+export type Shipment = {
+  id: number;
+  number: number;
+  label: string;
+  status: "active" | "closed" | "cancelled";
+  stage: number;
+  client: Ref | null;
+  supplier: Ref | null;
+  carrier: Ref | null;
+  carrierInvoice: {
+    id: number;
+    number: string | null;
+    date: string | null;
+    amount: number | null;
+    currency: string | null;
+    paymentStatus: "unpaid" | "partial" | "paid" | null;
+  } | null;
+  deal: { id: number; key: string; title: string } | null;
+  containerNo: string | null;
+  cargo: string;
+  transport: string | null;
+  route: string | null;
+  depositDate: string | null;
+  flags: Record<string, string>;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+  milestones: Record<string, { plan: string | null; fact: string | null }>;
+  nextDate: string | null;
+  pendingFlags: string[];
+};
+
+export type ShipmentEvent = {
+  id: number;
+  kind: string;
+  field: string | null;
+  oldValue: unknown;
+  newValue: unknown;
+  createdAt: string;
+  userName: string | null;
+};
+
+export type CalendarEvent = {
+  id: string;
+  kind: "milestone" | "flag";
+  key: string;
+  title: string;
+  date: string | null;
+  done: boolean;
+  payment: boolean;
+  milestone: string | null;
+  shipment: { number: number; label: string; stage: number; containerNo: string | null; cargo: string; client: string | null; carrier: string | null };
+};

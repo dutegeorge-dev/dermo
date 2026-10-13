@@ -8,7 +8,16 @@ import type { Deal } from "../../lib/types.ts";
 
 export type PickedDeal = { id: number; key: string; title: string };
 
-export function DealPicker({ value, onChange }: { value: PickedDeal | null; onChange: (d: PickedDeal | null) => void }) {
+export function DealPicker({
+  value,
+  onChange,
+  outcome = "open",
+}: {
+  value: PickedDeal | null;
+  onChange: (d: PickedDeal | null) => void;
+  /** Какие сделки искать: только в работе или все (включая выигранные). */
+  outcome?: "open" | "all";
+}) {
   const [q, setQ] = useState(value ? `${value.key} · ${value.title}` : "");
   const [open, setOpen] = useState(false);
   const [debounced, setDebounced] = useState("");
@@ -18,8 +27,8 @@ export function DealPicker({ value, onChange }: { value: PickedDeal | null; onCh
     return () => clearTimeout(t);
   }, [q]);
   const { data } = useQuery({
-    queryKey: ["deals", "pick", debounced],
-    queryFn: () => api<{ deals: Deal[] }>(`/deals?outcome=open&q=${encodeURIComponent(value && q.startsWith(value.key) ? "" : debounced)}`),
+    queryKey: ["deals", "pick", outcome, debounced],
+    queryFn: () => api<{ deals: Deal[] }>(`/deals?outcome=${outcome}&q=${encodeURIComponent(value && q.startsWith(value.key) ? "" : debounced)}`),
     enabled: open,
   });
   return (

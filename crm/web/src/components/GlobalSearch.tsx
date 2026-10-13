@@ -8,9 +8,10 @@ import { api } from "../lib/api.ts";
 import { SnippetHtml } from "../lib/highlight.tsx";
 import type { SearchResult } from "../lib/types.ts";
 import { COUNTERPARTY_ROLES, docSpec } from "../../../shared/documents.ts";
-import { IconBoard, IconBook, IconBox, IconBuilding, IconFile, IconPhone, IconSearch } from "./Icons.tsx";
+import { shipmentLabel, stageSpec } from "../../../shared/shipments.ts";
+import { IconBoard, IconBook, IconBox, IconBuilding, IconContainer, IconFile, IconPhone, IconSearch } from "./Icons.tsx";
 
-type Item = { key: string; to: string; kind: "page" | "topic" | "deal" | "client" | "document" | "product"; title: string; sub: string; snippet: string };
+type Item = { key: string; to: string; kind: "page" | "topic" | "deal" | "shipment" | "client" | "document" | "product"; title: string; sub: string; snippet: string };
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -44,12 +45,20 @@ export function GlobalSearch() {
   const items = useMemo<Item[]>(() => {
     if (!data || debounced.length < 2) return [];
     return [
+      ...data.shipments.map((sh) => ({
+        key: `s-${sh.number}`,
+        to: `/shipments/${sh.number}`,
+        kind: "shipment" as const,
+        title: [shipmentLabel(sh.number), sh.containerNo, sh.cargo].filter(Boolean).join(" · "),
+        sub: `Сделка · ${sh.status === "active" ? stageSpec(sh.stage).name : sh.status === "closed" ? "закрыта" : "отменена"}${sh.client ? ` · ${sh.client}` : ""}`,
+        snippet: "",
+      })),
       ...data.deals.map((d) => ({
         key: `d-${d.key}`,
         to: `/deals/${d.key}`,
         kind: "deal" as const,
         title: `${d.key} · ${d.title}`,
-        sub: `Сделка · ${d.outcome === "lost" ? "отказ" : d.status}${d.client ? ` · ${d.client}` : ""}`,
+        sub: `Воронка · ${d.outcome === "lost" ? "отказ" : d.status}${d.client ? ` · ${d.client}` : ""}`,
         snippet: "",
       })),
       ...data.clients.map((c) => ({
@@ -170,7 +179,7 @@ export function GlobalSearch() {
               onClick={() => go(item)}
               className={`flex w-full gap-2.5 px-3 py-2 text-left ${i === active ? "bg-slate-100 dark:bg-neutral-800" : ""}`}
             >
-              <span className="mt-0.5 text-slate-400">{{ page: <IconBook />, topic: <IconPhone />, deal: <IconBoard />, client: <IconBuilding />, document: <IconFile />, product: <IconBox /> }[item.kind]}</span>
+              <span className="mt-0.5 text-slate-400">{{ page: <IconBook />, topic: <IconPhone />, deal: <IconBoard />, shipment: <IconContainer />, client: <IconBuilding />, document: <IconFile />, product: <IconBox /> }[item.kind]}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{item.title}</span>
                 <span className="block truncate text-xs muted">{item.sub}</span>

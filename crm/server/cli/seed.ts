@@ -27,7 +27,7 @@ import { CRM_ROOT } from "../config.ts";
 import { db, pool } from "../db/client.ts";
 import { contacts, counterparties, dealEvents, deals, dealStatuses, kbSpaces } from "../db/schema.ts";
 import { getCompany, setCompany } from "../lib/settings.ts";
-import { removeDemoExtras, seedDemoDocuments, seedDemoKb } from "./demo.ts";
+import { removeDemoExtras, seedDemoDocuments, seedDemoKb, seedDemoShipments } from "./demo.ts";
 import { audit } from "../lib/audit.ts";
 import {
   listTopics,
@@ -279,6 +279,7 @@ try {
     console.log("Демо-данные CRM:");
     await seedDemo();
     await seedDemoDocuments();
+    await seedDemoShipments();
     await seedDemoKb();
   }
   console.log("✓ Готово");

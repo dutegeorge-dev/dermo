@@ -11,6 +11,8 @@ import {
   IconBoard,
   IconBook,
   IconBox,
+  IconCalendar,
+  IconContainer,
   IconBuilding,
   IconFactory,
   IconFile,
@@ -79,8 +81,14 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           Справочник для звонков
         </NavItem>
         <div className="px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">CRM</div>
-        <NavItem to="/deals" icon={<IconBoard />}>
+        <NavItem to="/calendar" icon={<IconCalendar />}>
+          Календарь
+        </NavItem>
+        <NavItem to="/shipments" icon={<IconContainer />}>
           Сделки
+        </NavItem>
+        <NavItem to="/deals" icon={<IconBoard />}>
+          Воронка продаж
         </NavItem>
         <NavItem to="/clients" icon={<IconBuilding />}>
           Клиенты

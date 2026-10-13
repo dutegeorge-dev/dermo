@@ -490,3 +490,85 @@ describe("Документы: договор → инвойс → сделка �
     assert.equal((await call(s, "GET", `/documents/${orderId}`)).json().document.status, "signed");
   });
 });
+
+describe("Сделки (отгрузки) и календарь", () => {
+  test("этап по фактам, контейнер обязателен к погрузке, сдвиг дат, флажки, закрытие", async () => {
+    const s = await login("admin", "adminpass1");
+    const mk = async (role: string, name: string, extra: object = {}) =>
+      (await call(s, "POST", "/counterparties", { role, name, ...extra })).json().counterparty as { id: number };
+    const client = await mk("client", "ООО «Тест-Отгрузка»");
+    const carrier = await mk("contractor", "Перевозчик Тест", { contractorType: "carrier_cn" });
+    const supplier = await mk("supplier", "Test Supplier Co");
+
+    // Перевозчик на месте клиента — ошибка.
+    const wrong = await call(s, "POST", "/shipments", { clientId: carrier.id });
+    assert.equal(wrong.statusCode, 400, wrong.body);
+
+    const created = await call(s, "POST", "/shipments", {
+      clientId: client.id,
+      supplierId: supplier.id,
+      carrierId: carrier.id,
+      cargo: "Искусственная трава",
+      transport: "rail",
+      depositDate: "2026-10-01",
+      milestones: { ready: { plan: "2026-10-10" }, loading: { plan: "2026-10-14" }, departure: { plan: "2026-10-16" }, arrival: { plan: "2026-11-01" } },
+    });
+    assert.equal(created.statusCode, 200, created.body);
+    const sh = created.json().shipment;
+    assert.equal(sh.stage, 1);
+    assert.equal(sh.label, "С-001");
+    assert.equal(sh.nextDate, "2026-10-10");
+
+    // Производство окончено → этап 2, флажки остатка и фрахта ждут.
+    let res = await call(s, "PUT", `/shipments/${sh.number}/milestones/ready`, { fact: "2026-10-11" });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(res.json().shipment.stage, 2);
+    assert.deepEqual(res.json().shipment.pendingFlags, ["balance", "freight"]);
+
+    // Погрузку без контейнера не отметить.
+    res = await call(s, "PUT", `/shipments/${sh.number}/milestones/loading`, { fact: "2026-10-15" });
+    assert.equal(res.statusCode, 400);
+    assert.match(res.json().error, /контейнер/);
+
+    // Перенос погрузки на 3 дня со сдвигом следующих.
+    res = await call(s, "PUT", `/shipments/${sh.number}/milestones/loading`, { plan: "2026-10-17", shift: true });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(res.json().shifted, 2);
+    assert.equal(res.json().shipment.milestones.departure.plan, "2026-10-19");
+    assert.equal(res.json().shipment.milestones.arrival.plan, "2026-11-04");
+    assert.equal(res.json().shipment.milestones.ready.plan, "2026-10-10", "прошлые не двигаются");
+
+    await call(s, "PATCH", `/shipments/${sh.number}`, { containerNo: "tgbu 1234567" });
+    res = await call(s, "PUT", `/shipments/${sh.number}/milestones/loading`, { fact: "2026-10-17" });
+    assert.equal(res.json().shipment.stage, 3);
+    assert.equal(res.json().shipment.containerNo, "TGBU1234567");
+    res = await call(s, "PATCH", `/shipments/${sh.number}`, { containerNo: "" });
+    assert.equal(res.statusCode, 400, "после погрузки контейнер не стереть");
+
+    // Флажок фрахта.
+    res = await call(s, "PUT", `/shipments/${sh.number}/flags/freight`, { done: true });
+    assert.deepEqual(res.json().shipment.pendingFlags, ["balance"]);
+
+    // Календарь: остаток поставщику висит на дате погрузки; фрахт — выполнен.
+    const cal = (await call(s, "GET", "/calendar")).json().events as { id: string; date: string | null; done: boolean }[];
+    const balance = cal.find((e) => e.id === `${sh.number}:f:balance`)!;
+    assert.equal(balance.date, "2026-10-17");
+    assert.equal(balance.done, false);
+    assert.equal(cal.find((e) => e.id === `${sh.number}:f:freight`)!.done, true);
+    assert.equal(cal.find((e) => e.id === `${sh.number}:m:departure`)!.date, "2026-10-19");
+
+    // Поиск по контейнеру и номеру.
+    const found = (await call(s, "GET", "/search?q=TGBU12")).json().shipments;
+    assert.equal(found[0].number, sh.number);
+    assert.equal((await call(s, "GET", "/shipments?q=С-001")).json().shipments.length, 1);
+
+    // Карточка с историей; закрытие вручную убирает из календаря.
+    const card = (await call(s, "GET", `/shipments/${sh.number}`)).json();
+    assert.ok(card.events.some((e: { kind: string; field: string }) => e.kind === "plan" && e.field === "arrival"));
+    assert.ok(card.events.some((e: { kind: string }) => e.kind === "stage"));
+    await call(s, "POST", `/shipments/${sh.number}/status`, { status: "closed" });
+    assert.equal((await call(s, "GET", "/calendar")).json().events.length, 0);
+    assert.equal((await call(s, "GET", "/shipments")).json().shipments.length, 0);
+    assert.equal((await call(s, "GET", "/shipments?status=closed")).json().shipments.length, 1);
+  });
+});

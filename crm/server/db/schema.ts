@@ -553,3 +553,80 @@ export const settings = pgTable("settings", {
   updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: updatedAt(),
 });
+
+// ── Сделки (отгрузки) и календарь ───────────────────────────────────────────
+// Сделка начинается с оплаты депозита и независима от воронки продаж: связь с
+// лидом из воронки необязательна (повторный заказ в воронку не попадает).
+
+export const shipmentNumberSeq = pgSequence("shipment_number_seq", { startWith: 1 });
+
+export const shipments = pgTable(
+  "shipments",
+  {
+    id: serial("id").primaryKey(),
+    number: integer("number")
+      .notNull()
+      .unique()
+      .default(sql`nextval('shipment_number_seq')`),
+    /** active — в работе; closed — закрыта вручную; cancelled — отменена. */
+    status: text("status").notNull().default("active"),
+    /** 1–7, вычисляется из фактических дат (shared/shipments.ts → stageOf). */
+    stage: integer("stage").notNull().default(1),
+    clientId: integer("client_id").references(() => counterparties.id, { onDelete: "set null" }),
+    supplierId: integer("supplier_id").references(() => counterparties.id, { onDelete: "set null" }),
+    carrierId: integer("carrier_id").references(() => counterparties.id, { onDelete: "set null" }),
+    carrierInvoiceId: integer("carrier_invoice_id").references(() => documents.id, { onDelete: "set null" }),
+    /** Лид из воронки продаж, из которого пришла сделка (необязательно). */
+    dealId: integer("deal_id").references(() => deals.id, { onDelete: "set null" }),
+    containerNo: text("container_no"),
+    cargo: text("cargo").notNull().default(""),
+    transport: text("transport"),
+    route: text("route"),
+    depositDate: date("deposit_date"),
+    /** Отмеченные флажки ожиданий: ключ → дата отметки. */
+    flags: jsonb("flags").$type<Record<string, string>>().notNull().default({}),
+    notes: text("notes").notNull().default(""),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("shipments_status_idx").on(t.status, t.stage),
+    index("shipments_client_idx").on(t.clientId),
+    index("shipments_carrier_idx").on(t.carrierId),
+  ],
+);
+
+/** Ключевые даты сделки: план и факт. */
+export const shipmentMilestones = pgTable(
+  "shipment_milestones",
+  {
+    shipmentId: integer("shipment_id")
+      .notNull()
+      .references(() => shipments.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    plan: date("plan"),
+    fact: date("fact"),
+  },
+  (t) => [primaryKey({ columns: [t.shipmentId, t.key] }), index("shipment_milestones_plan_idx").on(t.plan)],
+);
+
+/** История сделки: переносы дат, этапы, флажки, правки полей. */
+export const shipmentEvents = pgTable(
+  "shipment_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    shipmentId: integer("shipment_id")
+      .notNull()
+      .references(() => shipments.id, { onDelete: "cascade" }),
+    userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+    /** created | field | plan | fact | flag | status | comment */
+    kind: text("kind").notNull(),
+    field: text("field"),
+    oldValue: jsonb("old_value"),
+    newValue: jsonb("new_value"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("shipment_events_idx").on(t.shipmentId, t.createdAt)],
+);

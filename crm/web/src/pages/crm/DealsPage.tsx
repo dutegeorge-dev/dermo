@@ -72,7 +72,7 @@ export function DealsPage() {
   return (
     <div className="px-4 py-5 sm:px-6">
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <h1 className="page-title mr-2">Сделки</h1>
+        <h1 className="page-title mr-2">Воронка продаж</h1>
         <div className="inline-flex rounded-md border border-slate-300 p-0.5 dark:border-neutral-700" role="tablist">
           {(["board", "table"] as const).map((v) => (
             <button

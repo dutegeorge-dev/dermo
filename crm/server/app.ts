@@ -23,6 +23,7 @@ import { documentRoutes } from "./routes/documents.ts";
 import { orderRoutes } from "./routes/orders.ts";
 import { productRoutes } from "./routes/products.ts";
 import { settingsRoutes } from "./routes/settings.ts";
+import { shipmentRoutes } from "./routes/shipments.ts";
 import { fileRoutes } from "./routes/files.ts";
 import { kbRoutes } from "./routes/kb.ts";
 import { searchRoutes } from "./routes/search.ts";
@@ -133,6 +134,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
       await api.register(orderRoutes);
       await api.register(productRoutes);
       await api.register(settingsRoutes);
+      await api.register(shipmentRoutes);
     },
     { prefix: API_PREFIX },
   );
