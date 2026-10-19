@@ -209,11 +209,11 @@ export function ShipmentPage() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
           <StageTimeline data={data} saveField={save} />
-          <CalcBlock data={data} />
+          <ShipmentDocs data={data} />
           <FinanceBlock data={data} />
           <GoodsBlock data={data} />
-          <ShipmentDocs data={data} />
           <History shipment={s} events={data.events} />
+          <CalcBlock data={data} />
         </div>
         <div className="min-w-0">
           <ShipmentFields data={data} save={save} run={run} />

@@ -13,6 +13,7 @@ import { BASE, errorMessage } from "../../lib/api.ts";
 import type { ShipmentResponse } from "../../lib/types.ts";
 import { formatDay, StatusChip } from "../docs/common.tsx";
 import { IconCheck } from "../Icons.tsx";
+import { OPEN_CALC_EVENT } from "./CalcBlock.tsx";
 import { DueLabel, today, useShipmentActions } from "./common.tsx";
 
 type SaveField = (patch: Record<string, unknown>) => Promise<void>;
@@ -382,7 +383,8 @@ function OrderChecklist({ data }: { data: ShipmentResponse }) {
                 title={invoices.length === 0 ? "Сначала загрузите инвойс поставщика — товары и суммы берутся из него" : "Перевозка, пошлина, КП и поручение — в блоке «Расчёт для клиента»"}
                 onClick={(e) => {
                   e.preventDefault();
-                  document.getElementById("calc")?.scrollIntoView({ behavior: "smooth" });
+                  window.dispatchEvent(new Event(OPEN_CALC_EVENT));
+                  setTimeout(() => document.getElementById("calc")?.scrollIntoView({ behavior: "smooth" }), 50);
                 }}
               >
                 Рассчитать и сформировать ↓

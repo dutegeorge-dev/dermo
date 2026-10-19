@@ -11,6 +11,7 @@ import { useNavigate } from "react-router";
 import { type CalcParams, kpLines, type ShipmentCalc } from "../../../../shared/customs.ts";
 import { CURRENCIES, formatMoney } from "../../../../shared/documents.ts";
 import { api, BASE, errorMessage } from "../../lib/api.ts";
+import { IconChevronDown, IconChevronRight } from "../Icons.tsx";
 import type { ShipmentResponse } from "../../lib/types.ts";
 
 type CalcItemRow = { productId: number | null; name: string; hsCode: string | null; tariff: string | null; tnvedName: string | null; vat10: boolean };
@@ -52,6 +53,10 @@ function HsInput({ value, onSave }: { value: string | null; onSave: (code: strin
   );
 }
 
+const OPEN_KEY = "crm-calc-open";
+/** Событие «раскрыть расчёт» — из «Хода сделки». */
+export const OPEN_CALC_EVENT = "crm:open-calc";
+
 export function CalcBlock({ data }: { data: ShipmentResponse }) {
   const sh = data.shipment;
   const navigate = useNavigate();
@@ -60,6 +65,27 @@ export function CalcBlock({ data }: { data: ShipmentResponse }) {
   const [form, setForm] = useState<Record<keyof CalcParams, string> | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Блок свёрнут по умолчанию (внизу карточки); «Рассчитать и сформировать» в «Ходе сделки» его раскрывает.
+  const [open, setOpenState] = useState(() => {
+    try {
+      return localStorage.getItem(OPEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setOpen = (v: boolean) => {
+    setOpenState(v);
+    try {
+      localStorage.setItem(OPEN_KEY, v ? "1" : "0");
+    } catch {
+      // приватный режим — не запоминаем
+    }
+  };
+  useEffect(() => {
+    const onOpen = () => setOpenState(true);
+    window.addEventListener(OPEN_CALC_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_CALC_EVENT, onOpen);
+  }, []);
 
   const base = q.data?.calc ?? q.data?.defaults ?? null;
   useEffect(() => {
@@ -126,8 +152,16 @@ export function CalcBlock({ data }: { data: ShipmentResponse }) {
 
   return (
     <section id="calc" className="panel scroll-mt-16 p-4">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto text-sm font-semibold">Расчёт для клиента — КП и поручение</h2>
+      <div className={`flex flex-wrap items-center gap-2 ${open ? "mb-3" : ""}`}>
+        <button type="button" className="mr-auto flex min-w-0 items-center gap-1.5 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
+          {open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+          <span className="text-sm font-semibold">Расчёт для клиента — КП и поручение</span>
+          {!open && (
+            <span className="truncate text-xs muted">
+              {calc ? `таможенные платежи ${rub(customsNow)} · курс на ${dmy(calc.ratesDate)}` : invoices.length ? "не рассчитано" : "нужен инвойс поставщика"}
+            </span>
+          )}
+        </button>
         {calc && (
           <a className="btn btn-sm" href={`${BASE}/api/shipments/${sh.number}/kp.docx`}>
             КП (Word)
@@ -156,7 +190,7 @@ export function CalcBlock({ data }: { data: ShipmentResponse }) {
           ))}
       </div>
 
-      {invoices.length === 0 ? (
+      {!open ? null : invoices.length === 0 ? (
         <p className="text-sm muted">Сначала загрузите инвойс поставщика — товары и суммы берутся из него.</p>
       ) : (
         <>

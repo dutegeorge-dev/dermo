@@ -40,6 +40,8 @@ function eventText(e: ShipmentEvent): string {
       return `оплата — ${v(e.oldValue)}: ${v(e.newValue)}`;
     case "party_added":
       return `добавил подрядчика ${v(e.newValue)}`;
+    case "calc":
+      return e.oldValue ? `расчёт: таможенные платежи ${v(e.oldValue)} → ${v(e.newValue)}` : `расчёт: таможенные платежи ${v(e.newValue)}`;
     case "party_removed":
       return `убрал подрядчика ${v(e.oldValue)}`;
     default:
