@@ -50,6 +50,10 @@ export function addUsage(a: AiUsage, b: AiUsage): AiUsage {
 /** Понятное сообщение вместо технической ошибки API. */
 export function aiError(error: unknown): HttpError {
   if (error instanceof HttpError) return error;
+  // Шлюз отвечает 403 {"code":"INSUFFICIENT_BALANCE"} (или 402), когда кончились баланс / лимит — это не ключ.
+  if (error instanceof Anthropic.APIError && (error.status === 402 || /INSUFFICIENT_BALANCE|insufficient|balance|quota/i.test(JSON.stringify(error.error ?? "") + error.message))) {
+    return new HttpError(402, "ИИ: на шлюзе закончился баланс / лимит токенов — пополните его в личном кабинете claude-gateway.ru");
+  }
   if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
     return new HttpError(502, "ИИ: ключ не принят — проверьте ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY");
   }
