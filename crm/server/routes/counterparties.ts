@@ -11,7 +11,11 @@ import { audit } from "../lib/audit.ts";
 import { dealQuery } from "../lib/deals.ts";
 import { listShipments } from "../lib/shipment-query.ts";
 import { documentListQuery } from "../lib/documents.ts";
+import { config } from "../config.ts";
+import { contractMissing, nextContractNumber, renderContractDocx } from "../lib/contract.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
+import { getCompany } from "../lib/settings.ts";
+import { storeBuffer } from "./files.ts";
 
 type Kind = keyof typeof COMPANY_KINDS;
 type Messenger = keyof typeof MESSENGERS;
@@ -299,6 +303,42 @@ export async function counterpartyRoutes(app: FastifyInstance): Promise<void> {
       ip: request.ip,
     });
     return { ok: true };
+  });
+
+  // ── Договор комиссии из карточки клиента ─────────────────────────────────
+
+  /** Подсказки для формы: следующий номер, город, чего не хватает в реквизитах. */
+  app.get("/counterparties/:id/commission-contract", async (request) => {
+    const id = intParam((request.params as { id: string }).id);
+    const [client] = await db.select().from(counterparties).where(eq(counterparties.id, id));
+    if (!client) throw new HttpError(404, "Контрагент не найден");
+    const company = await getCompany(db);
+    return { number: await nextContractNumber(db), city: (company.city || "Красногорск").replace(/^г\.?\s*/i, ""), missing: contractMissing(client) };
+  });
+
+  /** Создать договор комиссии: документ (черновик) + DOCX по шаблону в его файлах. */
+  app.post("/counterparties/:id/commission-contract", async (request) => {
+    const user = currentUser(request);
+    const id = intParam((request.params as { id: string }).id);
+    const input = body<{ number: unknown; date: unknown; city: unknown; validUntil: unknown }>(request);
+    const [client] = await db.select().from(counterparties).where(eq(counterparties.id, id));
+    if (!client) throw new HttpError(404, "Контрагент не найден");
+    if (client.role !== "client") throw new HttpError(400, "Договор комиссии заключается с клиентом");
+    const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    const number = str(input.number, 50) ?? (await nextContractNumber(db));
+    if (!isDate(input.date) || !isDate(input.validUntil)) throw new HttpError(400, "Укажите дату договора и срок действия");
+    const contract = { number, date: input.date, city: str(input.city, 100) ?? "Красногорск", validUntil: input.validUntil };
+    const buffer = await renderContractDocx(client, contract, config.uploadDir);
+    const document = await db.transaction(async (tx) => {
+      const [doc] = await tx
+        .insert(documents)
+        .values({ type: "commission_contract", number, date: contract.date, validUntil: contract.validUntil, counterpartyId: client.id, status: "draft", data: { city: contract.city }, createdBy: user.id })
+        .returning();
+      await storeBuffer(tx, { type: "document", id: doc.id }, { filename: `Договор комиссии № ${number} — ${client.name}.docx`.replace(/[\\/:*?"<>|]/g, " "), mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer, label: "generated" }, user.id);
+      await audit(tx, { userId: user.id, action: "create", entityType: "document", entityId: doc.id, summary: `Сформировал договор комиссии № ${number} с «${client.name}»`, ip: request.ip });
+      return doc;
+    });
+    return { document };
   });
 
   // ── Контакты ─────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-/** Настройки: реквизиты компании и шаблон поручения (admin). */
+/** Настройки: реквизиты компании и шаблоны поручения и договора комиссии (admin). */
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -12,19 +12,29 @@ import { config } from "../config.ts";
 import { db } from "../db/client.ts";
 import { audit } from "../lib/audit.ts";
 import { body, HttpError, requireAdmin } from "../lib/http.ts";
+import { CONTRACT_TEMPLATE } from "../lib/contract.ts";
 import { ORDER_TEMPLATE } from "../lib/order.ts";
 import { getCompany, setCompany } from "../lib/settings.ts";
 
 const s = (v: unknown, max = 500) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-function customTemplatePath() {
-  return path.join(config.uploadDir, "templates", "commission_order.docx");
+/** Шаблоны документов: встроенный и свой (CRM_UPLOAD_DIR/templates/<name>.docx). */
+const TEMPLATES = {
+  commission_order: { label: "поручение", builtin: ORDER_TEMPLATE },
+  commission_contract: { label: "договор комиссии", builtin: CONTRACT_TEMPLATE },
+} as const;
+
+function template(name: string) {
+  const t = TEMPLATES[name as keyof typeof TEMPLATES];
+  if (!t) throw new HttpError(404, "Нет такого шаблона");
+  return { ...t, name, custom: () => path.join(config.uploadDir, "templates", `${name}.docx`) };
 }
 
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/settings/company", async () => ({
     company: await getCompany(db),
-    orderTemplate: fs.existsSync(customTemplatePath()) ? "custom" : "default",
+    orderTemplate: fs.existsSync(template("commission_order").custom()) ? "custom" : "default",
+    contractTemplate: fs.existsSync(template("commission_contract").custom()) ? "custom" : "default",
   }));
 
   app.put("/settings/company", async (request) => {
@@ -68,31 +78,34 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     return { company };
   });
 
-  /** Текущий шаблон поручения — чтобы поправить в Word и загрузить обратно. */
-  app.get("/settings/templates/commission_order.docx", async (_request, reply) => {
-    const file = fs.existsSync(customTemplatePath()) ? customTemplatePath() : ORDER_TEMPLATE;
+  /** Текущий шаблон (поручение / договор комиссии) — чтобы поправить в Word и загрузить обратно. */
+  app.get("/settings/templates/:name.docx", async (request, reply) => {
+    const t = template((request.params as { name: string }).name);
+    const file = fs.existsSync(t.custom()) ? t.custom() : t.builtin;
     return reply
       .header("content-type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-      .header("content-disposition", 'attachment; filename="commission_order_template.docx"')
+      .header("content-disposition", `attachment; filename="${t.name}_template.docx"`)
       .send(fs.createReadStream(file));
   });
 
-  app.post("/settings/templates/commission_order", async (request) => {
+  app.post("/settings/templates/:name", async (request) => {
     const admin = requireAdmin(request);
+    const t = template((request.params as { name: string }).name);
     const file = await request.file();
     if (!file || !file.filename.toLowerCase().endsWith(".docx")) throw new HttpError(400, "Нужен файл .docx");
-    const target = customTemplatePath();
+    const target = t.custom();
     await fs.promises.mkdir(path.dirname(target), { recursive: true });
     await pipeline(file.file, fs.createWriteStream(`${target}.tmp`));
     await fs.promises.rename(`${target}.tmp`, target);
-    await audit(db, { userId: admin.id, action: "update", entityType: "settings", summary: "Загрузил свой шаблон поручения", ip: request.ip });
+    await audit(db, { userId: admin.id, action: "update", entityType: "settings", summary: `Загрузил свой шаблон: ${t.label}`, ip: request.ip });
     return { ok: true };
   });
 
-  app.delete("/settings/templates/commission_order", async (request) => {
+  app.delete("/settings/templates/:name", async (request) => {
     const admin = requireAdmin(request);
-    await fs.promises.rm(customTemplatePath(), { force: true });
-    await audit(db, { userId: admin.id, action: "update", entityType: "settings", summary: "Вернул стандартный шаблон поручения", ip: request.ip });
+    const t = template((request.params as { name: string }).name);
+    await fs.promises.rm(t.custom(), { force: true });
+    await audit(db, { userId: admin.id, action: "update", entityType: "settings", summary: `Вернул стандартный шаблон: ${t.label}`, ip: request.ip });
     return { ok: true };
   });
 }

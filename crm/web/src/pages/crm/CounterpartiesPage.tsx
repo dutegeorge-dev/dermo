@@ -9,7 +9,7 @@ import { CONTRACTOR_TYPES, COUNTERPARTY_ROLES, DOC_TYPES, type DocType, docSpec,
 import { formatShortDate, StageChip, useStages } from "../../components/crm/common.tsx";
 import { CounterpartyForm } from "../../components/crm/CounterpartyForm.tsx";
 import { counterpartyPath, docTypeLabel, DocumentsTable, formatDay } from "../../components/docs/common.tsx";
-import { IconPlus, IconSearch, IconTrash } from "../../components/Icons.tsx";
+import { IconFile, IconPlus, IconSearch, IconTrash } from "../../components/Icons.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { ConfirmDialog, EmptyState, ErrorBox, Modal, PageHeader, Spinner } from "../../components/ui.tsx";
 import { api } from "../../lib/api.ts";
@@ -231,6 +231,7 @@ export function CounterpartyPage({ role }: { role: CounterpartyRole }) {
   const [contact, setContact] = useState<Contact | "new" | null>(null);
   const [removingContact, setRemovingContact] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [makingContract, setMakingContract] = useState(false);
 
   if (isLoading) return <Content><Spinner /></Content>;
   if (!data) return <Content><ErrorBox error={error} /></Content>;
@@ -257,6 +258,11 @@ export function CounterpartyPage({ role }: { role: CounterpartyRole }) {
           .join(" · ")}
         actions={
           <>
+            {c.role === "client" && (
+              <button type="button" className="btn" onClick={() => setMakingContract(true)} title="Договор комиссии по шаблону с реквизитами клиента">
+                <IconFile size={14} /> Договор комиссии
+              </button>
+            )}
             <Link to={`/documents/new?${clientParam}`} className="btn btn-primary">
               <IconPlus size={14} /> Документ
             </Link>
@@ -456,6 +462,19 @@ export function CounterpartyPage({ role }: { role: CounterpartyRole }) {
         </div>
       )}
 
+      {makingContract && (
+        <ContractDialog
+          client={c}
+          onEdit={() => {
+            setMakingContract(false);
+            setEditing(true);
+          }}
+          onClose={(docId) => {
+            setMakingContract(false);
+            if (docId) navigate(`/documents/${docId}`);
+          }}
+        />
+      )}
       {editing && <CounterpartyForm role={c.role} counterparty={c} onClose={() => setEditing(false)} />}
       {contact && <ContactDialog counterpartyId={cpId} contact={contact === "new" ? undefined : contact} onClose={() => setContact(null)} />}
       {removingContact && (
@@ -482,5 +501,85 @@ export function CounterpartyPage({ role }: { role: CounterpartyRole }) {
         />
       )}
     </Content>
+  );
+}
+
+/** Договор комиссии из карточки клиента: номер, дата, город, срок — DOCX по шаблону с реквизитами клиента. */
+function ContractDialog({ client, onEdit, onClose }: { client: Counterparty; onEdit: () => void; onClose: (docId?: number) => void }) {
+  const queryClient = useQueryClient();
+  const hints = useQuery({
+    queryKey: ["contract-hints", client.id],
+    queryFn: () => api<{ number: string; city: string; missing: string[] }>(`/counterparties/${client.id}/commission-contract`),
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  const yearLater = (d: string) => {
+    const x = new Date(`${d}T00:00:00Z`);
+    x.setUTCFullYear(x.getUTCFullYear() + 1);
+    x.setUTCDate(x.getUTCDate() - 1);
+    return x.toISOString().slice(0, 10);
+  };
+  const [form, setForm] = useState<{ number: string | null; date: string; city: string | null; validUntil: string }>({ number: null, date: today, city: null, validUntil: yearLater(today) });
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const number = form.number ?? hints.data?.number ?? "";
+  const city = form.city ?? hints.data?.city ?? "";
+  return (
+    <Modal
+      title={`Договор комиссии — ${client.name}`}
+      onClose={() => onClose()}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={() => onClose()}>Отмена</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || !number || !hints.data}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                const { document } = await api<{ document: { id: number } }>(`/counterparties/${client.id}/commission-contract`, { method: "POST", body: { ...form, number, city } });
+                await queryClient.invalidateQueries({ queryKey: ["counterparty", client.id] });
+                onClose(document.id);
+              } catch (e) {
+                setError(e);
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Формируем…" : "Сформировать"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {hints.data && hints.data.missing.length > 0 && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+            В карточке клиента нет: {hints.data.missing.join(", ")} — в договоре останутся пустые места.{" "}
+            <button type="button" className="link" onClick={onEdit}>Заполнить</button>
+          </p>
+        )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="label">Номер</span>
+            <input className="input" value={number} onChange={(e) => setForm({ ...form, number: e.target.value })} />
+          </label>
+          <label className="block">
+            <span className="label">Город</span>
+            <input className="input" value={city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+          </label>
+          <label className="block">
+            <span className="label">Дата</span>
+            <input type="date" className="input" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, validUntil: yearLater(e.target.value || today) })} />
+          </label>
+          <label className="block">
+            <span className="label">Действует до (дальше продлевается на год)</span>
+            <input type="date" className="input" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} />
+          </label>
+        </div>
+        <p className="text-xs muted">Договор сохранится в документах клиента (черновик) с файлом Word. Подписанный скан потом загрузите в этот документ — статус станет «Подписан».</p>
+        <ErrorBox error={error} />
+      </div>
+    </Modal>
   );
 }

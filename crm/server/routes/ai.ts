@@ -8,7 +8,8 @@ import { aiEnabled } from "../lib/ai.ts";
 import { type ChatMessage, chatReply } from "../lib/ai-chat.ts";
 import { recognizeFactory } from "../lib/ai-factory.ts";
 import { recognizeRates } from "../lib/ai-rates.ts";
-import { parseDocumentFile } from "../lib/ai-parse.ts";
+import { fileContent, parseDocumentFile } from "../lib/ai-parse.ts";
+import { parseRequisites } from "../lib/requisites.ts";
 import { body, HttpError } from "../lib/http.ts";
 
 export async function aiRoutes(app: FastifyInstance): Promise<void> {
@@ -50,6 +51,20 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
     const { rates, usage } = await recognizeRates({ text, files });
     request.log.info({ ai: "rates", model: config.ai.model, files: files.length, usage }, "ИИ: ставки доставки");
     return { rates };
+  });
+
+  /** multipart: text (вставленные реквизиты) и/или файл (карточка предприятия) → поля контрагента. */
+  app.post("/parse-requisites", async (request) => {
+    if (!aiEnabled()) throw new HttpError(503, "ИИ не подключён");
+    let text = "";
+    const blocks = [];
+    for await (const part of request.parts({ limits: { files: 2 } })) {
+      if (part.type === "file") blocks.push(...(await fileContent(await part.toBuffer(), part.filename || "file", part.mimetype || "application/octet-stream")));
+      else if (part.fieldname === "text") text = String(part.value ?? "");
+    }
+    const { values, usage } = await parseRequisites(text, blocks);
+    request.log.info({ ai: "requisites", model: config.ai.model, usage }, "ИИ: реквизиты");
+    return { values };
   });
 
   /** { messages: [{ role, content }], page? } → { reply }. История — только текст, её хранит браузер. */

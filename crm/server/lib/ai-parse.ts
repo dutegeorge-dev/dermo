@@ -21,6 +21,7 @@ import { addUsage, type AiUsage, aiBase, aiClient, aiError, usageOf } from "./ai
 import { docxText, pdfText, xlsxText } from "./file-text.ts";
 import { HttpError } from "./http.ts";
 import { loadProducts, matchProduct } from "./product-match.ts";
+import { REQUISITE_KEYS, REQUISITES_RULES, REQUISITES_SCHEMA, requisitesValues } from "./requisites.ts";
 import { listShipments } from "./shipment-query.ts";
 import { searchTnved, tnvedByCodes, tnvedCount } from "./tnved.ts";
 
@@ -74,19 +75,7 @@ export const DRAFT_SCHEMA = {
     date: STR,
     currency: optEnum(CURRENCIES),
     amount: NUM,
-    counterparty: {
-      type: "object",
-      additionalProperties: false,
-      required: ["name", "fullName", "inn", "regNumber", "country", "address"],
-      properties: {
-        name: STR,
-        fullName: STR,
-        inn: STR,
-        regNumber: STR,
-        country: STR,
-        address: STR,
-      },
-    },
+    counterparty: REQUISITES_SCHEMA,
     contractorType: optEnum(Object.keys(CONTRACTOR_TYPES)),
     clientName: STR,
     contractNumber: STR,
@@ -131,7 +120,7 @@ export type ModelDraft = {
   date: string | null;
   currency: string | null;
   amount: number | null;
-  counterparty: { name: string | null; fullName: string | null; inn: string | null; regNumber: string | null; country: string | null; address: string | null };
+  counterparty: Partial<Record<(typeof REQUISITE_KEYS)[number], string | null>>;
   contractorType: string | null;
   clientName: string | null;
   contractNumber: string | null;
@@ -166,7 +155,8 @@ const SYSTEM_PROMPT = `Ты переписываешь документ в ка�
 docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k, s]) => `${k} (${s.label}${TYPE_HINTS[k] ? `: ${TYPE_HINTS[k]}` : ""})`).join("; ")}.
 
 Правила:
-- counterparty — вторая сторона: продавец, перевозчик, экспедитор, брокер. name — короткое название как в документе. inn — только российский ИНН (10/12 цифр); иностранный рег. номер — regNumber. country — по-русски.
+- counterparty — вторая сторона: продавец, перевозчик, экспедитор, брокер; в договоре с клиентом (договор комиссии, поставки, ТЭУ) — клиент (Комитент, Покупатель, Заказчик). country — по-русски. Банк, подписанта, ОГРН, КПП, телефон, email — из блока реквизитов, если есть.
+- ${REQUISITES_RULES}
 - contractorType — для подрядчиков: carrier_cn (перевозчик/экспедитор в Китае), carrier_ru, broker, warehouse (СВХ), agent, other.
 - clientName — наш клиент, если явно назван (грузополучатель, маркировка), иначе "".
 - contractNumber — номер договора / контракта, на который ссылается документ. relatedNumbers — другие номера из документа: заказ, заявка, B/L, накладная, инвойс, на который ссылаются.
@@ -187,9 +177,9 @@ export async function fileContent(buffer: Buffer, filename: string, mime: string
   try {
     if (mime === "application/pdf" || ext === "pdf") {
       text = await pdfText(buffer);
-      // Скан без текстового слоя — отдаём PDF как есть (дороже: страницы — картинками).
+      // Скан без текстового слоя: сканы ИИ пока не разбирает (решение владельца) — модель не вызываем.
       if (text.replace(/\s/g, "").length < 40) {
-        return [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") } }];
+        throw new HttpError(422, "Это скан без текста — ИИ сканы пока не разбирает. Заполните поля вручную, файл сохранится с документом.");
       }
     } else if (ext === "docx") text = await docxText(buffer);
     else if (ext === "xlsx") text = await xlsxText(buffer);
@@ -298,20 +288,24 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
   // Контрагент: найденный или новый с реквизитами из документа.
   let counterparty: DocumentDraft["counterparty"] = null;
   let newCounterparty: DocumentDraft["newCounterparty"] = null;
+  let counterpartyFill: DocumentDraft["counterpartyFill"] = null;
   if (spec.party) {
     const found = matchCounterparty(cps, spec.party, rc);
     const name = text(rc.name, 300) ?? text(rc.fullName, 300);
-    if (found) counterparty = { id: found.id, name: found.name };
-    else if (name) {
+    if (found) {
+      counterparty = { id: found.id, name: found.name };
+      // Реквизиты, которых у контрагента ещё нет (банк, ОГРН, подписант…) — дописать при сохранении.
+      const [row] = await tx.select().from(counterparties).where(eq(counterparties.id, found.id));
+      const { name: _name, kind: _kind, ...req } = requisitesValues(rc);
+      const fill: Record<string, string> = Object.fromEntries(Object.entries(req).filter(([k]) => row && !(row as Record<string, unknown>)[k]));
+      counterpartyFill = Object.keys(fill).length ? fill : null;
+    } else if (name) {
       counterparty = { id: null, name };
-      newCounterparty = {};
-      const inn = (rc.inn ?? "").replace(/\D/g, "");
+      const { name: _name, ...req } = requisitesValues(rc);
       const country = text(rc.country, 60);
-      if (inn.length === 10 || inn.length === 12) newCounterparty.inn = inn;
-      for (const [k, v] of [["fullName", text(rc.fullName, 500)], ["regNumber", text(rc.regNumber, 60)], ["legalAddress", text(rc.address, 500)], ["country", country]] as const) {
-        if (v) newCounterparty[k] = v;
-      }
-      if (spec.party !== "client" && (!country || !/росс|russia|^ru$/i.test(country))) newCounterparty.kind = "foreign";
+      if (spec.party !== "client" && (!country || !/росс|russia|^ru$/i.test(country))) req.kind = "foreign";
+      else if (spec.party === "client" && !req.kind) req.kind = "ooo";
+      newCounterparty = req;
       if (spec.party === "contractor" && raw.contractorType && raw.contractorType in CONTRACTOR_TYPES) newCounterparty.contractorType = raw.contractorType;
     }
   }
@@ -483,6 +477,7 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
     amount,
     counterparty,
     newCounterparty,
+    counterpartyFill,
     client,
     parentId,
     contractNumber,

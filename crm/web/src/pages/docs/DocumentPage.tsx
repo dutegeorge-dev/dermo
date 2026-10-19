@@ -164,7 +164,7 @@ export function DocumentPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {d.type === "commission_order" && (
+          {(d.type === "commission_order" || d.type === "commission_contract") && (
             <a className="btn btn-primary" href={`${BASE}/api/documents/${docId}/docx`}>
               <IconFile size={14} /> Скачать DOCX
             </a>

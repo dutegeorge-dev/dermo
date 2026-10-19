@@ -1145,3 +1145,69 @@ describe("Товары: варианты, объединение; ставки �
     assert.equal((await call(s, "DELETE", `/quotes/${list[0].id}`)).statusCode, 200);
   });
 });
+
+describe("Клиент ↔ договор комиссии", () => {
+  test("реквизиты: цифры чистятся, ИП определяется кодом", async () => {
+    const { requisitesValues } = await import("../lib/requisites.ts");
+    const v = requisitesValues({ name: "ИП Демова Д.Д.", inn: "7700 0000 0012", ogrn: "3 2100 0000 000001", bankAccount: "40802 810 1 0000 0000001", bankBik: "04 4525 000", kind: "ooo", signatoryName: "Демова Дарья Дмитриевна", kpp: "12" });
+    assert.deepEqual(
+      [v.inn, v.ogrn, v.bankAccount, v.bankBik, v.kind, v.signatoryTitle, v.kpp],
+      ["770000000012", "321000000000001", "40802810100000000001", "044525000", "ip", "Индивидуальный предприниматель", undefined],
+    );
+  });
+
+  test("договор комиссии из карточки клиента: номер по порядку, преамбула в родительном падеже, реквизиты, DOCX", async () => {
+    const { docxText } = await import("../lib/file-text.ts");
+    const s = await adminSession();
+    const ooo = (await call(s, "POST", "/counterparties", {
+      role: "client", kind: "ooo", name: "ООО «Демо-Комитент»", fullName: "Общество с ограниченной ответственностью «Демо-Комитент»",
+      inn: "7700000001", kpp: "770001001", ogrn: "1027700000001", legalAddress: "125000, г. Москва, ул. Демо, д. 1",
+      bankAccount: "40702810000000000001", bankName: "АО «Демо-Банк»", bankBik: "044525001", bankCorrAccount: "30101810000000000001",
+      signatoryTitle: "Генеральный директор", signatoryName: "Демидова Анна Петровна", signatoryBasis: "Устава",
+    })).json().counterparty;
+    const hints = (await call(s, "GET", `/counterparties/${ooo.id}/commission-contract`)).json();
+    assert.deepEqual(hints.missing, []);
+    assert.match(hints.number, /^\d{2,}$/);
+    const res = await call(s, "POST", `/counterparties/${ooo.id}/commission-contract`, { number: hints.number, date: "2026-03-09", city: "г. Красногорск", validUntil: "2027-03-08" });
+    assert.equal(res.statusCode, 200, res.body);
+    const doc = res.json().document;
+    assert.deepEqual([doc.type, doc.counterpartyId, doc.status, doc.validUntil], ["commission_contract", ooo.id, "draft", "2027-03-08"]);
+    const full = (await call(s, "GET", `/documents/${doc.id}`)).json();
+    assert.equal(full.files.length, 1);
+    assert.equal(full.files[0].label, "generated");
+    const file = await app.inject({ method: "GET", url: `${API}/files/${full.files[0].id}`, headers: { cookie: s.cookie } });
+    const text = await docxText(file.rawPayload);
+    assert.match(text, new RegExp(`Договор комиссии №\\s+${hints.number}`));
+    assert.match(text, / г\. Красногорск\s*09 марта 2026 г\./);
+    assert.doesNotMatch(text, /г\. г\./);
+    assert.match(text, /Общество с ограниченной ответственностью «Демо-Комитент», именуемое в дальнейшем Комитент, в лице генерального директора Демидовой А\.П\., действующей на основании Устава, с одной стороны, и/);
+    assert.match(text, /действует до 08 марта 2027 года/);
+    assert.match(text, /ИНН 7700000001\/КПП 770001001/);
+    assert.match(text, /р\/с 40702810000000000001 в АО «Демо-Банк»/);
+    assert.match(text, /Демидова А\.П\./);
+    assert.doesNotMatch(text, /\{\{/);
+    // Следующий номер — на единицу больше.
+    assert.equal(Number((await call(s, "GET", `/counterparties/${ooo.id}/commission-contract`)).json().number), Number(hints.number) + 1);
+    // DOCX документа — заново по текущим реквизитам.
+    const again = await app.inject({ method: "GET", url: `${API}/documents/${doc.id}/docx`, headers: { cookie: s.cookie } });
+    assert.equal(again.statusCode, 200);
+    assert.match(await docxText(again.rawPayload), /Демидовой А\.П\./);
+
+    // ИП: сам предприниматель, «именуемая»; не хватает реквизитов — подсказка.
+    const ip = (await call(s, "POST", "/counterparties", { role: "client", kind: "ip", name: "ИП Демова Д.Д.", signatoryName: "Демова Дарья Дмитриевна", inn: "770000000012" })).json().counterparty;
+    assert.deepEqual((await call(s, "GET", `/counterparties/${ip.id}/commission-contract`)).json().missing, ["ОГРНИП", "адрес", "банковские реквизиты"]);
+    const ipDoc = (await call(s, "POST", `/counterparties/${ip.id}/commission-contract`, { date: "2026-04-01", validUntil: "2027-03-31" })).json().document;
+    const ipText = await docxText((await app.inject({ method: "GET", url: `${API}/documents/${ipDoc.id}/docx`, headers: { cookie: s.cookie } })).rawPayload);
+    assert.match(ipText, /Индивидуальный предприниматель Демова Дарья Дмитриевна, именуемая в дальнейшем Комитент, с одной стороны/);
+    assert.match(ipText, /ОГРНИП/);
+
+    // Договор только с клиентом; шаблон договора можно скачать в настройках.
+    const sup = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Contract Supplier" })).json().counterparty;
+    assert.equal((await call(s, "POST", `/counterparties/${sup.id}/commission-contract`, { date: "2026-04-01", validUntil: "2027-03-31" })).statusCode, 400);
+    const tpl = await app.inject({ method: "GET", url: `${API}/settings/templates/commission_contract.docx`, headers: { cookie: s.cookie } });
+    assert.equal(tpl.statusCode, 200);
+    assert.match(await docxText(tpl.rawPayload), /\{\{contract\.clientPreamble\}\}/);
+    assert.equal((await app.inject({ method: "GET", url: `${API}/settings/templates/nope.docx`, headers: { cookie: s.cookie } })).statusCode, 404);
+    assert.equal((await app.inject({ method: "GET", url: `${API}/settings/templates/commission_order.docx`, headers: { cookie: s.cookie } })).statusCode, 200);
+  });
+});

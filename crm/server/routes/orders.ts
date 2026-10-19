@@ -5,11 +5,13 @@ import type { FastifyInstance } from "fastify";
 
 import { config } from "../config.ts";
 import { db } from "../db/client.ts";
-import { documents, shipments } from "../db/schema.ts";
+import { counterparties, documents, shipments } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { assertSingleOrder, nextSeqNo, pad2, replaceItems } from "../lib/documents.ts";
 import { currentUser, HttpError, intParam } from "../lib/http.ts";
 import { buildOrderDraft, renderOrderDocx } from "../lib/order.ts";
+import { renderContractDocx } from "../lib/contract.ts";
+import { getCompany } from "../lib/settings.ts";
 import { addShipmentEvent, parseShipmentNumber } from "../lib/shipments.ts";
 
 export async function orderRoutes(app: FastifyInstance): Promise<void> {
@@ -59,6 +61,22 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
     const id = intParam((request.params as { id: string }).id);
     const [doc] = await db.select().from(documents).where(eq(documents.id, id));
     if (!doc) throw new HttpError(404, "Документ не найден");
+    if (doc.type === "commission_contract") {
+      // Договор — заново по шаблону и текущим реквизитам клиента.
+      const [client] = doc.counterpartyId ? await db.select().from(counterparties).where(eq(counterparties.id, doc.counterpartyId)) : [];
+      if (!client) throw new HttpError(400, "В договоре не указан клиент");
+      const today = new Date().toISOString().slice(0, 10);
+      const buffer = await renderContractDocx(
+        client,
+        { number: doc.number ?? "___", date: doc.date ?? today, validUntil: doc.validUntil ?? today, city: (doc.data as { city?: string } | null)?.city ?? ((await getCompany(db)).city || "Красногорск") },
+        config.uploadDir,
+      );
+      const filename = `Договор комиссии ${doc.number ?? id} — ${client.name}.docx`.replace(/[\\/:*?"<>|]/g, " ");
+      return reply
+        .header("content-type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        .header("content-disposition", `attachment; filename="contract-${id}.docx"; filename*=UTF-8''${encodeURIComponent(filename)}`)
+        .send(buffer);
+    }
     if (doc.type !== "commission_order") throw new HttpError(400, "Для этого типа документа шаблона нет");
     const buffer = await renderOrderDocx(db, id, config.uploadDir);
     const filename = `Поручение ${doc.number ?? id}.docx`;

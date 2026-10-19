@@ -5,7 +5,9 @@ import { useState } from "react";
 
 import { COMPANY_KINDS } from "../../../../shared/deal-fields.ts";
 import { CONTRACTOR_TYPES, COUNTERPARTY_ROLES } from "../../../../shared/documents.ts";
+import { useAiEnabled } from "../../lib/ai.ts";
 import { api } from "../../lib/api.ts";
+import { IconSparkles } from "../Icons.tsx";
 import type { Counterparty, CounterpartyRole } from "../../lib/types.ts";
 import { ErrorBox, Modal } from "../ui.tsx";
 
@@ -87,6 +89,28 @@ export function CounterpartyForm({
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
   const foreign = form.kind === "foreign";
+  const ai = useAiEnabled();
+  const [paste, setPaste] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [parsed, setParsed] = useState(false);
+  /** ИИ раскладывает вставленный текст по полям; название у существующего не меняем. */
+  const parsePaste = async () => {
+    setParsing(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("text", paste);
+      const { values } = await api<{ values: Record<string, string> }>("/ai/parse-requisites", { method: "POST", form: fd });
+      if (counterparty) delete values.name;
+      if (role === "supplier" && values.kind !== "ip" && values.kind !== "ooo") values.kind = "foreign";
+      setForm((f) => ({ ...f, ...values }));
+      setParsed(true);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setParsing(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,6 +141,25 @@ export function CounterpartyForm({
   return (
     <Modal title={counterparty ? counterparty.name : `Новый ${COUNTERPARTY_ROLES[role].one.toLowerCase()}`} onClose={() => onClose()} wide>
       <form onSubmit={submit} className="space-y-5">
+        {ai && (
+          <div className="rounded-md border border-dashed border-slate-300 p-3 dark:border-neutral-700">
+            <label className="label" htmlFor="cp-paste">Вставить реквизиты — в любом виде (из письма, договора, карточки предприятия)</label>
+            <textarea
+              id="cp-paste"
+              className="input"
+              rows={paste ? 5 : 2}
+              value={paste}
+              onChange={(e) => setPaste(e.target.value)}
+              placeholder={"ООО «Пример»\nАдрес: 143000, Московская обл., …\nОГРН … ИНН …/КПП …\nр/с … в ПАО «Банк», БИК …"}
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button type="button" className="btn btn-sm" disabled={parsing || !paste.trim()} onClick={() => void parsePaste()}>
+                <IconSparkles size={14} /> {parsing ? "Разбираем…" : "Заполнить поля"}
+              </button>
+              {parsed && <span className="text-xs text-green-700 dark:text-green-400">Заполнено — проверьте поля ниже</span>}
+            </div>
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
           <div>
             <label className="label" htmlFor="cp-kind">Форма</label>

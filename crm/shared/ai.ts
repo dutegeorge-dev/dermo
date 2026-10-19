@@ -13,6 +13,8 @@ export type DocumentDraft = {
   /** id: null — новый контрагент; newCounterparty — его реквизиты из документа. */
   counterparty: { id: number | null; name: string } | null;
   newCounterparty: Record<string, string> | null;
+  /** Найденному контрагенту — реквизиты из документа, которых у него ещё нет (дописать при сохранении). */
+  counterpartyFill: Record<string, string> | null;
   client: { id: number; name: string } | null;
   parentId: number | null;
   contractNumber: string | null;

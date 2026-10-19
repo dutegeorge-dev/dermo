@@ -157,6 +157,7 @@ function EditorForm({ initial }: { initial: Initial }) {
   const [ai, setAi] = useState<{ status: "idle" | "busy" | "done" | "error"; draft?: DocumentDraft; error?: string }>({ status: "idle" });
   // Реквизиты нового контрагента, которые ИИ прочитал из документа (имя → поля).
   const [aiCounterparty, setAiCounterparty] = useState<{ name: string; extra: Record<string, string> } | null>(null);
+  const [aiFill, setAiFill] = useState<{ id: number; values: Record<string, string> } | null>(null);
   const [applyToDeal, setApplyToDeal] = useState(true);
   const [packingLines, setPackingLines] = useState<PackingLine[]>(((data0.packing as PackingData | undefined)?.lines ?? []).length ? (data0.packing as PackingData).lines : [emptyPackingLine()]);
   // Документ об оплате: к какому счёту прикрепить и отметить ли оплату.
@@ -196,6 +197,7 @@ function EditorForm({ initial }: { initial: Initial }) {
     setType(d.type);
     setParty(d.counterparty);
     setAiCounterparty(d.counterparty && d.counterparty.id === null && d.newCounterparty ? { name: d.counterparty.name, extra: d.newCounterparty } : null);
+    setAiFill(d.counterparty?.id && d.counterpartyFill ? { id: d.counterparty.id, values: d.counterpartyFill } : null);
     if (d.client && dSpec.party !== "client") setClient(d.client);
     if (d.number) setNumber(d.number);
     if (d.date) setDate(d.date);
@@ -293,6 +295,10 @@ function EditorForm({ initial }: { initial: Initial }) {
       }
       const cpExtra = party && party.id === null && aiCounterparty?.name === party.name ? aiCounterparty.extra : {};
       const counterpartyId = spec.party ? await ensureCounterparty(party, spec.party, cpExtra) : null;
+      // Найденному контрагенту — реквизиты из документа, которых у него не было (банк, ОГРН, подписант).
+      if (counterpartyId && aiFill?.id === counterpartyId) {
+        await api(`/counterparties/${counterpartyId}`, { method: "PATCH", body: aiFill.values }).catch(() => undefined);
+      }
       const clientId = await ensureCounterparty(client, "client");
       const data: Record<string, unknown> = { ...data0 };
       if (type === "supplier_invoice") Object.assign(data, { incoterms, paymentTerms });
@@ -457,10 +463,15 @@ function EditorForm({ initial }: { initial: Initial }) {
             {spec.party && (
               <Field label={COUNTERPARTY_ROLES[spec.party].one} wide>
                 <CounterpartyPicker role={spec.party} value={party} onChange={setParty} />
+                {party && party.id !== null && aiFill?.id === party.id && (
+                  <span className="mt-1 block text-xs muted">В карточку допишутся реквизиты из документа: {requisitesList(aiFill.values)}.</span>
+                )}
                 {party && party.id === null && (
                   <span className="mt-1 block text-xs muted">
                     Будет создан новый {COUNTERPARTY_ROLES[spec.party].one.toLowerCase()} —{" "}
-                    {aiCounterparty?.name === party.name ? "реквизиты из документа (страна, адрес) запишутся сами, остальное — в его карточке." : "реквизиты заполните потом в его карточке."}
+                    {aiCounterparty?.name === party.name
+                      ? `реквизиты из документа запишутся сами: ${requisitesList(aiCounterparty.extra)}.`
+                      : "реквизиты заполните потом в его карточке."}
                     {spec.party === "contractor" && ` Вид по умолчанию: ${CONTRACTOR_TYPES.carrier_cn}.`}
                   </span>
                 )}
@@ -676,3 +687,11 @@ function EditorForm({ initial }: { initial: Initial }) {
     </form>
   );
 }
+
+const REQUISITE_LABELS: Record<string, string> = {
+  inn: "ИНН", kpp: "КПП", ogrn: "ОГРН", legalAddress: "адрес", bankAccount: "р/с", bankBik: "БИК", bankName: "банк",
+  signatoryName: "подписант", email: "e-mail", phone: "телефон", country: "страна", regNumber: "рег. номер",
+};
+/** «ИНН, ОГРН, р/с, БИК, подписант» — что из реквизитов запишется. */
+const requisitesList = (v: Record<string, string>) =>
+  Object.keys(v).map((k) => REQUISITE_LABELS[k]).filter(Boolean).join(", ") || "страна, адрес";

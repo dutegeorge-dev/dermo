@@ -41,12 +41,11 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["settings", "company"],
-    queryFn: () => api<{ company: CompanySettings; orderTemplate: "custom" | "default" }>("/settings/company"),
+    queryFn: () => api<{ company: CompanySettings; orderTemplate: "custom" | "default"; contractTemplate: "custom" | "default" }>("/settings/company"),
   });
   const [form, setForm] = useState<CompanySettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<unknown>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (data) setForm(data.company);
   }, [data]);
@@ -128,48 +127,58 @@ export function SettingsPage() {
         </div>
       </form>
 
-      <section className="mt-10 border-t border-slate-200 pt-5 dark:border-neutral-800">
-        <h2 className="mb-1 text-sm font-semibold">Шаблон поручения</h2>
-        <p className="mb-3 text-sm muted">
-          {data?.orderTemplate === "custom" ? "Используется загруженный вами шаблон." : "Используется стандартный шаблон ТЛК БАРС."} Скачайте его, поправьте текст в Word
-          (поля в фигурных скобках {"{{…}}"} не трогайте) и загрузите обратно.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <a className="btn" href={`${BASE}/api/settings/templates/commission_order.docx`}>Скачать шаблон</a>
-          <button type="button" className="btn" onClick={() => fileRef.current?.click()}>Загрузить свой</button>
-          {data?.orderTemplate === "custom" && (
-            <button
-              type="button"
-              className="btn"
-              onClick={async () => {
-                await api("/settings/templates/commission_order", { method: "DELETE" });
-                await queryClient.invalidateQueries({ queryKey: ["settings"] });
-              }}
-            >
-              Вернуть стандартный
-            </button>
-          )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".docx"
-            className="hidden"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (!f) return;
-              const form = new FormData();
-              form.append("file", f);
-              try {
-                await api("/settings/templates/commission_order", { method: "POST", form });
-                await queryClient.invalidateQueries({ queryKey: ["settings"] });
-              } catch (x) {
-                setErr(x);
-              }
-            }}
-          />
-        </div>
-      </section>
+      <TemplateSection name="commission_order" title="Шаблон поручения" custom={data?.orderTemplate === "custom"} onError={setErr} />
+      <TemplateSection name="commission_contract" title="Шаблон договора комиссии" custom={data?.contractTemplate === "custom"} onError={setErr} />
     </Content>
+  );
+}
+
+/** Шаблон документа: скачать текущий, загрузить свой, вернуть стандартный. */
+function TemplateSection({ name, title, custom, onError }: { name: string; title: string; custom: boolean; onError: (e: unknown) => void }) {
+  const queryClient = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  return (
+    <section className="mt-10 border-t border-slate-200 pt-5 dark:border-neutral-800">
+      <h2 className="mb-1 text-sm font-semibold">{title}</h2>
+      <p className="mb-3 text-sm muted">
+        {custom ? "Используется загруженный вами шаблон." : "Используется стандартный шаблон ТЛК БАРС."} Скачайте его, поправьте текст в Word
+        (поля в фигурных скобках {"{{…}}"} не трогайте) и загрузите обратно.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <a className="btn" href={`${BASE}/api/settings/templates/${name}.docx`}>Скачать шаблон</a>
+        <button type="button" className="btn" onClick={() => fileRef.current?.click()}>Загрузить свой</button>
+        {custom && (
+          <button
+            type="button"
+            className="btn"
+            onClick={async () => {
+              await api(`/settings/templates/${name}`, { method: "DELETE" });
+              await queryClient.invalidateQueries({ queryKey: ["settings"] });
+            }}
+          >
+            Вернуть стандартный
+          </button>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".docx"
+          className="hidden"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (!f) return;
+            const form = new FormData();
+            form.append("file", f);
+            try {
+              await api(`/settings/templates/${name}`, { method: "POST", form });
+              await queryClient.invalidateQueries({ queryKey: ["settings"] });
+            } catch (x) {
+              onError(x);
+            }
+          }}
+        />
+      </div>
+    </section>
   );
 }
