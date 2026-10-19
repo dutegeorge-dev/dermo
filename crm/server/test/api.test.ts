@@ -1211,3 +1211,37 @@ describe("Клиент ↔ договор комиссии", () => {
     assert.equal((await app.inject({ method: "GET", url: `${API}/settings/templates/commission_order.docx`, headers: { cookie: s.cookie } })).statusCode, 200);
   });
 });
+
+describe("ИИ-разбор: стороны и тип счёта", () => {
+  const base = {
+    number: "DEMO-FF-1", date: "2026-09-14", currency: "CNY", amount: 1000, contractorType: null, clientName: null, contractNumber: null,
+    relatedNumbers: [], cargoTitle: null, containerNo: null, weightKg: null, volumeM3: null, incoterms: null, paymentTerms: null,
+    validUntil: null, costCategory: null, summary: "Инвойс за международную перевозку",
+  };
+  test("счёт от китайского экспедитора — не «счёт клиенту», а счёт подрядчика", async () => {
+    const { resolveDraft } = await import("../lib/ai-parse.ts");
+    const d = await resolveDraft(db, {
+      ...base,
+      docType: "client_invoice",
+      counterparty: { name: "Demo Freight Forwarding Co., Ltd.", country: "Китай" },
+      items: [{ name: "International transportation costs", hsCode: null, hsGuess: null, quantity: 1, unit: null, price: 1000, amount: 1000 }],
+    } as never);
+    assert.equal(d.type, "contractor_invoice");
+    assert.equal(d.counterparty?.name, "Demo Freight Forwarding Co., Ltd.");
+  });
+  test("стороной записали нас — сторона сбрасывается, тип не «счёт клиенту»", async () => {
+    const { resolveDraft, isOurCompany } = await import("../lib/ai-parse.ts");
+    assert.ok(isOurCompany({ name: "LIMITEDTRADE DEVELOPMENT BARS TRADING CO." }));
+    assert.ok(isOurCompany({ inn: "5024 256988" }));
+    assert.ok(!isOurCompany({ name: "ООО «Барс-Демо»" }));
+    const d = await resolveDraft(db, {
+      ...base,
+      docType: "client_invoice",
+      counterparty: { name: "LIMITEDTRADE DEVELOPMENT BARS TRADING CO.", inn: "5024256988" },
+      items: [],
+    } as never);
+    assert.equal(d.type, "contractor_invoice");
+    assert.equal(d.counterparty, null);
+    assert.ok(d.warnings.some((w) => /не распознано/.test(w)));
+  });
+});

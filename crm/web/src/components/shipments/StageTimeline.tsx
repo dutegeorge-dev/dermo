@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 
+import { formatMoney } from "../../../../shared/documents.ts";
 import { daysBetween, FLAGS, type FlagKey, MILESTONES, type MilestoneSpec, SHIPMENT_STAGES, type StageSpec } from "../../../../shared/shipments.ts";
 import { api, apiDownload, BASE, errorMessage } from "../../lib/api.ts";
 import type { ShipmentResponse } from "../../lib/types.ts";
@@ -130,7 +131,10 @@ export function StageTimeline({ data, saveField }: { data: ShipmentResponse; sav
                     {(st.flags.length > 0 || st.no === 3) && (
                       <div className="space-y-1.5">
                         <div className="text-xs font-semibold muted">Что нужно сделать</div>
-                        {st.flags.map((k) => flagItem(k))}
+                        {st.flags.map((k) =>
+                          // Перед оплатой фрахта — инвойс перевозчика: к нему прикрепится платёжка.
+                          k === "freight" ? [<CarrierInvoiceItem key="carrier-invoice" data={data} />, flagItem(k)] : flagItem(k),
+                        )}
                         {st.no === 3 && <ContainerItem containerNo={shipment.containerNo} disabled={!active} onSave={(v) => void saveField({ containerNo: v })} />}
                       </div>
                     )}
@@ -433,6 +437,34 @@ function FlagItem({
         </div>
       )}
     </div>
+  );
+}
+
+/** «Загрузить инвойс перевозчика» — пока его нет; есть — ссылки на счета перевозчика с оплатой. */
+function CarrierInvoiceItem({ data }: { data: ShipmentResponse }) {
+  const docs = flagDocs(data, "freight");
+  if (docs.length) {
+    return (
+      <Check done>
+        <span className="muted line-through">Загрузить инвойс перевозчика</span>
+        {docs.map((d) => (
+          <Link key={d.id} to={`/documents/${d.id}`} className="text-xs link">
+            № {d.number ?? "б/н"}
+            {d.amount !== null ? ` · ${formatMoney(d.amount, d.currency)}` : ""}
+            {d.paymentStatus === "paid" ? " · оплачен" : ""}
+          </Link>
+        ))}
+      </Check>
+    );
+  }
+  return (
+    <Check done={false}>
+      <span>Загрузить инвойс перевозчика</span>
+      <Link to={`/documents/new?shipment=${data.shipment.number}&type=contractor_invoice`} className="btn btn-sm">
+        Загрузить
+      </Link>
+      <span className="text-xs muted">— к нему прикрепится платёжка за фрахт</span>
+    </Check>
   );
 }
 

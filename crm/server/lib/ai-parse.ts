@@ -35,12 +35,12 @@ const MAX_TEXT = 24_000;
 const TYPE_HINTS: Partial<Record<DocType, string>> = {
   supplier_invoice: "инвойс / проформа (PI, Commercial Invoice, «购销合同» с ценами) от поставщика товара",
   supplier_contract: "контракт на поставку с поставщиком (рамочный)",
-  contractor_invoice: "счёт / инвойс / debit note перевозчика, экспедитора, брокера, СВХ за услуги",
+  contractor_invoice: "счёт / инвойс / Commercial Invoice / debit note перевозчика, экспедитора (Freight Forwarding, Logistics), брокера, СВХ за услуги: перевозка, фрахт, transportation costs",
   railway_bill: "ж/д накладная СМГС",
   bill_of_lading: "морской коносамент B/L",
   customs_declaration: "декларация на товары (ДТ, ГТД)",
   conformity: "декларация / сертификат соответствия ЕАЭС",
-  client_invoice: "счёт, который ТЛК БАРС выставила клиенту",
+  client_invoice: "счёт, который выставила сама ТЛК БАРС (мы — продавец / исполнитель, наши реквизиты — получателя платежа). Если ТЛК БАРС — получатель счёта (TO, Buyer, Bill to, Плательщик), это НЕ client_invoice",
   packing_list: "упаковочный лист (Packing List, 装箱单): места, нетто, брутто, объём",
   carrier_spec: "спецификация «счёт-фактура — упаковочный лист — спецификация» для перевозчика",
   payment_order: "платёжное поручение, SWIFT, подтверждение оплаты инвойса / счёта",
@@ -150,13 +150,14 @@ export type ModelDraft = {
   summary: string;
 };
 
-const SYSTEM_PROMPT = `Ты переписываешь документ в карточку CRM компании ООО «ТЛК БАРС» (закупка и доставка товаров из Китая). Наша компания — покупатель / заказчик (в документах: BARS TRADING CO., LTD; LIMITED TRADE DEVELOPMENT BARS TRADING CO.; ТЛК БАРС; ИНН 5024256988) — она никогда не контрагент.
+const SYSTEM_PROMPT = `Ты переписываешь документ в карточку CRM компании ООО «ТЛК БАРС» (закупка и доставка товаров из Китая). Наша компания — покупатель / заказчик (в документах: BARS TRADING CO., LTD; LIMITED TRADE DEVELOPMENT BARS TRADING CO.; LIMITEDTRADE DEVELOPMENT BARS TRADING CO.; ТЛК БАРС; ИНН 5024256988) — она никогда не контрагент.
 
 docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k, s]) => `${k} (${s.label}${TYPE_HINTS[k] ? `: ${TYPE_HINTS[k]}` : ""})`).join("; ")}.
 
 Правила:
-- counterparty — вторая сторона: продавец, перевозчик, экспедитор, брокер; в договоре с клиентом (договор комиссии, поставки, ТЭУ) — клиент (Комитент, Покупатель, Заказчик). country — по-русски. Банк, подписанта, ОГРН, КПП, телефон, email — из блока реквизитов, если есть.
+- counterparty — вторая сторона, НЕ ТЛК БАРС: в инвойсе / счёте — кто его выставил (шапка документа, получатель платежа — Beneficiary): продавец, перевозчик, экспедитор, брокер; блок «TO / Buyer / Bill to» с нашими реквизитами — это мы, его не переписывай; в договоре с клиентом (договор комиссии, поставки, ТЭУ) — клиент (Комитент, Покупатель, Заказчик). country — по-русски. Банк, подписанта, ОГРН, КПП, телефон, email — из блока реквизитов, если есть.
 - ${REQUISITES_RULES}
+- Инвойс / счёт, где ТЛК БАРС — получатель (TO / Buyer / Bill to): за товар — supplier_invoice; за перевозку, фрахт, экспедирование, оформление (International transportation costs, freight, logistics) — contractor_invoice. client_invoice — только если счёт выставили мы.
 - contractorType — для подрядчиков: carrier_cn (перевозчик/экспедитор в Китае), carrier_ru, broker, warehouse (СВХ), agent, other.
 - clientName — наш клиент, если явно назван (грузополучатель, маркировка), иначе "".
 - contractNumber — номер договора / контракта, на который ссылается документ. relatedNumbers — другие номера из документа: заказ, заявка, B/L, накладная, инвойс, на который ссылаются.
@@ -274,12 +275,34 @@ function matchCounterparty(rows: CpRow[], role: string | null, c: { name?: strin
   return partial.length === 1 ? partial[0] : null;
 }
 
+/** Наша компания (ТЛК БАРС / BARS TRADING) — никогда не контрагент документа. */
+export function isOurCompany(c: { name?: string | null; fullName?: string | null; inn?: string | null }): boolean {
+  if ((c.inn ?? "").replace(/\D/g, "") === "5024256988") return true;
+  return /bars\s*trading|тлк\s*барс|limited\s*trade\s*development/i.test(`${c.name ?? ""} ${c.fullName ?? ""}`);
+}
+
 /** Ответ модели → черновик формы: ссылки только на существующее в базе. */
 export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<DocumentDraft & { hsGuesses: (string | null)[] }> {
-  const type: DocType = raw.docType in DOC_TYPES ? (raw.docType as DocType) : "other";
-  const spec = docSpec(type)!;
+  let type: DocType = raw.docType in DOC_TYPES ? (raw.docType as DocType) : "other";
   const warnings: string[] = [];
-  const rc = raw.counterparty ?? ({} as ModelDraft["counterparty"]);
+  let rc = raw.counterparty ?? ({} as ModelDraft["counterparty"]);
+  // Модель записала стороной нас (блок «TO» с нашими реквизитами) — стороны перепутаны: счёт выставили нам.
+  if (isOurCompany(rc)) {
+    rc = {};
+    if (type === "client_invoice") type = /перевоз|фрахт|транспорт|логист|экспед|freight|transport|logistic|shipping|forward/i.test(`${raw.summary} ${raw.costCategory ?? ""}`) ? "contractor_invoice" : "supplier_invoice";
+    warnings.push("Кто выставил документ, не распознано — выберите сторону вручную");
+  }
+  // «Счёт клиенту» выставляем только мы и только клиенту в России: от иностранной компании, поставщика или
+  // подрядчика — это их счёт нам (за перевозку — подрядчика, иначе — поставщика).
+  if (type === "client_invoice") {
+    const issuer = matchCounterparty(await tx.select({ id: counterparties.id, role: counterparties.role, name: counterparties.name, fullName: counterparties.fullName, inn: counterparties.inn, regNumber: counterparties.regNumber }).from(counterparties), null, rc);
+    const foreign = !!rc.regNumber || /кит|china|гонконг|hong\s*kong/i.test(rc.country ?? "") || (!(rc.inn ?? "").replace(/\D/g, "") && /co\.?,?\s*ltd|limited|company/i.test(`${rc.name ?? ""} ${rc.fullName ?? ""}`));
+    if (foreign || (issuer && issuer.role !== "client")) {
+      const text = `${raw.summary} ${raw.costCategory ?? ""} ${(raw.items ?? []).map((i) => i.name).join(" ")} ${rc.name ?? ""}`;
+      type = /перевоз|фрахт|транспорт|логист|экспед|freight|transport|logistic|shipping|forward/i.test(text) ? "contractor_invoice" : "supplier_invoice";
+    }
+  }
+  const spec = docSpec(type)!;
 
   const cps: CpRow[] = await tx
     .select({ id: counterparties.id, role: counterparties.role, name: counterparties.name, fullName: counterparties.fullName, inn: counterparties.inn, regNumber: counterparties.regNumber })
