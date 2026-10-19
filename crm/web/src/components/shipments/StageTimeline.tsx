@@ -6,7 +6,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { daysBetween, FLAGS, type FlagKey, MILESTONES, type MilestoneSpec, SHIPMENT_STAGES, type StageSpec } from "../../../../shared/shipments.ts";
@@ -24,7 +24,7 @@ const milestoneOf = (stage: StageSpec): MilestoneSpec | undefined => MILESTONES.
 
 export function StageTimeline({ data, saveField }: { data: ShipmentResponse; saveField: SaveField }) {
   const shipment = data.shipment;
-  const { milestone, flag } = useShipmentActions();
+  const { milestone, flag, refresh } = useShipmentActions();
   const [shift, setShift] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -42,9 +42,20 @@ export function StageTimeline({ data, saveField }: { data: ShipmentResponse; sav
       setError(errorMessage(e));
     }
   };
-  const setFlag = (key: string, done: boolean) => {
+  const setFlag = async (key: string, done: boolean, date?: string, proof?: File | null) => {
     setError(null);
-    flag.mutateAsync({ number: shipment.number, key, done }).catch((e) => setError(errorMessage(e)));
+    try {
+      await flag.mutateAsync({ number: shipment.number, key, done, date });
+      if (proof) await uploadProof(key, proof);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+  const uploadProof = async (key: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    await api(`/shipments/${shipment.number}/flags/${key}/proof`, { method: "POST", form });
+    refresh(shipment.number);
   };
   const ms = (key: string) => shipment.milestones[key] ?? { plan: null, fact: null };
 
@@ -52,7 +63,18 @@ export function StageTimeline({ data, saveField }: { data: ShipmentResponse; sav
     <PlanInput value={ms(m.key).plan} disabled={!active || busy} onSave={(v) => void setDate(m.key, { plan: v })} />
   );
   const factNote = (m: MilestoneSpec) => <FactNote m={m} d={ms(m.key)} />;
-  const flagItem = (k: FlagKey) => <FlagItem key={k} k={k} doneDate={shipment.flags[k] ?? null} disabled={!active || busy} onToggle={(v) => setFlag(k, v)} />;
+  const flagItem = (k: FlagKey) => (
+    <FlagItem
+      key={k}
+      k={k}
+      doneDate={shipment.flags[k] ?? null}
+      disabled={!active || busy}
+      proofs={FLAGS[k].payment ? flagDocs(data, k).reduce((s, d) => s + (d.paymentFileCount ?? 0), 0) : null}
+      canProof={flagDocs(data, k).length > 0}
+      onToggle={(v, date, proof) => void setFlag(k, v, date, proof)}
+      onProof={(file) => uploadProof(k, file).catch((e) => setError(errorMessage(e)))}
+    />
+  );
 
   return (
     <section className="panel">
@@ -297,18 +319,120 @@ function FactNote({ m, d }: { m: MilestoneSpec; d: { plan: string | null; fact: 
   );
 }
 
-function FlagItem({ k, doneDate, disabled, onToggle }: { k: FlagKey; doneDate: string | null; disabled: boolean; onToggle: (done: boolean) => void }) {
+/** Документы сделки, оплату которых означает галочка (как на сервере — lib/payments.ts). */
+function flagDocs(data: ShipmentResponse, k: FlagKey) {
+  const sh = data.shipment;
+  if (k === "balance") return data.documents.filter((d) => d.type === "supplier_invoice" && d.shipmentId === sh.id);
+  if (k === "customs_payment") return data.documents.filter((d) => d.type === "customs_declaration");
+  if (k === "freight") return data.documents.filter((d) => d.type === "contractor_invoice" && (d.id === sh.carrierInvoiceId || d.counterpartyId === sh.carrierId || (d.contractorType ?? "").startsWith("carrier")));
+  return [];
+}
+
+/**
+ * Флажок ожидания. Оплаты: отметка — с датой и, по желанию, платёжкой (прикрепится к инвойсу / счёту / ДТ,
+ * который при этом станет «Оплачен»); после отметки — «+ платёжка», если её ещё нет.
+ */
+function FlagItem({
+  k,
+  doneDate,
+  disabled,
+  proofs,
+  canProof,
+  onToggle,
+  onProof,
+}: {
+  k: FlagKey;
+  doneDate: string | null;
+  disabled: boolean;
+  /** null — не оплата; число — сколько платёжек приложено. */
+  proofs: number | null;
+  /** Есть документ (инвойс / счёт / ДТ), к которому прикрепить платёжку. */
+  canProof: boolean;
+  onToggle: (done: boolean, date?: string, proof?: File | null) => void;
+  onProof: (file: File) => void;
+}) {
   const done = Boolean(doneDate);
+  const [asking, setAsking] = useState(false);
+  const [date, setDate] = useState(today());
+  const [proof, setProof] = useState<File | null>(null);
+  const proofRef = useRef<HTMLInputElement>(null);
+  const isPayment = proofs !== null;
   return (
-    <label className={`flex flex-wrap items-center gap-x-2 text-sm ${done ? "" : "font-medium"}`}>
-      <input type="checkbox" className="h-4 w-4" checked={done} disabled={disabled} onChange={(e) => onToggle(e.target.checked)} />
-      <span className={done ? "muted line-through" : ""}>{FLAGS[k].todo}</span>
-      {done && (
-        <span className="text-xs text-green-700 dark:text-green-400">
-          {FLAGS[k].done.toLowerCase()} {formatDay(doneDate)}
-        </span>
+    <div className="text-sm">
+      <div className={`flex flex-wrap items-center gap-x-2 ${done ? "" : "font-medium"}`}>
+        <input
+          type="checkbox"
+          className="h-4 w-4"
+          checked={done || asking}
+          disabled={disabled}
+          aria-label={FLAGS[k].todo}
+          onChange={(e) => {
+            if (!e.target.checked) {
+              setAsking(false);
+              if (done) onToggle(false);
+            } else if (isPayment) setAsking(true);
+            else onToggle(true);
+          }}
+        />
+        <span className={done ? "muted line-through" : ""}>{FLAGS[k].todo}</span>
+        {done && (
+          <span className="text-xs text-green-700 dark:text-green-400">
+            {FLAGS[k].done.toLowerCase()} {formatDay(doneDate)}
+          </span>
+        )}
+        {done && isPayment && canProof && (
+          proofs ? (
+            <span className="text-xs text-sky-700 dark:text-sky-400">платёжка ✓</span>
+          ) : (
+            <>
+              <button type="button" className="text-xs link" disabled={disabled} onClick={() => proofRef.current?.click()}>
+                + платёжка
+              </button>
+              <input
+                ref={proofRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) onProof(f);
+                }}
+              />
+            </>
+          )
+        )}
+      </div>
+      {asking && !done && (
+        <div className="ml-6 mt-1.5 flex flex-wrap items-center gap-2 rounded-md bg-slate-50 p-2 dark:bg-neutral-800/40">
+          <span className="text-xs muted">Дата оплаты</span>
+          <input type="date" className="input w-auto py-1" value={date} onChange={(e) => setDate(e.target.value)} />
+          {canProof && (
+            <label className="btn btn-sm cursor-pointer">
+              {proof ? `платёжка: ${proof.name.slice(0, 24)}` : "Платёжка (необязательно)"}
+              <input type="file" className="hidden" onChange={(e) => setProof(e.target.files?.[0] ?? null)} />
+            </label>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={disabled}
+            onClick={() => {
+              onToggle(true, date, proof);
+              setAsking(false);
+              setProof(null);
+            }}
+          >
+            Отметить оплату
+          </button>
+          <button type="button" className="text-xs link" onClick={() => setAsking(false)}>
+            отмена
+          </button>
+          <span className="basis-full text-[11px] muted">
+            {canProof ? "Инвойс / счёт этой оплаты станет «Оплачен», платёжка прикрепится к нему." : "Инвойс / счёт загрузите позже — он сразу будет «Оплачен» этой датой."}
+          </span>
+        </div>
       )}
-    </label>
+    </div>
   );
 }
 

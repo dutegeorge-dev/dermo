@@ -40,7 +40,8 @@ export async function shipmentDocuments(db: DbOrTx, shipmentId: number) {
       paidAt: documents.paidAt,
       validUntil: documents.validUntil,
       data: documents.data,
-      fileCount: sql<number>`(select count(*)::int from attachments a where a.owner_type = 'document' and a.owner_id = ${documents.id})`,
+      fileCount: sql<number>`(select count(*)::int from attachments a where a.owner_type = 'document' and a.owner_id = ${documents.id} and a.label is distinct from 'payment')`,
+      paymentFileCount: sql<number>`(select count(*)::int from attachments a where a.owner_type = 'document' and a.owner_id = ${documents.id} and a.label = 'payment')`,
     })
     .from(documents)
     .leftJoin(counterparties, eq(counterparties.id, documents.counterpartyId))

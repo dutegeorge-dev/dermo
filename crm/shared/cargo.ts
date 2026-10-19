@@ -1,6 +1,6 @@
 /**
  * Груз после погрузки: упаковочный лист (места, нетто, брутто, объём) и спецификация для
- * перевозчика (инвойс + упаковочный лист по кодам ТН ВЭД) — общий код сервера и интерфейса.
+ * перевозчика (инвойс + упаковочный лист, по позициям) — общий код сервера и интерфейса.
  */
 
 export type PackingLine = {
@@ -42,16 +42,16 @@ export type SpecParams = {
   country: string;
   /** Страна происхождения: «Китай / China». */
   origin: string;
-  /** Описание товара по коду ТН ВЭД: «Искусственный газон / artificial grass». */
+  /** Описание товара по позиции (SpecLine.key; старые — по коду ТН ВЭД): «Искусственный газон / artificial grass». */
   descriptions: Record<string, string>;
 };
 
 export const DEFAULT_SPEC_PARAMS: SpecParams = { consignee: "", station: "", country: "Россия", origin: "Китай / China", descriptions: {} };
 
-/** Строка спецификации — одна на код ТН ВЭД. */
+/** Строка спецификации — одна на позицию инвойса / упаковочного листа. */
 export type SpecLine = {
   no: number;
-  /** Ключ для описаний (SpecParams.descriptions): код ТН ВЭД, без кода — название товара. */
+  /** Ключ для описаний (SpecParams.descriptions) — нормализованное название позиции. */
   key: string;
   hsCode: string;
   origin: string;

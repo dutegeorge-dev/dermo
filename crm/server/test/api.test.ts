@@ -860,7 +860,7 @@ describe("Упаковочный лист, спецификация для пе�
     const shipmentId = (await call(s, "GET", `/shipments/${no}`)).json().shipment.id as number;
     await call(s, "PATCH", `/shipments/${no}`, { containerNo: "DEMU1000101" });
 
-    // Упаковочный лист: строки по товарам — места и веса уходят в спецификацию по кодам ТН ВЭД.
+    // Упаковочный лист: строки по товарам — спецификация ровно по этим позициям (не по кодам ТН ВЭД).
     const lines = [
       { name: "Demo grass 20 mm, 2×25 м", quantity: 2600, unit: "м²", packages: 52, packageType: "рул.", netKg: 4000, grossKg: 4050, volumeM3: 12 },
       { name: "Demo grass 35 mm, 2×25 м (30 рул.)", quantity: 1500, unit: "м²", packages: 30, packageType: "рул.", netKg: 3000, grossKg: 3030, volumeM3: 9 },
@@ -871,14 +871,15 @@ describe("Упаковочный лист, спецификация для пе�
 
     let spec = (await call(s, "GET", `/shipments/${no}/spec`)).json();
     assert.ok(spec.missing.includes("получатель (consignee)"));
-    assert.equal(spec.lines.length, 2, "две строки — по кодам ТН ВЭД");
-    const grass = spec.lines.find((l: { hsCode: string }) => l.hsCode === "5703390009");
-    assert.deepEqual([grass.qty, grass.packages, grass.netKg, grass.grossKg, grass.amount], [82, 82, 7000, 7080, 44000], "трава: рулоны вместо м², веса из листа");
-    const glue = spec.lines.find((l: { hsCode: string }) => l.hsCode === "3506910000");
+    assert.deepEqual(spec.warnings, []);
+    assert.equal(spec.lines.length, 3, "три позиции — как в листе и инвойсе, хотя у травы один код");
+    const [grass20, grass35, glue] = spec.lines;
+    assert.deepEqual([grass20.hsCode, grass20.qty, grass20.packages, grass20.netKg, grass20.grossKg, grass20.amount, grass20.price], ["5703390009", 52, 52, 4000, 4050, 26000, 500], "трава 20 мм: рулоны вместо м², веса из листа");
+    assert.deepEqual([grass35.qty, grass35.netKg, grass35.amount], [30, 3000, 18000]);
     assert.deepEqual([glue.qty, glue.packages, glue.price], [20, 2, 300], "клей — штучный: кол-во в штуках");
     assert.equal(spec.fields.contract, "DPF-01 от 10.03.2026");
 
-    await call(s, "PUT", `/shipments/${no}/spec`, { consignee: "ООО «Демо-СВХ», ИНН 7700000000", station: "Демо-Станция", descriptions: { "5703390009": "Искусственный газон / artificial grass" } });
+    await call(s, "PUT", `/shipments/${no}/spec`, { consignee: "ООО «Демо-СВХ», ИНН 7700000000", station: "Демо-Станция", descriptions: { "5703390009": "Искусственный газон / artificial grass", [glue.key]: "Клей / glue" } });
     spec = (await call(s, "GET", `/shipments/${no}/spec`)).json();
     assert.deepEqual(spec.missing, []);
 
@@ -893,8 +894,11 @@ describe("Упаковочный лист, спецификация для пе�
     assert.equal(at("H12"), "Демо-Станция");
     assert.equal(at("B15"), "5703390009");
     assert.equal(at("D15"), "Искусственный газон / artificial grass");
-    assert.equal(at("F15"), "82");
-    assert.equal(at("J15"), "44000");
+    assert.equal(at("D16"), "Искусственный газон / artificial grass", "старое описание по коду подходит всем позициям с ним");
+    assert.equal(at("D17"), "Клей / glue");
+    assert.equal(at("F15"), "52");
+    assert.equal(at("J15"), "26000");
+    assert.equal(at("J16"), "18000");
     assert.equal(at("I14"), "Price per pcs / Цена за шт, CNY");
     assert.equal(at("E25"), "=SUM(E15:E24)", "итоги — формулами шаблона");
     const specDoc = (await call(s, "GET", `/documents?type=carrier_spec&shipment=${shipmentId}`)).json().documents;
@@ -920,5 +924,53 @@ describe("Упаковочный лист, спецификация для пе�
     assert.ok(names.some((n) => n.startsWith("2 Инвойсы поставщика/") && n.includes("оплата")), names.join("\n"));
     assert.ok(names.some((n) => n.startsWith("4 Спецификация/")));
     assert.match(await zip.file("Опись.txt")!.async("string"), /Не хватает/);
+  });
+
+  test("галочки оплат ↔ оплата документов, платёжка к галочке", async () => {
+    const s = await adminSession();
+    const supplier = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Pay Factory" })).json().counterparty;
+    const inv = await call(s, "POST", "/documents", {
+      type: "supplier_invoice", number: "DPAY-1", date: "2026-10-01", counterpartyId: supplier.id, currency: "USD", amount: 1000,
+      newShipment: { title: "Оплаты демо", weightKg: 1, volumeM3: 1 },
+    });
+    assert.equal(inv.statusCode, 200, inv.body);
+    const no = inv.json().shipment.number as number;
+    const invoiceId = inv.json().document.id as number;
+    const shipmentId = (await call(s, "GET", `/shipments/${no}`)).json().shipment.id as number;
+    const doc = async (id: number) => (await call(s, "GET", `/documents/${id}`)).json().document;
+    const flags = async () => (await call(s, "GET", `/shipments/${no}`)).json().shipment.flags as Record<string, string>;
+
+    // Галочку отметили датой — инвойс «Оплачен» той же датой; платёжка — к инвойсу.
+    let res = await call(s, "PUT", `/shipments/${no}/flags/balance`, { done: true, date: "2026-10-05" });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.deepEqual([(await doc(invoiceId)).paymentStatus, (await doc(invoiceId)).paidAt], ["paid", "2026-10-05"]);
+    const proof = await upload(s, `/shipments/${no}/flags/balance/proof`, "mt103-demo.pdf", "%PDF-1.4 demo");
+    assert.equal(proof.statusCode, 200, proof.body);
+    assert.equal(proof.json().documentId, invoiceId);
+    const deal = (await call(s, "GET", `/shipments/${no}`)).json();
+    assert.equal(deal.documents.find((d: { id: number }) => d.id === invoiceId).paymentFileCount, 1);
+    assert.equal(deal.documents.find((d: { id: number }) => d.id === invoiceId).fileCount, 0, "платёжка — не файл самого инвойса");
+    assert.equal((await upload(s, `/shipments/${no}/flags/customs_docs/proof`, "x.pdf", "x")).statusCode, 400);
+    assert.equal((await upload(s, `/shipments/${no}/flags/customs_payment/proof`, "x.pdf", "x")).statusCode, 400, "ДТ ещё нет");
+
+    // Сняли галочку — инвойс снова не оплачен.
+    await call(s, "PUT", `/shipments/${no}/flags/balance`, { done: false });
+    assert.equal((await doc(invoiceId)).paymentStatus, "unpaid");
+
+    // Оплатили инвойс в документе — галочка ставится датой оплаты.
+    res = await call(s, "PATCH", `/documents/${invoiceId}`, { paymentStatus: "paid", paidAt: "2026-10-07" });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal((await flags()).balance, "2026-10-07");
+
+    // Новый неоплаченный инвойс поставщика — галочка снимается…
+    const inv2 = (await call(s, "POST", "/documents", { type: "supplier_invoice", number: "DPAY-2", counterpartyId: supplier.id, shipmentId, currency: "USD", amount: 50 })).json().document;
+    assert.equal((await flags()).balance, undefined);
+    assert.equal((await doc(inv2.id)).paymentStatus, "unpaid");
+
+    // …а таможню оплатили раньше, чем загрузили ДТ, — ДТ сразу «Оплачен» датой галочки.
+    await call(s, "PUT", `/shipments/${no}/flags/customs_payment`, { done: true, date: "2026-10-10" });
+    const dt = (await call(s, "POST", "/documents", { type: "customs_declaration", number: "10000000/101026/0000001", shipmentId, currency: "RUB", amount: 1 })).json().document;
+    assert.deepEqual([(await doc(dt.id)).paymentStatus, (await doc(dt.id)).paidAt], ["paid", "2026-10-10"]);
+    assert.equal((await flags()).customs_payment, "2026-10-10");
   });
 });

@@ -20,6 +20,7 @@ type SpecResponse = {
   lines: SpecLine[];
   currency: string;
   missing: string[];
+  warnings: string[];
   packing: { packages: number; netKg: number; grossKg: number } | null;
   document: { id: number } | null;
 };
@@ -112,6 +113,9 @@ export function SpecBlock({ data }: { data: ShipmentResponse }) {
               )}
             </p>
           )}
+          {d.warnings.map((w) => (
+            <p key={w} className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">{w}</p>
+          ))}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block sm:col-span-2">
               <span className="label">Получатель / Consignee — СВХ или терминал, ИНН, адрес (даёт перевозчик)</span>
@@ -176,7 +180,7 @@ export function SpecBlock({ data }: { data: ShipmentResponse }) {
             </table>
           </div>
           <p className="text-xs muted">
-            Одна строка — один код ТН ВЭД. Кол-во шт: штучный товар — штуки из инвойса, иначе места (рулоны, коробки). Места и веса — из упаковочного листа{d.packing ? ` (всего ${num(d.packing.packages)} мест, нетто ${num(d.packing.netKg)}, брутто ${num(d.packing.grossKg)} кг)` : ""}.
+            Строки — ровно как позиции упаковочного листа и инвойса. Кол-во шт: штучный товар — штуки из инвойса, иначе места (рулоны, коробки). Места и веса — из упаковочного листа{d.packing ? ` (всего ${num(d.packing.packages)} мест, нетто ${num(d.packing.netKg)}, брутто ${num(d.packing.grossKg)} кг)` : ""}.
           </p>
 
           <div className="flex flex-wrap items-center gap-2">

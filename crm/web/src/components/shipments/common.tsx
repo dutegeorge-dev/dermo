@@ -84,8 +84,8 @@ export function useShipmentActions() {
     onSuccess: (_, v) => refresh(v.number),
   });
   const flag = useMutation({
-    mutationFn: (v: { number: number; key: string; done: boolean }) =>
-      api<{ shipment: Shipment }>(`/shipments/${v.number}/flags/${v.key}`, { method: "PUT", body: { done: v.done } }),
+    mutationFn: (v: { number: number; key: string; done: boolean; date?: string }) =>
+      api<{ shipment: Shipment }>(`/shipments/${v.number}/flags/${v.key}`, { method: "PUT", body: { done: v.done, date: v.date } }),
     onSuccess: (_, v) => refresh(v.number),
   });
   return { milestone, flag, refresh };

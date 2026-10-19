@@ -10,6 +10,7 @@ import type { DocumentRow, Money, ShipmentResponse } from "../../lib/types.ts";
 import { docTitle, PaymentChip, StatusChip } from "../docs/common.tsx";
 import { IconFile, IconPlus, IconX } from "../Icons.tsx";
 import { ErrorBox } from "../ui.tsx";
+import { useShipmentActions } from "./common.tsx";
 import { CounterpartyPicker, ensureCounterparty, type Picked } from "../crm/CounterpartyPicker.tsx";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
@@ -107,7 +108,19 @@ export function ShipmentDocs({ data }: { data: ShipmentResponse }) {
     byGroup.set(g, [...(byGroup.get(g) ?? []), d]);
   }
   const order = data.documents.find((d) => d.id === data.finance.orderId);
-  const newDoc = (type: string) => `/documents/new?type=${type}&shipment=${sh.number}`;
+  const { refresh } = useShipmentActions();
+  const [proofError, setProofError] = useState<unknown>(null);
+  const uploadProof = async (documentId: number, file: File) => {
+    setProofError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      await api(`/documents/${documentId}/files?label=payment`, { method: "POST", form });
+      refresh(sh.number);
+    } catch (e) {
+      setProofError(e);
+    }
+  };
 
   return (
     <section className="panel space-y-4 p-4">
@@ -140,15 +153,16 @@ export function ShipmentDocs({ data }: { data: ShipmentResponse }) {
           )
         )}
         <span className="flex-1" />
-        <Link to={newDoc("supplier_invoice")} className="btn btn-sm"><IconPlus size={12} /> Инвойс поставщика</Link>
-        <Link to={newDoc("contractor_invoice")} className="btn btn-sm"><IconPlus size={12} /> Счёт подрядчика</Link>
-        <Link to={newDoc("packing_list")} className="btn btn-sm"><IconPlus size={12} /> Упаковочный лист</Link>
-        <Link to={newDoc("payment_order")} className="btn btn-sm" title="Платёжка / SWIFT — прикрепится к оплаченному инвойсу"><IconPlus size={12} /> Оплата</Link>
-        <Link to={newDoc("railway_bill")} className="btn btn-sm"><IconPlus size={12} /> СМГС / накладная</Link>
-        <Link to={newDoc("customs_declaration")} className="btn btn-sm"><IconPlus size={12} /> ДТ</Link>
-        <Link to={newDoc("other")} className="btn btn-sm"><IconPlus size={12} /> Документ</Link>
+        <Link
+          to={`/documents/new?shipment=${sh.number}`}
+          className="btn btn-primary btn-sm"
+          title="Инвойс, счёт, упаковочный лист, платёжка, накладная, ДТ… — тип и данные распознаются сами"
+        >
+          <IconPlus size={12} /> Загрузить документ
+        </Link>
       </div>
       {orderError != null && <ErrorBox error={orderError} />}
+      {proofError != null && <ErrorBox error={proofError} />}
 
       {docs.length === 0 && <p className="text-sm muted">Документов пока нет. Загрузите инвойс поставщика — он сам привяжется к договору, товары попадут в справочник.</p>}
       {docs.length > 0 && (
@@ -167,6 +181,22 @@ export function ShipmentDocs({ data }: { data: ShipmentResponse }) {
                       {d.amount !== null && <span className="tabular-nums">{formatMoney(d.amount, d.currency)}</span>}
                       <PaymentChip status={d.paymentStatus} paid={d.paidAmount} amount={d.amount} currency={d.currency} />
                       <StatusChip status={d.status === "draft" ? null : d.status} />
+                      {d.paymentStatus === "paid" && (d.paymentFileCount > 0 ? (
+                        <span className="text-[11px] text-sky-700 dark:text-sky-400" title="Платёжка приложена">платёжка ✓</span>
+                      ) : (
+                        <label className="cursor-pointer text-[11px] link" title="Приложить платёжку / SWIFT (необязательно)">
+                          + платёжка
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = "";
+                              if (f) void uploadProof(d.id, f);
+                            }}
+                          />
+                        </label>
+                      ))}
                       {d.fileCount === 0 && <span className="text-[11px] text-amber-700 dark:text-amber-400">без файла</span>}
                     </li>
                   ))}

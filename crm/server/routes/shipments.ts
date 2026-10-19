@@ -24,6 +24,7 @@ import { counterparties, documentItems, documents, products, shipmentEvents, shi
 import { audit } from "../lib/audit.ts";
 import { shipmentDocuments, shipmentFinance } from "../lib/finance.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
+import { markFlagDocuments, PAYMENT_FLAGS, type PaymentFlag } from "../lib/payments.ts";
 import { getShipmentDto, listShipments, type ShipmentDto } from "../lib/shipment-query.ts";
 import {
   addShipmentEvent,
@@ -343,8 +344,12 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
     if (!(FLAG_KEYS as string[]).includes(key)) throw new HttpError(400, "Неизвестный флажок");
     return db.transaction(async (tx) => {
       const row = await findShipment(tx, number);
-      const done = body<{ done: boolean }>(request).done === true;
-      await setFlag(tx, row, key as FlagKey, done, user.id);
+      const input = body<{ done: boolean; date: string }>(request);
+      const done = input.done === true;
+      const date = typeof input.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : new Date().toISOString().slice(0, 10);
+      await setFlag(tx, row, key as FlagKey, done, user.id, date);
+      // Галочка оплаты — те же инвойсы / счета / ДТ сделки становятся «Оплачен» / «Не оплачен».
+      if ((PAYMENT_FLAGS as string[]).includes(key)) await markFlagDocuments(tx, row, key as PaymentFlag, done, date, user.id);
       await audit(tx, {
         userId: user.id,
         action: "update",

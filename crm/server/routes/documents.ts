@@ -8,6 +8,7 @@ import { db } from "../db/client.ts";
 import { attachments, documents, users } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { documentLabel } from "../lib/deals.ts";
+import { paymentForNewDocument, syncPaymentFlags } from "../lib/payments.ts";
 import { addShipmentEvent, createShipment, requireCargo } from "../lib/shipments.ts";
 import {
   assertSingleOrder,
@@ -181,6 +182,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       }
       Object.assign(patch, await linkToShipment(tx, user.id, doc));
       if (Object.keys(patch).length) await tx.update(documents).set(patch).where(eq(documents.id, doc.id));
+      if (doc.shipmentId && spec.payable) await paymentForNewDocument(tx, doc.id, doc.shipmentId, user.id);
 
       const label = await documentLabel(tx, doc.id);
       if (doc.shipmentId) await addShipmentEvent(tx, doc.shipmentId, user.id, "document_added", null, null, label);
@@ -224,6 +226,10 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
         if (after.shipmentId && after.shipmentId !== before.shipmentId) {
           await addShipmentEvent(tx, after.shipmentId, user.id, "document_added", null, null, await documentLabel(tx, id));
         }
+      }
+      // Оплата документа ↔ галочки оплат сделки.
+      if (spec.payable && (fields.paymentStatus !== undefined || after.shipmentId !== before.shipmentId)) {
+        for (const sid of new Set([before.shipmentId, after.shipmentId])) if (sid) await syncPaymentFlags(tx, sid, user.id);
       }
       if (after.shipmentId && fields.paymentStatus && fields.paymentStatus !== before.paymentStatus) {
         await addShipmentEvent(

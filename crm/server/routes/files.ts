@@ -14,10 +14,12 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { config } from "../config.ts";
 import { db, type DbOrTx } from "../db/client.ts";
-import { attachments, deals, documents, kbPages } from "../db/schema.ts";
+import { attachments, deals, documents, kbPages, shipments } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { addEvent, documentLabel, parseDealKey } from "../lib/deals.ts";
 import { currentUser, HttpError, intParam } from "../lib/http.ts";
+import { flagDocuments, PAYMENT_FLAGS, type PaymentFlag } from "../lib/payments.ts";
+import { parseShipmentNumber } from "../lib/shipments.ts";
 
 /** Эти типы безопасно показывать прямо в браузере; остальное — только скачиванием. */
 const INLINE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"]);
@@ -162,6 +164,19 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
     // Загрузили подписанный скан — документ подписан.
     if (label === "signed") await db.update(documents).set({ status: "signed", updatedAt: new Date() }).where(eq(documents.id, id));
     return { attachment };
+  });
+
+  /** Платёжка к галочке оплаты сделки — прикрепляется к оплаченному документу (последнему из её инвойсов / счетов / ДТ). */
+  app.post("/shipments/:number/flags/:key/proof", async (request) => {
+    const { number, key } = request.params as { number: string; key: string };
+    if (!(PAYMENT_FLAGS as string[]).includes(key)) throw new HttpError(400, "Платёжка прикрепляется только к оплатам");
+    const [sh] = await db.select().from(shipments).where(eq(shipments.number, parseShipmentNumber(number)));
+    if (!sh) throw new HttpError(404, "Сделка не найдена");
+    const docs = await flagDocuments(db, sh, key as PaymentFlag);
+    const target = docs.map((d) => d.id).sort((a, b) => b - a)[0];
+    if (!target) throw new HttpError(400, "В сделке нет документа, к которому прикрепить платёжку — сначала загрузите инвойс / счёт");
+    const attachment = await saveUpload(request, "document", target, `к документу «${await documentLabel(db, target)}»`, "payment");
+    return { attachment, documentId: target };
   });
 
   app.get("/files/:id", async (request, reply) => {

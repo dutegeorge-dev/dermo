@@ -369,10 +369,10 @@ export async function moveToStage(tx: DbOrTx, shipment: ShipmentRow, target: num
   }
 }
 
-export async function setFlag(tx: DbOrTx, shipment: ShipmentRow, key: FlagKey, done: boolean, userId: number | null): Promise<void> {
+export async function setFlag(tx: DbOrTx, shipment: ShipmentRow, key: FlagKey, done: boolean, userId: number | null, date?: string): Promise<void> {
   const flags = { ...shipment.flags };
-  if (done === Boolean(flags[key])) return;
-  if (done) flags[key] = new Date().toISOString().slice(0, 10);
+  if (done === Boolean(flags[key]) && (!done || !date || flags[key] === date)) return;
+  if (done) flags[key] = date ?? new Date().toISOString().slice(0, 10);
   else delete flags[key];
   await tx.update(shipments).set({ flags, updatedAt: new Date() }).where(eq(shipments.id, shipment.id));
   await addShipmentEvent(tx, shipment.id, userId, "flag", key, !done, done);

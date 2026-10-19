@@ -1,7 +1,9 @@
 /**
  * Спецификация для перевозчика («Счёт-фактура — упаковочный лист — спецификация»): после погрузки
- * перевозчик просит заполнить её по инвойсу и упаковочному листу. Строки — по кодам ТН ВЭД: стоимость
- * из инвойсов поставщика, места / нетто / брутто — из упаковочных листов сделки.
+ * перевозчик просит заполнить её по инвойсу и упаковочному листу. Строки — ровно по позициям документов
+ * (часто это не коды ТН ВЭД, а места: рулоны 2 м — 65 шт., 3 м — 105 шт.): места / нетто / брутто — из
+ * упаковочного листа, стоимость — из инвойса поставщика (строки листа сопоставляются с инвойсом по
+ * названию, иначе по порядку).
  *
  * Шаблоны у перевозчиков немного разные. Свой шаблон — templates/carrier_spec.xlsx (разметка известна);
  * чужой — ИИ один раз определяет, в какие ячейки что вписывать (только адреса, значения пишет код),
@@ -55,7 +57,7 @@ const PIECES = /^(шт|pcs|pc|piece|pieces|компл|set|sets)\.?$/i;
 
 type ShipmentRow = typeof shipments.$inferSelect;
 
-/** Данные спецификации: поля шапки и строки по кодам ТН ВЭД. missing — чего не хватает. */
+/** Данные спецификации: поля шапки и строки — по позициям инвойса / упаковочного листа. missing — чего не хватает. */
 export async function specData(tx: DbOrTx, sh: ShipmentRow) {
   const params: SpecParams = { ...DEFAULT_SPEC_PARAMS, ...(sh.spec ?? {}) };
   const missing: string[] = [];
@@ -81,23 +83,17 @@ export async function specData(tx: DbOrTx, sh: ShipmentRow) {
     : [];
   const currency = invoices[0]?.currency ?? "CNY";
 
-  // Группы по коду ТН ВЭД (без кода — по названию).
-  type Group = { hsCode: string; names: string[]; nameRu: string | null; amount: number; pieces: number | null; keys: Set<string> };
-  const groups: Group[] = [];
-  for (const it of items) {
-    const hs = (it.productHs ?? it.itemHs ?? "").replace(/\D/g, "");
-    const key = hs || `name:${it.name}`;
-    let g = groups.find((x) => (x.hsCode || `name:${x.names[0]}`) === key);
-    if (!g) groups.push((g = { hsCode: hs, names: [], nameRu: null, amount: 0, pieces: 0, keys: new Set() }));
-    g.names.push(it.name);
-    g.nameRu ??= it.nameRu;
-    g.amount += Number(it.amount ?? 0);
-    g.keys.add(productKey(it.name));
-    g.pieces = g.pieces !== null && it.quantity !== null && PIECES.test((it.unit ?? "").trim()) ? g.pieces + Number(it.quantity) : null;
-  }
-  if (groups.some((g) => !g.hsCode)) missing.push("код ТН ВЭД у товаров");
+  // Позиции — ровно как в инвойсе / упаковочном листе (рулоны 2 м — одна строка, 3 м — другая).
+  type Item = (typeof items)[number];
+  const hsOf = (it: Item) => (it.productHs ?? it.itemHs ?? "").replace(/\D/g, "");
+  if (items.some((it) => !hsOf(it))) missing.push("код ТН ВЭД у товаров");
+  const pieces = (it: Item) => (it.quantity !== null && PIECES.test((it.unit ?? "").trim()) ? Number(it.quantity) : null);
+  /** «(52 рул.)» в названии позиции инвойса — мест, если упаковочного листа нет. */
+  const rollsInName = (name: string) => {
+    const m = /\((\d+)\s*(рул|roll|кор|box|carton|мест|pkg|pall|пал)/i.exec(name);
+    return m ? Number(m[1]) : null;
+  };
 
-  // Места и веса из упаковочных листов: строки, совпавшие с товарами группы, иначе — пропорционально стоимости.
   const pl = packings.map((d) => (d.data as { packing?: PackingData } | null)?.packing).filter((p): p is PackingData => !!p);
   const plLines = pl.flatMap((p) => p.lines);
   const total = { packages: 0, netKg: 0, grossKg: 0 };
@@ -106,43 +102,75 @@ export async function specData(tx: DbOrTx, sh: ShipmentRow) {
     total.netKg += p.totals.netKg ?? 0;
     total.grossKg += p.totals.grossKg ?? 0;
   }
-  const byGroup = groups.map(() => ({ packages: 0, netKg: 0, grossKg: 0, matched: false }));
-  let allMatched = plLines.length > 0;
-  for (const line of plLines) {
-    const k = productKey(line.name);
-    const gi = groups.findIndex((g) => g.keys.has(k));
-    if (gi < 0) {
-      allMatched = false;
-      break;
-    }
-    byGroup[gi].packages += line.packages ?? 0;
-    byGroup[gi].netKg += line.netKg ?? 0;
-    byGroup[gi].grossKg += line.grossKg ?? 0;
-    byGroup[gi].matched = true;
+
+  // Строка упаковочного листа → позиция инвойса: по названию, иначе (столько же строк) — по порядку.
+  let pairs: number[] | null = null;
+  if (plLines.length && items.length) {
+    const keys = items.map((it) => productKey(it.name));
+    const byName = plLines.map((l) => keys.indexOf(productKey(l.name)));
+    if (byName.every((i) => i >= 0) && new Set(byName).size === items.length) pairs = byName;
+    else if (plLines.length === items.length) pairs = plLines.map((_, i) => i);
   }
-  const amountTotal = groups.reduce((s, g) => s + g.amount, 0);
-  let packagesLeft = Math.round(total.packages);
-  const lines: SpecLine[] = groups.map((g, i) => {
-    const share = amountTotal ? g.amount / amountTotal : 1 / groups.length;
-    const last = i === groups.length - 1;
-    const packages = !pl.length ? null : allMatched ? byGroup[i].packages : last ? packagesLeft : Math.round(total.packages * share);
-    if (packages !== null && !allMatched) packagesLeft -= packages;
-    const netKg = !pl.length ? null : round(allMatched ? byGroup[i].netKg : total.netKg * share);
-    const grossKg = !pl.length ? null : round(allMatched ? byGroup[i].grossKg : total.grossKg * share);
+  const warnings: string[] = [];
+  type Row = { item: Item | null; name: string; amount: number; qtyHint: number | null; packages: number | null; netKg: number | null; grossKg: number | null };
+  let rows: Row[];
+  if (pairs) {
+    // Позиция инвойса на нескольких строках листа — стоимость делим по количеству (или местам).
+    const share = plLines.map((l, i) => {
+      const same = plLines.filter((_, j) => pairs![j] === pairs![i]);
+      if (same.length === 1) return 1;
+      const by = (f: (x: typeof l) => number | null) => {
+        const t = same.reduce((s, x) => s + (f(x) ?? 0), 0);
+        return t ? (f(l) ?? 0) / t : null;
+      };
+      return by((x) => x.quantity) ?? by((x) => x.packages) ?? 1 / same.length;
+    });
+    rows = plLines.map((l, i) => {
+      const it = items[pairs![i]];
+      return { item: it, name: l.name || it.name, amount: Number(it.amount ?? 0) * share[i], qtyHint: share[i] === 1 ? pieces(it) : null, packages: l.packages, netKg: l.netKg, grossKg: l.grossKg };
+    });
+  } else {
+    // Позиции листа не сходятся с инвойсом — строки по инвойсу, места и веса делим по стоимости.
+    if (plLines.length) warnings.push("Позиции упаковочного листа не совпадают с инвойсом: строки взяты из инвойса, места и веса разделены пропорционально стоимости — проверьте.");
+    const amountTotal = items.reduce((s, it) => s + Number(it.amount ?? 0), 0);
+    let packagesLeft = Math.round(total.packages);
+    rows = items.map((it, i) => {
+      const share = amountTotal ? Number(it.amount ?? 0) / amountTotal : 1 / items.length;
+      const last = i === items.length - 1;
+      const packages = !pl.length ? rollsInName(it.name) : last ? packagesLeft : Math.round(total.packages * share);
+      if (pl.length) packagesLeft -= packages ?? 0;
+      return {
+        item: it,
+        name: it.name,
+        amount: Number(it.amount ?? 0),
+        qtyHint: pieces(it),
+        packages,
+        netKg: pl.length ? total.netKg * share : null,
+        grossKg: pl.length ? total.grossKg * share : null,
+      };
+    });
+  }
+
+  const usedKeys = new Set<string>();
+  const lines: SpecLine[] = rows.map((r, i) => {
+    let key = productKey(r.name) || `#${i + 1}`;
+    while (usedKeys.has(key)) key += "#";
+    usedKeys.add(key);
+    const hsCode = r.item ? hsOf(r.item) : "";
     // «Кол-во шт»: штучный товар — штуки из инвойса, иначе — места (рулоны, коробки).
-    const qty = g.pieces && g.pieces > 0 ? g.pieces : (packages ?? 0);
+    const qty = r.qtyHint && r.qtyHint > 0 ? r.qtyHint : (r.packages ?? 0);
     return {
       no: i + 1,
-      key: g.hsCode || g.names[0],
-      hsCode: g.hsCode,
+      key,
+      hsCode,
       origin: params.origin,
-      description: params.descriptions[g.hsCode || g.names[0]] ?? g.nameRu ?? g.names[0],
+      description: params.descriptions[key] ?? params.descriptions[hsCode] ?? r.item?.nameRu ?? r.name,
       qty,
-      packages,
-      netKg,
-      grossKg,
-      price: qty ? round(g.amount / qty, 4) : null,
-      amount: round(g.amount, 2),
+      packages: r.packages,
+      netKg: r.netKg === null ? null : round(r.netKg),
+      grossKg: r.grossKg === null ? null : round(r.grossKg),
+      price: qty ? round(r.amount / qty, 4) : null,
+      amount: round(r.amount, 2),
     };
   });
 
@@ -168,7 +196,7 @@ export async function specData(tx: DbOrTx, sh: ShipmentRow) {
     priceHeader: currency,
     amountHeader: currency,
   };
-  return { params, fields, lines, currency, missing, packing: pl.length ? total : null };
+  return { params, fields, lines, currency, missing, warnings, packing: pl.length ? total : null };
 }
 
 // ── Разметка чужого шаблона (ИИ) ───────────────────────────────────────────
@@ -309,7 +337,7 @@ export async function mapTemplate(tx: DbOrTx, buffer: Buffer): Promise<{ mapping
 /** Значения ячеек по разметке. Заголовки «…, USD» — меняем валюту на валюту инвойса. */
 export async function renderSpec(template: Buffer, mapping: SpecMapping, data: Awaited<ReturnType<typeof specData>>): Promise<Buffer> {
   if (data.lines.length > mapping.table.rows) {
-    throw new HttpError(400, `В шаблоне ${mapping.table.rows} строк для товаров, а кодов ТН ВЭД — ${data.lines.length}. Объедините товары или возьмите наш шаблон.`);
+    throw new HttpError(400, `В шаблоне ${mapping.table.rows} строк для товаров, а позиций — ${data.lines.length}. Возьмите наш шаблон или шаблон с бо́льшим числом строк.`);
   }
   const grid = await readGrid(template);
   const sheetGrid = grid.find((g) => g.sheet === mapping.sheet) ?? grid[0];

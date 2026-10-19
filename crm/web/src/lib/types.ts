@@ -140,7 +140,10 @@ export type DealDocument = {
   paidAmount: number | null;
   paidAt: string | null;
   validUntil: string | null;
+  /** Файлов документа (без документов об оплате). */
   fileCount: number;
+  /** Документов об оплате (платёжки, SWIFT), прикреплённых к документу. */
+  paymentFileCount: number;
 };
 
 export type DealResponse = {
