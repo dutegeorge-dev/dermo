@@ -39,8 +39,9 @@ const API = "/crm/api";
 
 type Session = { cookie: string; csrf: string };
 
-async function login(loginName: string, password: string): Promise<Session> {
-  const res = await app.inject({ method: "POST", url: `${API}/auth/login`, payload: { login: loginName, password } });
+/** ip — для поздних блоков: лимит попыток входа считается по IP. */
+async function login(loginName: string, password: string, ip?: string): Promise<Session> {
+  const res = await app.inject({ method: "POST", url: `${API}/auth/login`, payload: { login: loginName, password }, remoteAddress: ip });
   assert.equal(res.statusCode, 200, res.body);
   const cookie = res.cookies.find((c) => c.name === config.session.cookieName);
   assert.ok(cookie, "cookie выставлена");
@@ -941,6 +942,73 @@ describe("Упаковочный лист, спецификация для пе�
     assert.ok(names.some((n) => n.startsWith("2 Инвойсы поставщика/") && n.includes("оплата")), names.join("\n"));
     assert.ok(names.some((n) => n.startsWith("4 Спецификация/")));
     assert.match(await zip.file("Опись.txt")!.async("string"), /Не хватает/);
+  });
+
+  test("база фабрик: кандидатов видят админ и нашедший, дубли по WeChat, цены → товары, «сделать поставщиком»", async () => {
+    const admin = await adminSession();
+    assert.equal((await call(admin, "POST", "/users", { login: "petr", name: "Пётр", role: "manager", password: "managerpass" })).statusCode, 200);
+    const petr = await login("petr", "managerpass", "10.0.0.21");
+    const ivan = await login("ivan", "managerpass", "10.0.0.22");
+
+    const created = await call(petr, "POST", "/factories", {
+      name: "A-Demo草坪厂-小王",
+      wechatId: "demo_grass_01",
+      nameRu: "Демо — искусственная трава",
+      location: "Демо-город, провинция Шаньдун",
+      categories: "Искусственная трава, ковролин",
+      profile: { leadTime: "3–5 дней", exportLicense: "yes", vtbShanghai: "no", russianClients: "да, газон", hsCode: "5703 30 800 0", bogus: "x" },
+      offers: [
+        { productName: "Демо-трава 20 мм", name: "Демо-трава 20 мм, 2×25 м, зелёная", price: "7,8", currency: "cny", unit: "м²", moq: 5000, perContainer: 15000, kgPerUnit: 0.4 },
+        { name: "Демо-трава 20 мм, 4×25 м (10 рул.)", price: 8.1, unit: "м²" },
+        { name: "" },
+      ],
+    });
+    assert.equal(created.statusCode, 200, created.body);
+    const id = created.json().factory.id as number;
+    const card = (await call(petr, "GET", `/factories/${id}`)).json();
+    assert.deepEqual(card.factory.categories, ["искусственная трава", "ковролин"]);
+    assert.equal(card.factory.profile.exportLicense, "yes");
+    assert.equal(card.factory.profile.bogus, undefined);
+    assert.equal(card.foundBy.name, "Пётр");
+    assert.equal(card.offers.length, 2, "пустая строка цены отброшена");
+    assert.equal(card.offers[0].price, 7.8);
+    assert.equal(card.offers[0].currency, "CNY");
+    assert.equal(card.offers[0].productName, "Демо-трава 20 мм");
+    assert.equal(card.offers[1].productId, card.offers[0].productId, "4×25 м — вариант того же товара, а не новый");
+
+    // Кандидата видят нашедший и админ; другой сотрудник — нет (и про дубль знает только, кто нашёл).
+    assert.equal((await call(ivan, "GET", `/factories/${id}`)).statusCode, 404);
+    assert.equal((await call(ivan, "PATCH", `/factories/${id}`, { notes: "x" })).statusCode, 404);
+    assert.ok(!(await call(ivan, "GET", "/factories")).json().factories.some((f: { id: number }) => f.id === id));
+    assert.ok((await call(admin, "GET", "/factories?q=трава")).json().factories.some((f: { id: number }) => f.id === id), "поиск по товару");
+    const dup = (await call(ivan, "GET", "/factories/duplicates?wechatId=DEMO_grass_01")).json().duplicates;
+    assert.deepEqual(dup, [{ id: null, name: null, foundByName: "Пётр" }]);
+    assert.equal((await call(petr, "GET", "/factories/duplicates?wechatId=demo_grass_01")).json().duplicates[0].id, id);
+    assert.equal((await call(ivan, "GET", `/products/${card.offers[0].productId}/offers`)).json().offers.length, 0, "цены кандидата чужим не видны");
+    assert.equal((await call(petr, "GET", `/products/${card.offers[0].productId}/offers`)).json().offers.length, 2);
+
+    // Фильтры анкеты.
+    assert.ok((await call(admin, "GET", "/factories?flag=export")).json().factories.some((f: { id: number }) => f.id === id));
+    assert.ok(!(await call(admin, "GET", "/factories?flag=vtb")).json().factories.some((f: { id: number }) => f.id === id));
+    assert.ok((await call(admin, "GET", "/factories?flag=russia")).json().factories.some((f: { id: number }) => f.id === id));
+
+    // Файл фабрики; чужой сотрудник загрузить не может.
+    assert.equal((await upload(petr, `/factories/${id}/files?label=photo`, "grass.png", "png-demo", "image/png")).statusCode, 200);
+    assert.equal((await upload(ivan, `/factories/${id}/files?label=photo`, "x.png", "x", "image/png")).statusCode, 404);
+
+    // Сотрудник не может переназначить «кто нашёл».
+    await call(petr, "PATCH", `/factories/${id}`, { foundBy: null, status: "samples" });
+    assert.equal((await call(petr, "GET", `/factories/${id}`)).json().factory.foundBy, card.factory.foundBy);
+
+    // Договорились — поставщик; теперь фабрику видят все.
+    const sup = await call(petr, "POST", `/factories/${id}/supplier`);
+    assert.equal(sup.statusCode, 200, sup.body);
+    const cp = (await call(ivan, "GET", `/counterparties/${sup.json().counterpartyId}`)).json();
+    assert.equal(cp.counterparty.role, "supplier");
+    assert.equal(cp.contacts[0].messengerHandle, "demo_grass_01");
+    assert.equal((await call(ivan, "GET", `/factories/${id}`)).statusCode, 200);
+    assert.equal((await call(ivan, "DELETE", `/factories/${id}`)).statusCode, 403);
+    assert.equal((await call(petr, "DELETE", `/factories/${id}`)).statusCode, 403, "поставщика удаляет только админ");
   });
 
   test("галочки оплат ↔ оплата документов, платёжка к галочке", async () => {

@@ -71,6 +71,13 @@
       "when": 1792401289796,
       "tag": "0009_payment_flags_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792403910461,
+      "tag": "0010_factories",
+      "breakpoints": true
     }
   ]
 }

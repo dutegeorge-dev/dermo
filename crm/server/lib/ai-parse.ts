@@ -52,7 +52,7 @@ const NUM = { type: ["number", "null"] } as const;
 const optEnum = (values: readonly string[]) => ({ type: "string", enum: [...values, ""] });
 
 /** "" → null во всём ответе модели; пустые строки из массивов строк убираются. */
-function emptyToNull<T>(v: T): T {
+export function emptyToNull<T>(v: T): T {
   if (v === "") return null as T;
   if (Array.isArray(v)) return v.filter((x) => x !== "").map(emptyToNull) as T;
   if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, emptyToNull(x)])) as T;
@@ -181,7 +181,7 @@ docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k
 - Номера переписывай символ в символ. Нет значения — пустая строка "" (у чисел — null). Ничего не придумывай.`;
 
 /** Содержимое для модели: текст, если его можно достать кодом; иначе — сам файл. */
-async function fileContent(buffer: Buffer, filename: string, mime: string): Promise<Anthropic.Beta.BetaContentBlockParam[]> {
+export async function fileContent(buffer: Buffer, filename: string, mime: string): Promise<Anthropic.Beta.BetaContentBlockParam[]> {
   const ext = filename.toLowerCase().split(".").pop() ?? "";
   let text = "";
   try {

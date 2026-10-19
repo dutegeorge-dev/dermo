@@ -29,11 +29,13 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
 import type { SpecParams } from "../../shared/cargo.ts";
 import type { ShipmentCalc } from "../../shared/customs.ts";
+import type { FactoryProfile } from "../../shared/factories.ts";
 
 /** Полнотекстовый индекс PostgreSQL. */
 const tsvector = customType<{ data: string }>({
@@ -444,6 +446,68 @@ export const products = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [index("products_name_idx").on(t.name)],
+);
+
+/**
+ * База фабрик (shared/factories.ts): заводы из WeChat — сначала кандидаты (counterparty_id пуст), после договора
+ * связываются с поставщиком. Кандидата видит админ и тот, кто нашёл (found_by).
+ */
+export const factories = pgTable(
+  "factories",
+  {
+    id: serial("id").primaryKey(),
+    /** Как в WeChat: «A-某某地板厂-小王». */
+    name: text("name").notNull(),
+    /** Коротко по-русски: «Демо-фабрика — SPC-ламинат». */
+    nameRu: text("name_ru"),
+    wechatId: text("wechat_id"),
+    contactName: text("contact_name"),
+    phone: text("phone"),
+    email: text("email"),
+    website: text("website"),
+    /** Место производства: «Линьи, провинция Шаньдун». */
+    location: text("location"),
+    categories: text("categories").array().notNull().default(sql`'{}'::text[]`),
+    status: text("status").notNull().default("new"),
+    profile: jsonb("profile").$type<FactoryProfile>().notNull().default(sql`'{}'::jsonb`),
+    notes: text("notes").notNull().default(""),
+    foundBy: integer("found_by").references(() => users.id, { onDelete: "set null" }),
+    counterpartyId: integer("counterparty_id").references(() => counterparties.id, { onDelete: "set null" }),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("factories_wechat_idx").on(t.wechatId),
+    index("factories_found_by_idx").on(t.foundBy),
+    uniqueIndex("factories_counterparty_idx").on(t.counterpartyId),
+  ],
+);
+
+/** Цены фабрик на товары (из анкеты, прайса, переписки). */
+export const productOffers = pgTable(
+  "product_offers",
+  {
+    id: serial("id").primaryKey(),
+    factoryId: integer("factory_id")
+      .notNull()
+      .references(() => factories.id, { onDelete: "cascade" }),
+    productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+    position: integer("position").notNull().default(0),
+    name: text("name").notNull(),
+    price: numeric("price", { precision: 16, scale: 4 }),
+    currency: text("currency").notNull().default("CNY"),
+    unit: text("unit"),
+    moq: numeric("moq", { precision: 16, scale: 3 }),
+    perContainer: numeric("per_container", { precision: 16, scale: 3 }),
+    kgPerUnit: numeric("kg_per_unit", { precision: 16, scale: 4 }),
+    m3PerUnit: numeric("m3_per_unit", { precision: 16, scale: 6 }),
+    conditions: text("conditions").notNull().default(""),
+    quotedAt: date("quoted_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("product_offers_factory_idx").on(t.factoryId, t.position), index("product_offers_product_idx").on(t.productId)],
 );
 
 /**

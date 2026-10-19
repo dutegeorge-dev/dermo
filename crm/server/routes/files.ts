@@ -14,9 +14,11 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { config } from "../config.ts";
 import { db, type DbOrTx } from "../db/client.ts";
-import { attachments, deals, documents, kbPages, shipments } from "../db/schema.ts";
+import { FACTORY_FILE_LABELS } from "../../shared/factories.ts";
+import { attachments, deals, documents, factories, kbPages, shipments } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { addEvent, documentLabel, parseDealKey } from "../lib/deals.ts";
+import { getFactory } from "../lib/factories.ts";
 import { currentUser, HttpError, intParam } from "../lib/http.ts";
 import { flagDocuments, PAYMENT_FLAGS, type PaymentFlag } from "../lib/payments.ts";
 import { parseShipmentNumber } from "../lib/shipments.ts";
@@ -163,6 +165,16 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
     const attachment = await saveUpload(request, "document", id, `к документу «${await documentLabel(db, id)}»`, label);
     // Загрузили подписанный скан — документ подписан.
     if (label === "signed") await db.update(documents).set({ status: "signed", updatedAt: new Date() }).where(eq(documents.id, id));
+    return { attachment };
+  });
+
+  /** Файл фабрики: ?label=photo|catalog|screenshot — фото товара / каталог, прайс / скриншот переписки. */
+  app.post("/factories/:id/files", async (request) => {
+    const factory = await getFactory(db, currentUser(request), intParam((request.params as { id: string }).id));
+    const raw = (request.query as { label?: string }).label ?? "";
+    const label = raw in FACTORY_FILE_LABELS ? raw : null;
+    const attachment = await saveUpload(request, "factory", factory.id, `к фабрике «${factory.name}»`, label);
+    await db.update(factories).set({ updatedAt: new Date() }).where(eq(factories.id, factory.id));
     return { attachment };
   });
 

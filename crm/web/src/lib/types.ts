@@ -413,3 +413,52 @@ export type CalendarEvent = {
   milestone: string | null;
   shipment: { number: number; label: string; title: string; stage: number; containerNo: string | null; client: string | null; carrier: string | null };
 };
+
+// ── База фабрик ────────────────────────────────────────────────────────────
+
+export type FactoryRow = {
+  id: number;
+  name: string;
+  nameRu: string | null;
+  wechatId: string | null;
+  contactName: string | null;
+  location: string | null;
+  categories: string[];
+  status: string;
+  counterpartyId: number | null;
+  foundByName: string | null;
+  updatedAt: string;
+  exportLicense: string;
+  photoId: string | null;
+  offers: { name: string; price: number | null; currency: string; unit: string | null }[];
+};
+
+export type Factory = {
+  id: number;
+  name: string;
+  nameRu: string | null;
+  wechatId: string | null;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  location: string | null;
+  categories: string[];
+  status: string;
+  profile: import("../../../shared/factories.ts").FactoryProfile;
+  notes: string;
+  foundBy: number | null;
+  counterpartyId: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FactoryFile = { id: string; filename: string; mime: string; size: number; label: string | null; createdAt: string };
+
+export type FactoryResponse = {
+  factory: Factory;
+  offers: import("../../../shared/factories.ts").Offer[];
+  files: FactoryFile[];
+  foundBy: { id: number; name: string } | null;
+  supplier: { id: number; name: string } | null;
+};

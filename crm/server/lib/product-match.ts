@@ -20,6 +20,35 @@ export function productKey(name: string | null | undefined): string {
     .trim();
 }
 
+// Цвета — целыми словами (иначе «син» съест «синтетический», «сер» — «серию»).
+const COLOR =
+  "(?:сер(?:ый|ая|ое|ые|ого)|красн(?:ый|ая|ое|ые|ого)|ж[её]лт(?:ый|ая|ое|ые|ого)|син(?:ий|яя|ее|ие|его)|зел[её]н(?:ый|ая|ое|ые|ого)|" +
+  "ч[её]рн(?:ый|ая|ое|ые|ого)|бел(?:ый|ая|ое|ые|ого)|коричнев\\p{L}*|бежев\\p{L}*|голуб(?:ой|ая|ое|ые|ого)|оранжев\\p{L}*|фиолетов\\p{L}*|" +
+  "розов\\p{L}*|мультиколор|grey|gray|red|yellow|blue|green|black|white|brown|beige|orange|purple|pink)";
+const COLORS_RE = new RegExp(`[,;]?\\s*(?<!\\p{L})${COLOR}(?:\\s*[/,]\\s*${COLOR})*(?!\\p{L})`, "giu");
+const ROLL_SIZE_RE = /[,;]?\s*\d+(?:[.,]\d+)?\s*[×xх*]\s*\d+(?:[.,]\d+)?\s*(?:мм|mm|см|cm|м|m)?\.?(?![\p{L}\d])/giu;
+
+/**
+ * Название товара без варианта: размер рулона, цвет, число мест — это не новый товар.
+ * «Искусственная трава 20 мм, 2×25 м (52 рул.)» → «Искусственная трава 20 мм»,
+ * «ПВХ-коврик 0,5×25 м, серый/красный (40 рул.)» → «ПВХ-коврик».
+ */
+export function productBaseName(name: string): string {
+  const base = name
+    .replace(/\([^)]*\)/g, " ")
+    .replace(ROLL_SIZE_RE, " ")
+    .replace(COLORS_RE, " ")
+    .replace(/\s+([,;])/g, "$1")
+    .replace(/[,;]\s*[,;]/g, ",")
+    .replace(/[\s,;.-]+$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return base || name.trim();
+}
+
+/** Ключ товара справочника — по названию без варианта. */
+export const productBaseKey = (name: string | null | undefined) => productKey(productBaseName(name ?? ""));
+
 export type ProductRef = { id: number; name: string; hsCode: string | null };
 
 export async function loadProducts(tx: DbOrTx): Promise<ProductRef[]> {

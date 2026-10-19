@@ -141,6 +141,16 @@
     и то же («галочка стоит, а инвойс не оплачен» — была жалоба), держатся согласованными (`lib/payments.ts`). Каждый
     факт оплаты **по желанию** подтверждается платёжкой (MT103 / «Заявление на перевод») — не обязательно. В блоке
     «Документы» одна кнопка «Загрузить документ» — тип определяет ИИ (было много «+»: «упростить UI»).
+15. **База фабрик (октябрь 2026).** У владельца и сотрудников в WeChat тысячи контактов заводов без порядка —
+    искать невозможно. Фабрика-кандидат — **отдельная таблица `factories`**, не контрагент: договора нет, имени
+    и названия компании часто нет (только имя в WeChat вроде «A-某某地板厂-小王»). Решения владельца:
+    **кандидатов видит только админ и тот, кто нашёл**; фабрики-поставщики (после «Сделать поставщиком») — все.
+    Работник-поисковик заводит фабрику с телефона: скриншоты профиля и переписки WeChat, фото, прайсы → ИИ
+    (Haiku, ~5 тыс. токенов) заполняет анкету владельца (10 вопросов: место и сроки производства, цены с
+    характеристиками, вес/объём партии, минимальный объём, экспортная лицензия, ВТБ Шанхай, работали ли с РФ,
+    образцы, код ТН ВЭД) и цены, работник проверяет. Дубли — по WeChat ID / телефону / имени; про чужого
+    кандидата сообщаем только, кто его нашёл. Цены фабрик (`product_offers`) привязаны к товарам справочника:
+    размер рулона и цвет — вариант, а не новый товар.
 14. **Сайт не трогать** без надобности: `/crm/` — отдельный пакет, деплоится
     отдельно (`deploy/deploy-crm.sh`), сайт байт-в-байт тот же (кроме robots.txt).
 
@@ -216,6 +226,9 @@ crm/
       ai.ts             клиент Claude (ключ/шлюз из .env), aiBase (модель + fallbacks), понятные ошибки
       ai-parse.ts       разбор: текст из файла (код) → модель (JSON-схема, без справочника) → resolveDraft (сопоставление кодом)
       ai-chat.ts        чат: инструменты = GET к своему API через app.inject с cookie пользователя (только чтение)
+      factories.ts      база фабрик: factoryAccess (кто что видит), factoryValues/profileValues, offerValues, replaceOffers
+                        (товар по названию без варианта или новый)
+      ai-factory.ts     карточка фабрики по скриншотам / фото / прайсам (recognizeFactory; сканы PDF не отправляем)
       payments.ts       галочки оплат ↔ оплата документов: flagDocuments, markFlagDocuments, paymentForNewDocument, syncPaymentFlags
       carrier-spec.ts   спецификация для перевозчика: specData (упаковочный лист + инвойс → строки по позициям),
                         разметка чужого шаблона ИИ (mapTemplate, кэш settings spec_template:<sha1>), renderSpec
@@ -223,10 +236,13 @@ crm/
       calc.ts           расчёт сделки: товары инвойсов + коды/ставки → computeCalc; КП DOCX (renderKpDocx)
       rates.ts          курсы ЦБ на дату (XML ЦБ, кэш; CRM_RATES_FIXED — фиксированные для тестов)
       tnved.ts          справочник ТН ВЭД: загрузка выгрузки tws.by, поиск, коды → ставки
-      product-match.ts  ключ товара (название без размеров в скобках) — сопоставление позиций с товарами
+      product-match.ts  productKey (позиция: без числа мест в скобках) и productBaseName/productBaseKey (товар:
+                        без размера рулона «2×25 м», цвета, скобок) — сопоставление со справочником
       file-text.ts      текст из PDF (pdfjs-dist, строки по координатам), .docx / .xlsx (jszip) для модели
       settings.ts call-script.ts text.ts
     routes/             auth users kb files calls search audit deals counterparties documents orders products settings shipments ai
+                        factories (список, дубли, карточка, цены, «сделать поставщиком», GET /products/:id/offers);
+                        файлы фабрики — files.ts POST /factories/:id/files; ИИ — ai.ts POST /ai/recognize-factory
                         calc (GET/POST /shipments/:n/calc, kp.docx, GET /tnved)
                         cargo (GET/PUT /shipments/:n/spec, spec.xlsx, customs-pack[.zip])
     cli/tnved.ts        npm run tnved:update [--if-empty] [--file]
@@ -238,7 +254,9 @@ crm/
     lib/                api.ts (fetch + CSRF), auth.tsx, types.ts (типы ответов API), format.ts, theme.ts
     pages/              kb/*, CallScriptPage, crm/DealsPage (воронка), crm/CounterpartiesPage, crm/ProductsPage,
                         docs/DocumentsPage|DocumentPage|DocumentEditor, shipments/ShipmentsPage (доска/список/календарь),
-                        shipments/ShipmentPage (карточка), shipments/CalendarPage (CalendarView), SettingsPage, Users, Audit
+                        shipments/ShipmentPage (карточка), shipments/CalendarPage (CalendarView), SettingsPage, Users, Audit,
+                        factories/FactoriesPage (карточки с фото, фильтры анкеты), factories/FactoryPage (новая и карточка:
+                        файлы → ИИ, дубли, анкета, цены; components/factories/common — OffersEditor, статус)
     components/
       AiChat.tsx        кнопка «Спросить ИИ» в шапке + окно чата (портал, история в sessionStorage, мини-markdown)
       crm/              воронка: Board, DealPanel (карточка лида), CreateDealDialog, DealsTable, StagesEditor, CounterpartyPicker, DealPicker
@@ -266,11 +284,16 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   supplier/carrier/carrier_invoice/контракты/deal_id/assignee, container_no, hs_code, weight, volume, transport,
   pickup/delivery, разрешения, flags jsonb, notes), `shipment_milestones` (shipment_id+key → plan/fact),
   `shipment_events` (история), `shipment_parties` (подрядчики).
+- **Фабрики:** `factories` (name — как в WeChat, name_ru, wechat_id, contact_name, location, categories text[],
+  status new/contacted/samples/approved/rejected, profile jsonb — анкета, found_by, counterparty_id — после договора),
+  `product_offers` (factory_id, product_id, name — позиция с характеристиками, price, currency, unit, moq,
+  per_container — штук в 40HQ, kg_per_unit, m3_per_unit, conditions, quoted_at); файлы — attachments owner_type
+  `factory`, label photo/catalog/screenshot.
 - **Документы:** `documents` (type, number, date, counterparty_id, client_id, **shipment_id**, parent_id (договор),
   seq_no, currency, amount, status, payment_status, paid_amount, paid_at, valid_until, data jsonb, notes),
   `document_items` (product_id, name, batch_no, hs_code, qty, unit, price, amount), `products`, `settings` (company).
 
-**Миграции:** … **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).

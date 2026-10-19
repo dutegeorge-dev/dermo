@@ -6,6 +6,7 @@ import { config } from "../config.ts";
 import { db } from "../db/client.ts";
 import { aiEnabled } from "../lib/ai.ts";
 import { type ChatMessage, chatReply } from "../lib/ai-chat.ts";
+import { recognizeFactory } from "../lib/ai-factory.ts";
 import { parseDocumentFile } from "../lib/ai-parse.ts";
 import { body, HttpError } from "../lib/http.ts";
 
@@ -20,6 +21,19 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
     const buffer = await file.toBuffer();
     const { draft, usage } = await parseDocumentFile(db, buffer, file.filename, file.mimetype);
     request.log.info({ ai: "parse", model: config.ai.model, file: file.filename, usage }, "ИИ: разбор документа");
+    return { draft };
+  });
+
+  /** multipart, несколько файлов (скриншоты WeChat, фото, прайсы) → черновик карточки фабрики (ничего не сохраняет). */
+  app.post("/recognize-factory", async (request) => {
+    if (!aiEnabled()) throw new HttpError(503, "ИИ не подключён");
+    const files: { buffer: Buffer; filename: string; mime: string }[] = [];
+    for await (const part of request.files({ limits: { files: 12 } })) {
+      files.push({ buffer: await part.toBuffer(), filename: part.filename || "file", mime: part.mimetype || "application/octet-stream" });
+    }
+    if (!files.length) throw new HttpError(400, "Нет файлов");
+    const { draft, usage } = await recognizeFactory(files);
+    request.log.info({ ai: "factory", model: config.ai.model, files: files.length, usage }, "ИИ: карточка фабрики");
     return { draft };
   });
 

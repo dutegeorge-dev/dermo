@@ -15,6 +15,7 @@ import {
   IconContainer,
   IconBuilding,
   IconFactory,
+  IconSearch,
   IconFile,
   IconSettings,
   IconTruck,
@@ -89,6 +90,9 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         </NavItem>
         <NavItem to="/clients" icon={<IconBuilding />}>
           Клиенты
+        </NavItem>
+        <NavItem to="/factories" icon={<IconSearch />}>
+          Фабрики
         </NavItem>
         <NavItem to="/suppliers" icon={<IconFactory />}>
           Поставщики
