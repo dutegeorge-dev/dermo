@@ -5,15 +5,17 @@
  * что будет дальше), будущие — с плановой датой.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 
 import { daysBetween, FLAGS, type FlagKey, MILESTONES, type MilestoneSpec, SHIPMENT_STAGES, type StageSpec } from "../../../../shared/shipments.ts";
-import { BASE, errorMessage } from "../../lib/api.ts";
+import { api, apiDownload, BASE, errorMessage } from "../../lib/api.ts";
 import type { ShipmentResponse } from "../../lib/types.ts";
 import { formatDay, StatusChip } from "../docs/common.tsx";
 import { IconCheck } from "../Icons.tsx";
 import { OPEN_CALC_EVENT } from "./CalcBlock.tsx";
+import { OPEN_SPEC_EVENT } from "./SpecBlock.tsx";
 import { DueLabel, today, useShipmentActions } from "./common.tsx";
 
 type SaveField = (patch: Record<string, unknown>) => Promise<void>;
@@ -100,6 +102,8 @@ export function StageTimeline({ data, saveField }: { data: ShipmentResponse; sav
                     {st.no === 1 && (
                       <OrderChecklist data={data} />
                     )}
+                    {(st.no === 4 || st.no === 5) && <AfterLoading data={data} />}
+                    {st.no === 6 && <CustomsPack number={shipment.number} />}
 
                     {(st.flags.length > 0 || st.no === 3) && (
                       <div className="space-y-1.5">
@@ -404,6 +408,82 @@ function OrderChecklist({ data }: { data: ShipmentResponse }) {
       ) : (
         <p className="text-xs muted">Схема «{sh.scheme === "teu" ? "ТЭУ" : "Поставка"}» — поручение не нужно; документы для клиента — в блоке «Документы».</p>
       )}
+    </div>
+  );
+}
+
+function openBlock(event: string, id: string) {
+  window.dispatchEvent(new Event(event));
+  setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }), 50);
+}
+
+/** После погрузки: упаковочный лист → спецификация для перевозчика. */
+function AfterLoading({ data }: { data: ShipmentResponse }) {
+  const sh = data.shipment;
+  const packing = data.documents.filter((d) => d.type === "packing_list");
+  const spec = data.documents.find((d) => d.type === "carrier_spec");
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-semibold muted">Документы после погрузки</div>
+      <Check done={packing.length > 0}>
+        <span className={packing.length ? "muted line-through" : ""}>Загрузить упаковочный лист</span>
+        {packing.map((d) => (
+          <Link key={d.id} to={`/documents/${d.id}`} className="text-xs link">
+            № {d.number ?? "б/н"}
+          </Link>
+        ))}
+        {!packing.length && (
+          <Link to={`/documents/new?type=packing_list&shipment=${sh.number}`} className="btn btn-sm">
+            + Упаковочный лист
+          </Link>
+        )}
+      </Check>
+      <Check done={Boolean(spec)}>
+        <span className={spec ? "muted line-through" : ""}>Заполнить спецификацию для перевозчика</span>
+        <a href="#spec" className="btn btn-sm" onClick={(e) => { e.preventDefault(); openBlock(OPEN_SPEC_EVENT, "spec"); }}>
+          {spec ? "Открыть" : "Заполнить ↓"}
+        </a>
+      </Check>
+    </div>
+  );
+}
+
+/** На таможне: пакет документов (ZIP) и чего в нём не хватает. */
+function CustomsPack({ number }: { number: number }) {
+  const q = useQuery({ queryKey: ["customs-pack", number], queryFn: () => api<{ files: number; missing: string[] }>(`/shipments/${number}/customs-pack`) });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-semibold muted">Документы для таможни</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          disabled={busy || !q.data?.files}
+          onClick={async () => {
+            setBusy(true);
+            setError(null);
+            try {
+              await apiDownload(`/shipments/${number}/customs-pack.zip`);
+            } catch (e) {
+              setError(errorMessage(e));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "Собираем…" : "Сформировать документы для таможни (ZIP)"}
+        </button>
+        {q.data && <span className="text-xs muted">файлов: {q.data.files}</span>}
+      </div>
+      <p className="text-xs muted">Контракт, инвойсы поставщика и перевозчика с документами об оплате, упаковочные листы, спецификация, накладные, сертификаты на товары — по папкам, с описью.</p>
+      {q.data && q.data.missing.length > 0 && (
+        <ul className="list-disc pl-5 text-xs text-amber-800 dark:text-amber-400">
+          {q.data.missing.map((m) => <li key={m}>{m}</li>)}
+        </ul>
+      )}
+      {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
     </div>
   );
 }

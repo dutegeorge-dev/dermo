@@ -49,6 +49,35 @@ function contentDisposition(kind: "inline" | "attachment", filename: string): st
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
+/** Сохраняет сформированный системой файл (спецификация, пакет…) как вложение. */
+export async function storeBuffer(
+  tx: DbOrTx,
+  owner: { type: string; id: number },
+  file: { filename: string; mime: string; buffer: Buffer; label?: string | null },
+  userId: number | null,
+): Promise<string> {
+  const id = crypto.randomUUID();
+  const key = `${new Date().toISOString().slice(0, 7)}/${id}`;
+  const target = storagePath(key);
+  await fs.promises.mkdir(path.dirname(target), { recursive: true });
+  await fs.promises.writeFile(target, file.buffer);
+  await tx.insert(attachments).values({
+    id,
+    ownerType: owner.type,
+    ownerId: owner.id,
+    filename: file.filename.slice(0, 200),
+    mime: file.mime,
+    size: file.buffer.length,
+    storageKey: key,
+    label: file.label ?? null,
+    createdBy: userId,
+  });
+  return id;
+}
+
+/** Содержимое сохранённого файла по ключу хранения. */
+export const readStored = (key: string): Promise<Buffer> => fs.promises.readFile(storagePath(key));
+
 /** Принимает файл из multipart-запроса (поле file), кладёт на диск и в attachments. */
 async function saveUpload(request: FastifyRequest, ownerType: string, ownerId: number, ownerLabel: string, label: string | null = null) {
   const user = currentUser(request);
@@ -121,13 +150,14 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
     return { attachment };
   });
 
-  /** Файл документа. ?label=original|signed — как прислали / подписанный скан. */
+  /** Файл документа. ?label=original|signed|payment — как прислали / подписанный скан / документ об оплате. */
   app.post("/documents/:id/files", async (request) => {
     const id = intParam((request.params as { id: string }).id);
     const [doc] = await db.select({ id: documents.id }).from(documents).where(eq(documents.id, id));
     if (!doc) throw new HttpError(404, "Документ не найден");
     const raw = (request.query as { label?: string }).label;
-    const label = raw === "signed" || raw === "original" ? raw : null;
+    // original — как прислали, signed — подписанный скан, payment — документ об оплате (платёжка, SWIFT).
+    const label = raw === "signed" || raw === "original" || raw === "payment" ? raw : null;
     const attachment = await saveUpload(request, "document", id, `к документу «${await documentLabel(db, id)}»`, label);
     // Загрузили подписанный скан — документ подписан.
     if (label === "signed") await db.update(documents).set({ status: "signed", updatedAt: new Date() }).where(eq(documents.id, id));

@@ -306,13 +306,13 @@ sudo systemctl start bars-crm
 | `contacts` | Контакты контрагента (`counterparty_id`): `name`, `phone`, `messenger` (`telegram`/`whatsapp`/`max`/`wechat`/`other`) + `messenger_handle`, `email`, `position`, `is_primary` |
 | `deal_statuses` | Этапы воронки = колонки доски: `key`, `name`, `color`, `position`, `is_final` (последний этап). Начальный набор (миграция 0002): Новая заявка → Поиск товара → Расчёт доставки предварительный → Предложение клиенту → Заказ у поставщика → Расчёт доставки → Согласование доставки → Доставка / информирование клиента → Завершено |
 | `deals` | Лид воронки продаж (работа с клиентом до депозита), ключ `key` = `BARS-` + `number` (последовательность `deal_number_seq`), поля ниже. Груз, поставщик, договоры и документы — не здесь, а в `shipments` (миграция 0005 перенесла их туда) |
-| `documents` | Документ любого типа (`type`, справочник — `shared/documents.ts`): `number`, `date`, `counterparty_id` (вторая сторона), `client_id` (клиент, к которому относится документ поставщика/подрядчика), `shipment_id` (сделка), `parent_id` (договор: поручение → договор комиссии, инвойс → контракт), `seq_no` (номер приложения в договоре), `currency`, `amount`, `status` (`draft`/`signed`/`cancelled`), `payment_status` (`unpaid`/`partial`/`paid`), `paid_amount`, `paid_at`, `valid_until`, `data` (jsonb: Incoterms, условия оплаты, смета поручения, статья расходов…), `notes`. Файлы — `attachments` с `owner_type='document'` и меткой `original`/`signed` |
+| `documents` | Документ любого типа (`type`, справочник — `shared/documents.ts`): `number`, `date`, `counterparty_id` (вторая сторона), `client_id` (клиент, к которому относится документ поставщика/подрядчика), `shipment_id` (сделка), `parent_id` (договор: поручение → договор комиссии, инвойс → контракт), `seq_no` (номер приложения в договоре), `currency`, `amount`, `status` (`draft`/`signed`/`cancelled`), `payment_status` (`unpaid`/`partial`/`paid`), `paid_amount`, `paid_at`, `valid_until`, `data` (jsonb: Incoterms, условия оплаты, смета поручения, статья расходов…), `notes`. Файлы — `attachments` с `owner_type='document'` и меткой `original`/`signed`/`payment` (документ об оплате)/`generated` (сформирован системой). `data.packing` — строки и итоги упаковочного листа |
 | `document_items` | Позиции документа: `product_id`, `name` (как в документе), `batch_no` («партийный номер» поручения), `hs_code`, `quantity`, `unit`, `price`, `amount` |
 | `products` | Справочник товаров: `name`, `name_ru`, `hs_code`, `unit`, `vat10` (НДС при ввозе 10 % вместо 22 %). Пополняется сам из позиций (поиск по названию и ключу названия без размеров в скобках — `server/lib/product-match.ts`); код ТН ВЭД из позиции записывается товару, если у него не было |
 | `tnved` | Справочник ТН ВЭД ЕАЭС: `code` (10 цифр), `name`, `tariff` (ставка текстом: «6.5%, но не менее 0.096 EUR за 1 кг»; разбор — `parseTariff` в `shared/customs.ts`). Заполняется `npm run crm:tnved` |
 | `settings` | Настройки, ключ → JSON. `company` — реквизиты ООО ТЛК БАРС, счета (`accounts`) и какой счёт ставить в поручения |
 | `deal_comments` | Комментарии: `deal_id`, `author_id`, `body` |
-| `shipments` | Сделка (заказ / отгрузка) — начинается с оплаты депозита, независима от воронки. `title` (название груза — как вы его называете), `number` (последовательность `shipment_number_seq`, вторичный «№ 12»), `status` (`active`/`closed`/`cancelled`, закрывается вручную), `stage` 1–8 (вычисляется из фактических дат), `scheme` (`commission`/`supply`/`teu`), `client_id`, `contact_id`, `supplier_id`, `carrier_id`, `carrier_invoice_id`, `client_contract_id`, `supplier_contract_id` (подбираются сами), `deal_id` (лид из воронки, необязательно), `assignee_id`, `container_no`, `hs_code`, `weight_kg`, `volume_m3`, `transport`, `pickup_location`, `delivery_location`, `export_license`, `certificates`, `certificate_holder`, `chestny_znak`, `flags` (jsonb: отмеченные ожидания → дата), `calc` (jsonb `ShipmentCalc`: расчёт для клиента — смета КП/поручения, курсы ЦБ и их дата, таможенные платежи по товарам), `notes`. Вес и объём обязательны при создании сделки (`POST /shipments`, `newShipment`) |
+| `shipments` | Сделка (заказ / отгрузка) — начинается с оплаты депозита, независима от воронки. `title` (название груза — как вы его называете), `number` (последовательность `shipment_number_seq`, вторичный «№ 12»), `status` (`active`/`closed`/`cancelled`, закрывается вручную), `stage` 1–8 (вычисляется из фактических дат), `scheme` (`commission`/`supply`/`teu`), `client_id`, `contact_id`, `supplier_id`, `carrier_id`, `carrier_invoice_id`, `client_contract_id`, `supplier_contract_id` (подбираются сами), `deal_id` (лид из воронки, необязательно), `assignee_id`, `container_no`, `hs_code`, `weight_kg`, `volume_m3`, `transport`, `pickup_location`, `delivery_location`, `export_license`, `certificates`, `certificate_holder`, `chestny_znak`, `flags` (jsonb: отмеченные ожидания → дата), `spec` (jsonb `SpecParams`: получатель, станция, описания для спецификации перевозчика), `calc` (jsonb `ShipmentCalc`: расчёт для клиента — смета КП/поручения, курсы ЦБ и их дата, таможенные платежи по товарам), `notes`. Вес и объём обязательны при создании сделки (`POST /shipments`, `newShipment`) |
 | `shipment_parties` | Подрядчики сделки (перевозчики, брокер, СВХ…) — `shipment_id` + `counterparty_id`; добавляются сами из их счетов |
 | `shipment_milestones` | Ключевые даты сделки: `shipment_id` + `key` (`deposit`, `ready`, `loading`, `departure`, `border`, `transshipment`, `arrival`, `release`, `delivery`), `plan`, `fact` |
 | `shipment_events` | История сделки: переносы дат, факты, этапы, флажки, правки полей, комментарии |
@@ -375,6 +375,9 @@ sudo systemctl start bars-crm
 | `GET /tnved?q=` | Справочник ТН ВЭД: по началу кода или словам; `parsed` — разобранная ставка |
 | `GET /shipments/:number/calc` | Расчёт сделки (или параметры по умолчанию), товары с кодами и ставками, таможенные платежи из поручения |
 | `POST /shipments/:number/calc` `{transportAmount, transportCurrency, transportLabel, fxPercent, broker, terminal, commission, lastMile, deliveryTerm, refreshRates}` | Рассчитать и сохранить; курс — прошлого расчёта, `refreshRates: true` — свежий ЦБ |
+| `GET/PUT /shipments/:number/spec` | Спецификация для перевозчика: данные (поля, строки по ТН ВЭД, чего не хватает) / параметры (получатель, станция, описания) |
+| `POST /shipments/:number/spec.xlsx` (multipart `file` — шаблон перевозчика, необязательно) | Сформировать Excel, сохранить документом `carrier_spec` и отдать |
+| `GET /shipments/:number/customs-pack`, `GET /shipments/:number/customs-pack.zip` | Пакет документов для таможни: состав и недостающее / ZIP с описью |
 | `GET /shipments/:number/kp.docx` | КП в Word по шаблону `templates/kp.docx` (свой — `CRM_UPLOAD_DIR/templates/kp.docx`) |
 | `GET/PUT /settings/company`, `GET/POST/DELETE /settings/templates/commission_order[.docx]` | Реквизиты компании; шаблон поручения (admin) |
 | `GET /search?q=` | Глобальный поиск: сделки, клиенты, страницы, справочник; сниппеты с `<mark>` |
@@ -479,6 +482,24 @@ sudo systemctl start bars-crm
 Новые товары из инвойса: ИИ-разбор называет примерный код (`hsGuess`), код берёт из справочника варианты с этим
 началом (≤ 40), один — подставляет, несколько — Haiku выбирает (≈ 1–2 тыс. единиц лимита); такие коды помечены
 «ИИ, проверьте». Знакомые товары берут код из справочника товаров без ИИ.
+
+### После погрузки и на таможне: упаковочный лист, спецификация для перевозчика, пакет документов
+
+- **Упаковочный лист** (`packing_list`): ИИ разбирает строки (кол-во, места, вид мест, нетто, брутто, объём) →
+  `documents.data.packing` (`shared/cargo.ts`). При сохранении можно записать в сделку фактические вес брутто и объём.
+- **Спецификация для перевозчика** (блок в карточке сделки, свёрнут; `server/lib/carrier-spec.ts`): строки по кодам
+  ТН ВЭД — сумма из инвойсов поставщика, места / нетто / брутто — из упаковочных листов (строки сопоставляются с товарами
+  по названию, иначе делятся пропорционально стоимости); «Кол-во шт» — штуки для штучного товара, иначе места. Получатель,
+  станция, страна, происхождение и описания RU/EN — вводятся в блоке (`shipments.spec`). Excel — по нашему шаблону
+  (`templates/carrier_spec.xlsx`, 10 строк) или по шаблону перевозчика: ИИ один раз определяет адреса ячеек (значения
+  пишет код, `server/lib/xlsx-fill.ts`), разметка кэшируется по SHA-1 файла в `settings` (`spec_template:…`). Файл
+  сохраняется документом «Спецификация для перевозчика» (`carrier_spec`) в сделке.
+- **Документ об оплате** (`payment_order`: платёжка, SWIFT) отдельным документом не сохраняется — прикрепляется файлом
+  с меткой `payment` к оплаченному инвойсу / счёту (ИИ находит счёт по номеру из назначения платежа или по сумме и
+  получателю) и может отметить его оплаченным. В карточке счёта — кнопка «Документ об оплате».
+- **Пакет для таможни** (этап «На таможне» → «Сформировать документы для таможни (ZIP)»): контракт, инвойсы поставщика,
+  упаковочные листы, спецификация, счета перевозчика, транспортные накладные, сертификаты на товары сделки — по папкам,
+  с документами об оплате и `Опись.txt` (чего не хватает).
 
 ### ИИ: разбор документов и чат
 

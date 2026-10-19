@@ -25,11 +25,13 @@ import {
   SCHEMES,
 } from "../../../../shared/documents.ts";
 import type { DocumentDraft } from "../../../../shared/ai.ts";
+import { emptyPackingLine, type PackingData, type PackingLine, packingTotals } from "../../../../shared/cargo.ts";
 import { CounterpartyPicker, ensureCounterparty, type Picked } from "../../components/crm/CounterpartyPicker.tsx";
 import { type PickedShipment, ShipmentPicker } from "../../components/shipments/ShipmentPicker.tsx";
 import { docTitle } from "../../components/docs/common.tsx";
 import { CostsEditor } from "../../components/docs/CostsEditor.tsx";
 import { FileDrop, FilePreview } from "../../components/docs/FilePane.tsx";
+import { PackingEditor } from "../../components/docs/PackingEditor.tsx";
 import { emptyItem, itemAmount, ItemsEditor } from "../../components/docs/ItemsEditor.tsx";
 import { detectCurrency, parseNumber } from "../../components/docs/paste.ts";
 import { IconSparkles } from "../../components/Icons.tsx";
@@ -156,6 +158,16 @@ function EditorForm({ initial }: { initial: Initial }) {
   // Реквизиты нового контрагента, которые ИИ прочитал из документа (имя → поля).
   const [aiCounterparty, setAiCounterparty] = useState<{ name: string; extra: Record<string, string> } | null>(null);
   const [applyToDeal, setApplyToDeal] = useState(true);
+  const [packingLines, setPackingLines] = useState<PackingLine[]>(((data0.packing as PackingData | undefined)?.lines ?? []).length ? (data0.packing as PackingData).lines : [emptyPackingLine()]);
+  // Документ об оплате: к какому счёту прикрепить и отметить ли оплату.
+  const [payTarget, setPayTarget] = useState<number | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMark, setPayMark] = useState(true);
+  const payables = useQuery({
+    queryKey: ["documents", "payables"],
+    queryFn: () => api<{ documents: DocumentRow[] }>("/documents?type=supplier_invoice,contractor_invoice,client_invoice,customs_declaration&limit=300"),
+    enabled: type === "payment_order",
+  });
 
   // Договоры, к которым можно привязать документ.
   const parentOwner = spec.party === "client" ? party?.id : party?.id;
@@ -208,6 +220,11 @@ function EditorForm({ initial }: { initial: Initial }) {
       }
     }
     if (d.cargoTitle) setNewTitle(d.cargoTitle);
+    if (d.packing?.lines.length) setPackingLines(d.packing.lines);
+    if (d.type === "payment_order") {
+      setPayTarget(d.payFor?.id ?? null);
+      setPayAmount(d.amount != null ? String(d.amount) : "");
+    }
     if (d.weightKg) setNewWeight(String(d.weightKg));
   };
 
@@ -235,21 +252,45 @@ function EditorForm({ initial }: { initial: Initial }) {
   const dealInfo = useQuery({
     queryKey: ["shipment", deal?.number],
     queryFn: () => api<ShipmentResponse>(`/shipments/${deal!.number}`),
-    enabled: !!deal && !newDeal && !!(draft?.containerNo || draft?.weightKg),
+    enabled: !!deal && !newDeal && !!(draft?.containerNo || draft?.weightKg || draft?.volumeM3),
   });
   const dealNow = dealInfo.data?.shipment;
   const dealPatch: Record<string, unknown> = {};
   if (dealNow && draft && !newDeal) {
     if (draft.containerNo && draft.containerNo !== dealNow.containerNo) dealPatch.containerNo = draft.containerNo;
-    if (draft.weightKg && !dealNow.weightKg) dealPatch.weightKg = draft.weightKg;
+    // Упаковочный лист — фактические вес и объём после погрузки: предлагаем заменить; из других документов — только если пусто.
+    const fromPacking = draft.type === "packing_list";
+    if (draft.weightKg && (fromPacking ? Math.round(draft.weightKg) !== Math.round(dealNow.weightKg ?? 0) : !dealNow.weightKg)) dealPatch.weightKg = draft.weightKg;
+    if (draft.volumeM3 && fromPacking && Math.round(draft.volumeM3 * 100) !== Math.round((dealNow.volumeM3 ?? 0) * 100)) dealPatch.volumeM3 = draft.volumeM3;
   }
   const hasDealPatch = Object.keys(dealPatch).length > 0;
+
+  /** Документ об оплате — прикрепить к оплаченному счёту и отметить оплату. */
+  const attachPayment = async () => {
+    const target = payables.data?.documents.find((d) => d.id === payTarget);
+    if (!file) throw new Error("Загрузите файл документа об оплате");
+    if (!target) throw new Error("Выберите, какой инвойс / счёт оплачен");
+    const form = new FormData();
+    form.append("file", file);
+    await api(`/documents/${target.id}/files?label=payment`, { method: "POST", form });
+    if (payMark) {
+      const paid = (target.paymentStatus === "partial" ? (target.paidAmount ?? 0) : 0) + (parseNumber(payAmount) ?? target.amount ?? 0);
+      const full = target.amount === null || paid >= target.amount * 0.995;
+      await api(`/documents/${target.id}`, { method: "PATCH", body: { paymentStatus: full ? "paid" : "partial", paidAmount: full ? null : paid, paidAt: date || null } });
+    }
+    await queryClient.invalidateQueries();
+    navigate(`/documents/${target.id}`);
+  };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
+      if (type === "payment_order") {
+        await attachPayment();
+        return;
+      }
       const cpExtra = party && party.id === null && aiCounterparty?.name === party.name ? aiCounterparty.extra : {};
       const counterpartyId = spec.party ? await ensureCounterparty(party, spec.party, cpExtra) : null;
       const clientId = await ensureCounterparty(client, "client");
@@ -258,6 +299,10 @@ function EditorForm({ initial }: { initial: Initial }) {
       if (type === "contractor_invoice") data.costCategory = costCategory || undefined;
       if (type === "power_of_attorney") data.issuedTo = issuedTo;
       if (type === "commission_order") Object.assign(data, { city, incoterms, paymentTerms, deliveryPoint, costs });
+      if (type === "packing_list") {
+        const lines = packingLines.filter((l) => l.name.trim());
+        data.packing = { lines, totals: packingTotals(lines) };
+      }
       const body: Record<string, unknown> = {
         type,
         number: number || null,
@@ -390,7 +435,8 @@ function EditorForm({ initial }: { initial: Initial }) {
                 Записать в сделку № {deal.number}:{" "}
                 {"containerNo" in dealPatch && <>контейнер <b>{String(dealPatch.containerNo)}</b>{dealNow?.containerNo ? ` (сейчас ${dealNow.containerNo})` : ""}</>}
                 {"containerNo" in dealPatch && "weightKg" in dealPatch && ", "}
-                {"weightKg" in dealPatch && <>вес <b>{Number(dealPatch.weightKg).toLocaleString("ru-RU")} кг</b></>}
+                {"weightKg" in dealPatch && <>вес <b>{Number(dealPatch.weightKg).toLocaleString("ru-RU")} кг</b>{dealNow?.weightKg ? ` (сейчас ${dealNow.weightKg.toLocaleString("ru-RU")})` : ""}</>}
+                {"volumeM3" in dealPatch && <>, объём <b>{Number(dealPatch.volumeM3).toLocaleString("ru-RU")} м³</b>{dealNow?.volumeM3 ? ` (сейчас ${dealNow.volumeM3.toLocaleString("ru-RU")})` : ""}</>}
               </span>
             </label>
           )}
@@ -437,13 +483,13 @@ function EditorForm({ initial }: { initial: Initial }) {
               </Field>
             )}
 
-            {spec.party !== "client" && (
+            {spec.party !== "client" && type !== "payment_order" && (
               <Field label={type === "supplier_contract" ? "Клиент — если это контракт клиента (ТЭУ)" : type === "conformity" ? "Заявитель / держатель" : "Клиент"} wide>
                 <CounterpartyPicker role="client" value={client} onChange={setClient} placeholder="Необязательно" />
               </Field>
             )}
 
-            {!spec.contract && (
+            {!spec.contract && type !== "payment_order" && (
               <div className="sm:col-span-2">
                 <span className="label">Сделка</span>
                 {!ex && (spec.party === "supplier" || type === "supplier_invoice") && (
@@ -491,6 +537,42 @@ function EditorForm({ initial }: { initial: Initial }) {
               <Field label="Условия поставки (Incoterms)"><input className="input" value={incoterms} onChange={(e) => setIncoterms(e.target.value)} placeholder="EXW (Shijiazhuang, Китай)" /></Field>
               <Field label="Условия оплаты"><input className="input" value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="30% депозит 70% до отгрузки" /></Field>
             </div>
+          )}
+
+          {type === "packing_list" && (
+            <section>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">Места и веса</h2>
+              <PackingEditor lines={packingLines} onChange={setPackingLines} />
+              <p className="mt-1 text-xs muted">По упаковочному листу заполняется спецификация для перевозчика (в карточке сделки).</p>
+            </section>
+          )}
+
+          {type === "payment_order" && (
+            <section className="space-y-3 rounded-md bg-slate-50 p-3 text-sm dark:bg-neutral-800/40">
+              <p>Файл прикрепится к оплаченному инвойсу / счёту (в пакет для таможни попадёт вместе с ним). Отдельным документом не сохраняется.</p>
+              <Field label="Что оплачено" wide>
+                <select className="input" value={payTarget ?? ""} onChange={(e) => setPayTarget(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">— выберите инвойс / счёт —</option>
+                  {payables.data?.documents.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {docTitle(d)}
+                      {d.counterpartyName ? ` · ${d.counterpartyName}` : ""}
+                      {d.amount !== null ? ` · ${formatMoney(d.amount, d.currency)}` : ""}
+                      {d.paymentStatus ? ` · ${PAYMENT_STATUSES[d.paymentStatus as keyof typeof PAYMENT_STATUSES] ?? d.paymentStatus}` : ""}
+                      {d.shipmentTitle ? ` · ${d.shipmentTitle}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Сумма платежа"><input className="input tabular-nums" inputMode="decimal" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} /></Field>
+                <Field label="Дата платежа"><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+              </div>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={payMark} onChange={(e) => setPayMark(e.target.checked)} />
+                Отметить счёт оплаченным (если сумма меньше счёта — «частично»)
+              </label>
+            </section>
           )}
 
           {spec.items && type !== "commission_order" && (

@@ -1,5 +1,6 @@
 /** ИИ-разбор документа: черновик формы (сервер: server/lib/ai-parse.ts, интерфейс: DocumentEditor). */
 
+import type { PackingData } from "./cargo.ts";
 import type { DocType } from "./documents.ts";
 
 /** Черновик для формы документа (web: DocumentEditor). */
@@ -20,6 +21,11 @@ export type DocumentDraft = {
   cargoTitle: string | null;
   containerNo: string | null;
   weightKg: number | null;
+  volumeM3: number | null;
+  /** Упаковочный лист: строки и итоги. */
+  packing: PackingData | null;
+  /** Документ об оплате: к какому инвойсу / счёту прикрепить. */
+  payFor: { id: number; label: string; amount: number | null; currency: string | null; paymentStatus: string | null } | null;
   incoterms: string | null;
   paymentTerms: string | null;
   validUntil: string | null;

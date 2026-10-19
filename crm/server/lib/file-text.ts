@@ -8,6 +8,8 @@
 import JSZip from "jszip";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
+import { sheetsOf } from "./xlsx-fill.ts";
+
 type PdfItem = { str: string; x: number; y: number; w: number; h: number };
 
 export async function pdfText(buffer: Buffer): Promise<string> {
@@ -105,16 +107,13 @@ export async function xlsxText(buffer: Buffer): Promise<string> {
   const zip = await JSZip.loadAsync(buffer);
   const sharedXml = (await zip.file("xl/sharedStrings.xml")?.async("string")) ?? "";
   const shared = [...sharedXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => runsText(m[1], "t"));
-  const workbook = (await zip.file("xl/workbook.xml")?.async("string")) ?? "";
-  const names = [...workbook.matchAll(/<sheet [^>]*name="([^"]*)"/g)].map((m) => decodeXml(m[1]));
-  const sheets = Object.keys(zip.files)
-    .filter((f) => /^xl\/worksheets\/sheet\d+\.xml$/.test(f))
-    .sort((a, b) => Number(/(\d+)\.xml$/.exec(a)![1]) - Number(/(\d+)\.xml$/.exec(b)![1]));
+  // Листы — по workbook.xml и его связям (имена файлов sheetN не обязаны совпадать с порядком); скрытые пропускаем.
+  const sheets = (await sheetsOf(zip)).filter((sh) => !sh.hidden && zip.file(sh.path));
   if (!sheets.length) throw new Error("not an xlsx");
   const out: string[] = [];
-  for (const [i, file] of sheets.entries()) {
-    const xml = await zip.file(file)!.async("string");
-    out.push(`=== Лист ${names[i] ?? i + 1}`);
+  for (const sheet of sheets) {
+    const xml = await zip.file(sheet.path)!.async("string");
+    out.push(`=== Лист ${sheet.name}`);
     for (const row of xml.matchAll(/<row[ >][\s\S]*?<\/row>/g)) {
       const cells: string[] = [];
       for (const c of row[0].matchAll(/<c ([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {

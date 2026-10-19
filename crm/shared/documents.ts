@@ -194,6 +194,12 @@ export const DOC_TYPES = {
     parentTypes: ["contractor_contract"],
     payable: true,
   },
+  carrier_spec: {
+    label: "Спецификация для перевозчика",
+    group: "shipping",
+    party: null,
+    hint: "Формируется в карточке сделки (блок «Спецификация для перевозчика») по инвойсу и упаковочному листу",
+  },
   railway_bill: { label: "Ж/д накладная (СМГС)", group: "shipping", party: "contractor" },
   cmr: { label: "CMR", group: "shipping", party: "contractor" },
   bill_of_lading: { label: "Коносамент", group: "shipping", party: "contractor" },
@@ -231,6 +237,12 @@ export const DOC_TYPES = {
       "contractor_contract",
     ],
     signable: true,
+  },
+  payment_order: {
+    label: "Документ об оплате (платёжка, SWIFT)",
+    group: "other",
+    party: null,
+    hint: "Отдельным документом не сохраняется — прикрепляется к инвойсу / счёту, который оплачен",
   },
   other: { label: "Прочее", group: "other", party: null },
 } as const satisfies Record<string, DocTypeSpec>;

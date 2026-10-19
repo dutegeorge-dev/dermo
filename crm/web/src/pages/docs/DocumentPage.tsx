@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
+import type { PackingData } from "../../../../shared/cargo.ts";
 import { COST_CATEGORIES, type CostLine, docSpec, formatMoney, PAYMENT_STATUSES } from "../../../../shared/documents.ts";
 import { counterpartyPath, DocumentsTable, docTitle, docTypeLabel, formatDay, PaymentChip, StatusChip, ValidityChip } from "../../components/docs/common.tsx";
 import { FilePreview } from "../../components/docs/FilePane.tsx";
@@ -67,6 +68,48 @@ function PaymentControl({ data, onSaved }: { data: DocumentFull; onSaved: () => 
   );
 }
 
+const kg = (n: number | null) => (n === null ? "—" : n.toLocaleString("ru-RU", { maximumFractionDigits: 3 }));
+
+function PackingView({ packing }: { packing: PackingData }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs muted">
+            <th className="py-1 pr-2 font-medium">Товар</th>
+            <th className="py-1 pr-2 text-right font-medium">Кол-во</th>
+            <th className="py-1 pr-2 text-right font-medium">Мест</th>
+            <th className="py-1 pr-2 text-right font-medium">Нетто, кг</th>
+            <th className="py-1 pr-2 text-right font-medium">Брутто, кг</th>
+            <th className="py-1 text-right font-medium">Объём, м³</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200 dark:divide-neutral-800">
+          {packing.lines.map((l, i) => (
+            <tr key={i}>
+              <td className="py-1.5 pr-2">{l.name}</td>
+              <td className="py-1.5 pr-2 text-right tabular-nums">{kg(l.quantity)} {l.unit && <span className="text-xs muted">{l.unit}</span>}</td>
+              <td className="py-1.5 pr-2 text-right tabular-nums">{kg(l.packages)} {l.packageType && <span className="text-xs muted">{l.packageType}</span>}</td>
+              <td className="py-1.5 pr-2 text-right tabular-nums">{kg(l.netKg)}</td>
+              <td className="py-1.5 pr-2 text-right tabular-nums">{kg(l.grossKg)}</td>
+              <td className="py-1.5 text-right tabular-nums">{kg(l.volumeM3)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-slate-300 font-medium dark:border-neutral-700">
+            <td className="py-1.5" colSpan={2}>Итого</td>
+            <td className="py-1.5 pr-2 text-right tabular-nums">{kg(packing.totals.packages)}</td>
+            <td className="py-1.5 pr-2 text-right tabular-nums">{kg(packing.totals.netKg)}</td>
+            <td className="py-1.5 pr-2 text-right tabular-nums">{kg(packing.totals.grossKg)}</td>
+            <td className="py-1.5 text-right tabular-nums">{kg(packing.totals.volumeM3)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 export function DocumentPage() {
   const { id } = useParams();
   const docId = Number(id);
@@ -79,7 +122,7 @@ export function DocumentPage() {
   const [uploadError, setUploadError] = useState<unknown>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const labelRef = useRef<"original" | "signed">("original");
+  const labelRef = useRef<"original" | "signed" | "payment">("original");
 
   if (isLoading) return <Content><Spinner /></Content>;
   if (!data) return <Content><ErrorBox error={error} /></Content>;
@@ -91,7 +134,7 @@ export function DocumentPage() {
     await queryClient.invalidateQueries({ queryKey: ["deal"] });
   };
   const costs = ((d.data?.costs as CostLine[]) ?? []) as CostLine[];
-  const shownFile = data.files.find((f) => f.id === preview) ?? data.files.find((f) => f.label === "signed") ?? data.files[0];
+  const shownFile = data.files.find((f) => f.id === preview) ?? data.files.find((f) => f.label === "signed") ?? data.files.find((f) => f.label !== "payment") ?? data.files[0];
 
   const upload = async (file: File, label: string) => {
     setUploading(label);
@@ -158,6 +201,12 @@ export function DocumentPage() {
             {d.notes && <Row label="Заметки"><span className="whitespace-pre-wrap">{d.notes}</span></Row>}
           </section>
 
+          {d.type === "packing_list" && (d.data?.packing as PackingData | undefined) && (
+            <section>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">Места и веса</h2>
+              <PackingView packing={d.data!.packing as PackingData} />
+            </section>
+          )}
           {data.items.length > 0 && (
             <section>
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">Позиции</h2>
@@ -222,6 +271,11 @@ export function DocumentPage() {
                 {uploading === "signed" ? "Загрузка…" : "Загрузить подписанный скан"}
               </button>
             )}
+            {spec?.payable && (
+              <button type="button" className="btn btn-sm" disabled={!!uploading} title="Платёжное поручение, SWIFT — попадёт в пакет для таможни вместе с инвойсом" onClick={() => { labelRef.current = "payment"; fileRef.current?.click(); }}>
+                {uploading === "payment" ? "Загрузка…" : "Документ об оплате"}
+              </button>
+            )}
             <input
               ref={fileRef}
               type="file"
@@ -244,6 +298,8 @@ export function DocumentPage() {
                     <IconFile size={14} className="shrink-0 text-slate-400" />
                     <button type="button" className="min-w-0 truncate text-left hover:underline" onClick={() => setPreview(f.id)}>{f.filename}</button>
                     {f.label === "signed" && <span className="rounded bg-green-100 px-1.5 text-[11px] text-green-800 dark:bg-green-900/40 dark:text-green-300">подписан</span>}
+                    {f.label === "payment" && <span className="rounded bg-sky-100 px-1.5 text-[11px] text-sky-800 dark:bg-sky-900/40 dark:text-sky-300">оплата</span>}
+                    {f.label === "generated" && <span className="rounded bg-slate-100 px-1.5 text-[11px] text-slate-700 dark:bg-neutral-800 dark:text-neutral-300">сформирован</span>}
                     <span className="ml-auto shrink-0 text-xs font-normal muted">{formatSize(f.size)} · {formatDateTime(f.createdAt)}</span>
                     <a href={`${fileUrl(f.id)}?download`} className="text-xs font-normal link">скачать</a>
                   </li>

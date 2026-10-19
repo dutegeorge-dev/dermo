@@ -728,7 +728,8 @@ describe("ИИ: разбор документов и чат", () => {
     assert.equal(await docxText(await docx.generateAsync({ type: "nodebuffer" })), "Контракт № DTF-07/26\nGrass\t100 & 5");
     const xlsx = new JSZip();
     xlsx.file("xl/sharedStrings.xml", `<sst><si><t>Товар</t></si><si><t>Трава</t></si></sst>`);
-    xlsx.file("xl/workbook.xml", `<workbook><sheets><sheet name="PI" sheetId="1"/></sheets></workbook>`);
+    xlsx.file("xl/workbook.xml", `<workbook><sheets><sheet name="PI" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+    xlsx.file("xl/_rels/workbook.xml.rels", `<Relationships><Relationship Id="rId1" Type="worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
     xlsx.file("xl/worksheets/sheet1.xml", `<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1"><v>12.5</v></c></row><row r="2"><c r="B2" t="s"><v>1</v></c></row></sheetData></worksheet>`);
     assert.equal(await xlsxText(await xlsx.generateAsync({ type: "nodebuffer" })), "=== Лист PI\nТовар\t\t12.5\n\tТрава");
   });
@@ -813,5 +814,111 @@ describe("Расчёт: пошлина по ТН ВЭД, КП, поручени�
     assert.equal(after.order.customs, cost("customs").amount);
     const events = (await call(s, "GET", `/shipments/${no}`)).json().events;
     assert.ok(events.some((e: { kind: string }) => e.kind === "calc"));
+  });
+});
+
+describe("Упаковочный лист, спецификация для перевозчика, оплаты, пакет для таможни", () => {
+  const multipart = (name: string, content: Buffer | string, type = "application/pdf") => {
+    const boundary = "----crmpack";
+    const head = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: ${type}\r\n\r\n`);
+    const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+    return { payload: Buffer.concat([head, Buffer.isBuffer(content) ? content : Buffer.from(content), tail]), type: `multipart/form-data; boundary=${boundary}` };
+  };
+  const upload = async (s: Session, url: string, name: string, content: Buffer | string, type?: string) => {
+    const m = multipart(name, content, type);
+    return app.inject({ method: "POST", url: `${API}${url}`, headers: { cookie: s.cookie, "x-csrf-token": s.csrf, "content-type": m.type }, payload: m.payload });
+  };
+
+  test("заполнение ячеек Excel: есть ячейка, нет ячейки, нет строки", async () => {
+    const { setCell } = await import("../lib/xlsx-fill.ts");
+    const xml = `<worksheet><sheetData><row r="2"><c r="A2" s="3"><v>1</v></c><c r="D2" s="4"/></row><row r="5"><c r="A5"/></row></sheetData></worksheet>`;
+    let out = setCell(xml, "D2", "Текст & <знаки>");
+    assert.match(out, /<c r="D2" s="4" t="inlineStr"><is><t xml:space="preserve">Текст &amp; &lt;знаки&gt;<\/t><\/is><\/c>/);
+    out = setCell(out, "B2", 12.5);
+    assert.match(out, /<c r="A2" s="3"><v>1<\/v><\/c><c r="B2"><v>12.5<\/v><\/c><c r="D2"/);
+    out = setCell(out, "C3", "новая строка");
+    assert.match(out, /<\/row><row r="3"><c r="C3" t="inlineStr">.*<\/row><row r="5">/);
+  });
+
+  test("упаковочный лист → спецификация (наш шаблон) → оплата → пакет для таможни", async () => {
+    const { readGrid } = await import("../lib/xlsx-fill.ts");
+    const s = await adminSession();
+    const supplier = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Pack Factory", fullName: "DEMO PACK FACTORY CO., LTD", legalAddress: "No. 1 Demo Road, Hebei, China" })).json().counterparty;
+    const contract = (await call(s, "POST", "/documents", { type: "supplier_contract", number: "DPF-01", date: "2026-03-10", counterpartyId: supplier.id })).json().document;
+    const inv = await call(s, "POST", "/documents", {
+      type: "supplier_invoice", number: "DPF-PI-7", date: "2026-10-09", counterpartyId: supplier.id, parentId: contract.id, currency: "CNY",
+      data: { incoterms: "EXW" },
+      items: [
+        { name: "Demo grass 20 mm, 2×25 м (52 рул.)", hsCode: "5703390009", quantity: 2600, unit: "м²", price: 10, amount: 26000 },
+        { name: "Demo grass 35 mm, 2×25 м (30 рул.)", hsCode: "5703390009", quantity: 1500, unit: "м²", price: 12, amount: 18000 },
+        { name: "Demo glue", hsCode: "3506910000", quantity: 20, unit: "шт", price: 300, amount: 6000 },
+      ],
+      newShipment: { title: "Упаковка демо", weightKg: 1, volumeM3: 1 },
+    });
+    assert.equal(inv.statusCode, 200, inv.body);
+    const no = inv.json().shipment.number as number;
+    const shipmentId = (await call(s, "GET", `/shipments/${no}`)).json().shipment.id as number;
+    await call(s, "PATCH", `/shipments/${no}`, { containerNo: "DEMU1000101" });
+
+    // Упаковочный лист: строки по товарам — места и веса уходят в спецификацию по кодам ТН ВЭД.
+    const lines = [
+      { name: "Demo grass 20 mm, 2×25 м", quantity: 2600, unit: "м²", packages: 52, packageType: "рул.", netKg: 4000, grossKg: 4050, volumeM3: 12 },
+      { name: "Demo grass 35 mm, 2×25 м (30 рул.)", quantity: 1500, unit: "м²", packages: 30, packageType: "рул.", netKg: 3000, grossKg: 3030, volumeM3: 9 },
+      { name: "Demo glue", quantity: 20, unit: "шт", packages: 2, packageType: "кор.", netKg: 400, grossKg: 420, volumeM3: 1 },
+    ];
+    const pl = await call(s, "POST", "/documents", { type: "packing_list", number: "DPF-PL-7", counterpartyId: supplier.id, shipmentId, data: { packing: { lines, totals: { packages: 84, netKg: 7400, grossKg: 7500, volumeM3: 22 } } } });
+    assert.equal(pl.statusCode, 200, pl.body);
+
+    let spec = (await call(s, "GET", `/shipments/${no}/spec`)).json();
+    assert.ok(spec.missing.includes("получатель (consignee)"));
+    assert.equal(spec.lines.length, 2, "две строки — по кодам ТН ВЭД");
+    const grass = spec.lines.find((l: { hsCode: string }) => l.hsCode === "5703390009");
+    assert.deepEqual([grass.qty, grass.packages, grass.netKg, grass.grossKg, grass.amount], [82, 82, 7000, 7080, 44000], "трава: рулоны вместо м², веса из листа");
+    const glue = spec.lines.find((l: { hsCode: string }) => l.hsCode === "3506910000");
+    assert.deepEqual([glue.qty, glue.packages, glue.price], [20, 2, 300], "клей — штучный: кол-во в штуках");
+    assert.equal(spec.fields.contract, "DPF-01 от 10.03.2026");
+
+    await call(s, "PUT", `/shipments/${no}/spec`, { consignee: "ООО «Демо-СВХ», ИНН 7700000000", station: "Демо-Станция", descriptions: { "5703390009": "Искусственный газон / artificial grass" } });
+    spec = (await call(s, "GET", `/shipments/${no}/spec`)).json();
+    assert.deepEqual(spec.missing, []);
+
+    const xlsx = await app.inject({ method: "POST", url: `${API}/shipments/${no}/spec.xlsx`, headers: { cookie: s.cookie, "x-csrf-token": s.csrf } });
+    assert.equal(xlsx.statusCode, 200, xlsx.body);
+    const grid = (await readGrid(xlsx.rawPayload))[0];
+    const at = (ref: string) => grid.cells.find((c) => c.ref === ref)?.text;
+    assert.equal(at("B2"), "DPF-01 от 10.03.2026");
+    assert.equal(at("F2"), "DPF-PI-7");
+    assert.equal(at("C4"), "ООО «Демо-СВХ», ИНН 7700000000");
+    assert.equal(at("C12"), "DEMU1000101");
+    assert.equal(at("H12"), "Демо-Станция");
+    assert.equal(at("B15"), "5703390009");
+    assert.equal(at("D15"), "Искусственный газон / artificial grass");
+    assert.equal(at("F15"), "82");
+    assert.equal(at("J15"), "44000");
+    assert.equal(at("I14"), "Price per pcs / Цена за шт, CNY");
+    assert.equal(at("E25"), "=SUM(E15:E24)", "итоги — формулами шаблона");
+    const specDoc = (await call(s, "GET", `/documents?type=carrier_spec&shipment=${shipmentId}`)).json().documents;
+    assert.equal(specDoc.length, 1, "спецификация сохранена в документах сделки");
+
+    // Платёжка отдельным документом не сохраняется — прикрепляется к инвойсу.
+    assert.equal((await call(s, "POST", "/documents", { type: "payment_order" })).statusCode, 400);
+    const invoiceId = inv.json().document.id as number;
+    assert.equal((await upload(s, `/documents/${invoiceId}/files?label=original`, "invoice.pdf", "%PDF-1.4 demo")).statusCode, 200);
+    assert.equal((await upload(s, `/documents/${invoiceId}/files?label=payment`, "swift.pdf", "%PDF-1.4 swift")).statusCode, 200);
+    const files = (await call(s, "GET", `/documents/${invoiceId}`)).json().files;
+    assert.ok(files.some((f: { label: string }) => f.label === "payment"));
+
+    // Пакет для таможни.
+    const pack = (await call(s, "GET", `/shipments/${no}/customs-pack`)).json();
+    assert.ok(pack.files >= 3, JSON.stringify(pack));
+    assert.ok(pack.missing.some((m: string) => /Упаковочный лист.*нет файла/.test(m)));
+    const zipRes = await app.inject({ method: "GET", url: `${API}/shipments/${no}/customs-pack.zip`, headers: { cookie: s.cookie } });
+    assert.equal(zipRes.statusCode, 200);
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(zipRes.rawPayload);
+    const names = Object.keys(zip.files);
+    assert.ok(names.some((n) => n.startsWith("2 Инвойсы поставщика/") && n.includes("оплата")), names.join("\n"));
+    assert.ok(names.some((n) => n.startsWith("4 Спецификация/")));
+    assert.match(await zip.file("Опись.txt")!.async("string"), /Не хватает/);
   });
 });

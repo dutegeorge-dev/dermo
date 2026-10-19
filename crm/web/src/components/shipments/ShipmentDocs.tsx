@@ -142,6 +142,8 @@ export function ShipmentDocs({ data }: { data: ShipmentResponse }) {
         <span className="flex-1" />
         <Link to={newDoc("supplier_invoice")} className="btn btn-sm"><IconPlus size={12} /> Инвойс поставщика</Link>
         <Link to={newDoc("contractor_invoice")} className="btn btn-sm"><IconPlus size={12} /> Счёт подрядчика</Link>
+        <Link to={newDoc("packing_list")} className="btn btn-sm"><IconPlus size={12} /> Упаковочный лист</Link>
+        <Link to={newDoc("payment_order")} className="btn btn-sm" title="Платёжка / SWIFT — прикрепится к оплаченному инвойсу"><IconPlus size={12} /> Оплата</Link>
         <Link to={newDoc("railway_bill")} className="btn btn-sm"><IconPlus size={12} /> СМГС / накладная</Link>
         <Link to={newDoc("customs_declaration")} className="btn btn-sm"><IconPlus size={12} /> ДТ</Link>
         <Link to={newDoc("other")} className="btn btn-sm"><IconPlus size={12} /> Документ</Link>

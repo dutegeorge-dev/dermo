@@ -32,6 +32,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import type { SpecParams } from "../../shared/cargo.ts";
 import type { ShipmentCalc } from "../../shared/customs.ts";
 
 /** Полнотекстовый индекс PostgreSQL. */
@@ -581,6 +582,8 @@ export const shipments = pgTable(
     flags: jsonb("flags").$type<Record<string, string>>().notNull().default({}),
     /** Расчёт для клиента: смета КП / поручения и таможенные платежи (shared/customs.ts). */
     calc: jsonb("calc").$type<ShipmentCalc>(),
+    /** Параметры спецификации для перевозчика: получатель, станция… (shared/cargo.ts). */
+    spec: jsonb("spec").$type<SpecParams>(),
     notes: text("notes").notNull().default(""),
     createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),

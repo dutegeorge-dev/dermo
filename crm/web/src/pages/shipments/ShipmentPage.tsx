@@ -16,6 +16,7 @@ import { ShipmentStage } from "../../components/shipments/common.tsx";
 import { FinanceBlock, ShipmentDocs } from "../../components/shipments/ShipmentDocs.tsx";
 import { ShipmentFields } from "../../components/shipments/ShipmentFields.tsx";
 import { History, Stepper } from "../../components/shipments/ShipmentParts.tsx";
+import { SpecBlock } from "../../components/shipments/SpecBlock.tsx";
 import { StageTimeline } from "../../components/shipments/StageTimeline.tsx";
 import { ConfirmDialog, ErrorBox, Spinner } from "../../components/ui.tsx";
 import { api } from "../../lib/api.ts";
@@ -214,6 +215,7 @@ export function ShipmentPage() {
           <GoodsBlock data={data} />
           <History shipment={s} events={data.events} />
           <CalcBlock data={data} />
+          <SpecBlock data={data} />
         </div>
         <div className="min-w-0">
           <ShipmentFields data={data} save={save} run={run} />

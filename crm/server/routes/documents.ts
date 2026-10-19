@@ -131,6 +131,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const type = String(input.type ?? "");
     const spec = docSpec(type);
     if (!spec) throw new HttpError(400, "Выберите тип документа");
+    if (type === "payment_order") throw new HttpError(400, "Документ об оплате прикрепляется к оплаченному инвойсу / счёту, отдельно не сохраняется");
 
     const result = await db.transaction(async (tx) => {
       const fields = await parseDocumentFields(tx, input, type);

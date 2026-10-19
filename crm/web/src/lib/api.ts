@@ -59,3 +59,31 @@ export const fileUrl = (id: string) => `${API}/files/${id}`;
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Что-то пошло не так";
 }
+
+/** Запрос, который отдаёт файл (Excel, ZIP): скачивает его под именем из Content-Disposition. */
+export async function apiDownload(path: string, options: { method?: Method; form?: FormData } = {}): Promise<void> {
+  const method = options.method ?? "GET";
+  const headers: Record<string, string> = {};
+  if (method !== "GET" && csrfToken) headers["x-csrf-token"] = csrfToken;
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}`, { method, headers, credentials: "same-origin", body: options.form });
+  } catch {
+    throw new ApiError(0, "Нет связи с сервером. Проверьте интернет и повторите.");
+  }
+  if (!res.ok) {
+    const data = res.headers.get("content-type")?.includes("application/json") ? await res.json().catch(() => null) : null;
+    throw new ApiError(res.status, (data as { error?: string } | null)?.error ?? `Ошибка ${res.status}`);
+  }
+  const cd = res.headers.get("content-disposition") ?? "";
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(cd)?.[1];
+  const name = star ? decodeURIComponent(star) : (/filename="([^"]+)"/.exec(cd)?.[1] ?? "file");
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

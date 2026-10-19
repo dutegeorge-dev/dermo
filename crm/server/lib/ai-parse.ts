@@ -13,6 +13,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { DocumentDraft } from "../../shared/ai.ts";
+import { type PackingData, type PackingLine, packingTotals } from "../../shared/cargo.ts";
 import { CONTRACTOR_TYPES, COST_CATEGORIES, CURRENCIES, DOC_TYPES, docSpec, type DocType } from "../../shared/documents.ts";
 import type { DbOrTx } from "../db/client.ts";
 import { counterparties, documents, shipmentParties } from "../db/schema.ts";
@@ -39,6 +40,9 @@ const TYPE_HINTS: Partial<Record<DocType, string>> = {
   customs_declaration: "декларация на товары (ДТ, ГТД)",
   conformity: "декларация / сертификат соответствия ЕАЭС",
   client_invoice: "счёт, который ТЛК БАРС выставила клиенту",
+  packing_list: "упаковочный лист (Packing List, 装箱单): места, нетто, брутто, объём",
+  carrier_spec: "спецификация «счёт-фактура — упаковочный лист — спецификация» для перевозчика",
+  payment_order: "платёжное поручение, SWIFT, подтверждение оплаты инвойса / счёта",
 };
 
 const nullable = (type: "string" | "number") => ({ type: [type, "null"] });
@@ -49,7 +53,7 @@ const DRAFT_SCHEMA = {
   additionalProperties: false,
   required: [
     "docType", "number", "date", "currency", "amount", "counterparty", "contractorType", "clientName", "contractNumber",
-    "relatedNumbers", "cargoTitle", "containerNo", "weightKg", "incoterms", "paymentTerms", "validUntil", "costCategory",
+    "relatedNumbers", "cargoTitle", "containerNo", "weightKg", "volumeM3", "incoterms", "paymentTerms", "validUntil", "costCategory",
     "items", "summary",
   ],
   properties: {
@@ -87,7 +91,7 @@ const DRAFT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "hsCode", "hsGuess", "quantity", "unit", "price", "amount"],
+        required: ["name", "hsCode", "hsGuess", "quantity", "unit", "price", "amount", "packages", "packageType", "netKg", "grossKg", "volumeM3"],
         properties: {
           name: { type: "string" },
           hsCode: nullable("string"),
@@ -96,9 +100,15 @@ const DRAFT_SCHEMA = {
           unit: nullable("string"),
           price: nullable("number"),
           amount: nullable("number"),
+          packages: nullable("number"),
+          packageType: nullable("string"),
+          netKg: nullable("number"),
+          grossKg: nullable("number"),
+          volumeM3: nullable("number"),
         },
       },
     },
+    volumeM3: nullable("number"),
     summary: { type: "string" },
   },
 } as const;
@@ -121,7 +131,21 @@ export type ModelDraft = {
   paymentTerms: string | null;
   validUntil: string | null;
   costCategory: string | null;
-  items: { name: string; hsCode: string | null; hsGuess?: string | null; quantity: number | null; unit: string | null; price: number | null; amount: number | null }[];
+  volumeM3?: number | null;
+  items: {
+    name: string;
+    hsCode: string | null;
+    hsGuess?: string | null;
+    quantity: number | null;
+    unit: string | null;
+    price: number | null;
+    amount: number | null;
+    packages?: number | null;
+    packageType?: string | null;
+    netKg?: number | null;
+    grossKg?: number | null;
+    volumeM3?: number | null;
+  }[];
   summary: string;
 };
 
@@ -137,6 +161,8 @@ docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k
 - items — для инвойсов поставщика, спецификаций, сертификатов: каждая строка отдельно. name коротко: товар + артикул + размер («Искусственная трава 20 мм, 2×25 м (52 рул.)»), общие характеристики не повторяй; число рулонов/мест — в скобках. quantity — в единице цены (м², кг, шт); unit по-русски (м², м, шт, кг, рул.); price — цена за единицу, amount — сумма строки. Если цена за м² написана один раз на несколько строк — она общая для них; м² = ширина × длина рулона × число рулонов (проверь: quantity × price = amount). Доп. расходы (упаковка) — отдельной строкой (hsGuess null). hsCode — код, если он напечатан в документе; hsGuess — твой код ТН ВЭД ЕАЭС для товара, как можно точнее (минимум 4 цифры, например 5703, 391810). Для счетов подрядчиков items пустой.
 - Числа: «37 456,95», «7503,30» — десятичная запятая. ￥, RMB, 元 — CNY. Даты — YYYY-MM-DD; «15/10/2026» — день/месяц/год.
 - amount — итог документа (для ДТ — таможенные платежи в рублях). containerNo — 4 буквы + 7 цифр. weightKg — только если в документе прямо написан общий вес брутто (не считай сам).
+- Упаковочный лист (packing_list): items — его строки: name, quantity и unit (как в документе: м², шт…), packages — число мест, packageType — вид мест по-русски («рул.», «кор.», «палл.»), netKg, grossKg, volumeM3 — по строке; итоговые weightKg (брутто) и volumeM3 — из строки «итого». У других документов эти поля строк — null.
+- Документ об оплате (payment_order: платёжное поручение, SWIFT MT103, заявление на перевод, выписка с платежом): counterparty — получатель платежа, amount и currency — сумма платежа, date — дата платежа, number — номер платёжки, relatedNumbers — номера инвойсов / счетов / договоров из назначения платежа.
 - incoterms кратко («EXW Xinle»); paymentTerms кратко по-русски («30% депозит, 70% до погрузки»). validUntil — срок действия. costCategory — для счетов подрядчиков (transport, broker, terminal…).
 - cargoTitle — короткое название груза по-русски («Искусственная трава 20 и 35 мм»).
 - summary — одно короткое предложение по-русски (до 25 слов): что за документ, от кого, на что, сумма.
@@ -392,6 +418,51 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
     if (empty) warnings.push(`У ${empty} поз. нет ни суммы, ни цены с количеством — дополните`);
   }
 
+  // Упаковочный лист: строки и итоги (места, нетто, брутто, объём) — в data.packing документа.
+  let packing: PackingData | null = null;
+  if (type === "packing_list") {
+    const lines: PackingLine[] = (Array.isArray(raw.items) ? raw.items : [])
+      .filter((i) => typeof i?.name === "string" && i.name.trim())
+      .slice(0, 200)
+      .map((i) => ({
+        name: i.name.trim().slice(0, 500),
+        quantity: num(i.quantity),
+        unit: text(i.unit, 30),
+        packages: num(i.packages),
+        packageType: text(i.packageType, 30),
+        netKg: num(i.netKg),
+        grossKg: num(i.grossKg),
+        volumeM3: num(i.volumeM3),
+      }));
+    const totals = packingTotals(lines);
+    packing = { lines, totals: { ...totals, grossKg: totals.grossKg ?? num(raw.weightKg), volumeM3: totals.volumeM3 ?? num(raw.volumeM3) } };
+  }
+
+  // Документ об оплате: какой инвойс / счёт оплачен — по номеру из назначения платежа, иначе по сумме и получателю.
+  let payFor: DocumentDraft["payFor"] = null;
+  if (type === "payment_order") {
+    const payee = matchCounterparty(cps, null, rc);
+    const payable = await tx
+      .select({ id: documents.id, type: documents.type, number: documents.number, date: documents.date, amount: sql<number | null>`${documents.amount}::float8`, currency: documents.currency, counterpartyId: documents.counterpartyId, paymentStatus: documents.paymentStatus })
+      .from(documents)
+      .where(inArray(documents.type, ["supplier_invoice", "contractor_invoice", "client_invoice", "customs_declaration"]))
+      .orderBy(sql`${documents.date} desc nulls last`)
+      .limit(2000);
+    const refs = new Set([contractNumber, ...(Array.isArray(raw.relatedNumbers) ? raw.relatedNumbers : [])].map((n) => normNo(n)).filter((n) => n.length >= 3));
+    const payAmount = num(raw.amount);
+    let found = payable.filter((d) => d.number && refs.has(normNo(d.number)));
+    if (found.length > 1 && payee) found = found.filter((d) => d.counterpartyId === payee.id);
+    if (!found.length && payAmount) {
+      found = payable.filter(
+        (d) => d.paymentStatus !== "paid" && d.amount !== null && Math.abs(d.amount - payAmount) <= Math.max(1, d.amount * 0.005) && (!raw.currency || d.currency === raw.currency) && (!payee || d.counterpartyId === payee.id),
+      );
+    }
+    if (found.length === 1) {
+      const d = found[0];
+      payFor = { id: d.id, label: `${DOC_TYPES[d.type as DocType]?.label ?? d.type} № ${d.number ?? "б/н"}${d.date ? ` от ${d.date.split("-").reverse().join(".")}` : ""}`, amount: d.amount, currency: d.currency, paymentStatus: d.paymentStatus };
+    } else warnings.push(found.length ? "Подходят несколько счетов — выберите, к какому прикрепить" : "Не нашли, какой инвойс / счёт оплачен — выберите вручную");
+  }
+
   return {
     type,
     number,
@@ -407,7 +478,10 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
     shipmentReason,
     cargoTitle: text(raw.cargoTitle, 300),
     containerNo: container,
-    weightKg: num(raw.weightKg),
+    weightKg: packing?.totals.grossKg ?? num(raw.weightKg),
+    volumeM3: packing?.totals.volumeM3 ?? num(raw.volumeM3),
+    packing,
+    payFor,
     incoterms: text(raw.incoterms, 200),
     paymentTerms: text(raw.paymentTerms, 300),
     validUntil: isDate(raw.validUntil) ? raw.validUntil : null,
