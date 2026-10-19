@@ -74,3 +74,6 @@ export const IconUpload = make(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m1
 export const IconContainer = make(["M2 7h20v12H2z", "M6 7v12", "M10 7v12", "M14 7v12", "M18 7v12", "M2 4h20"], "IconContainer");
 export const IconCalendar = make(["M3 5h18v16H3z", "M3 10h18", "M8 3v4", "M16 3v4"], "IconCalendar");
 export const IconChevronLeft = make(["m15 18-6-6 6-6"], "IconChevronLeft");
+export const IconSparkles = make(["M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8Z", "M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z"], "IconSparkles");
+export const IconChat = make(["M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"], "IconChat");
+export const IconSend = make(["M22 2 11 13", "M22 2 15 22l-4-9-9-4Z"], "IconSend");

@@ -6,6 +6,7 @@ import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { BASE } from "../lib/api.ts";
 import { useAuth } from "../lib/auth.tsx";
 import { useTheme } from "../lib/theme.ts";
+import { AiChat } from "./AiChat.tsx";
 import { GlobalSearch } from "./GlobalSearch.tsx";
 import {
   IconBoard,
@@ -168,7 +169,9 @@ export function Layout() {
             <IconMenu size={18} />
           </button>
           <GlobalSearch />
-          <Link to="/documents/new" className="btn ml-auto shrink-0" title="Загрузить документ: инвойс, договор, накладную…">
+          <span className="ml-auto" />
+          <AiChat />
+          <Link to="/documents/new" className="btn shrink-0" title="Загрузить документ: инвойс, договор, накладную…">
             <IconUpload size={14} />
             <span className="hidden sm:inline">Загрузить документ</span>
           </Link>

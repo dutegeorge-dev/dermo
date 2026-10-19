@@ -22,6 +22,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/multipart": "^10.1.2",
     "@fastify/static": "^10.1.5",
@@ -29,6 +30,7 @@
     "docx-templates": "^4.15.0",
     "drizzle-orm": "^0.45.3",
     "fastify": "^5.12.5",
+    "jszip": "^3.10.2",
     "pg": "^8.23.1",
     "tsx": "^4.23.15"
   },

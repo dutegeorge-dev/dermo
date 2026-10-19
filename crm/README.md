@@ -140,6 +140,7 @@ nano crm/.env
 #   CRM_UPLOAD_DIR=/var/lib/bars-crm/uploads
 #   CRM_COOKIE_SECURE=true
 #   CRM_TRUST_PROXY=true
+#   ANTHROPIC_BASE_URL=…, ANTHROPIC_AUTH_TOKEN=…   # ИИ (необязательно)
 sudo chown www-data:www-data crm/.env && sudo chmod 600 crm/.env
 
 # 4. Сборка, миграции, первый админ, данные
@@ -185,8 +186,8 @@ location ^~ /crm/ {
     proxy_set_header X-Forwarded-Proto $scheme;
     client_max_body_size 30m;
     proxy_connect_timeout 5s;
-    proxy_send_timeout   120s;
-    proxy_read_timeout   120s;
+    proxy_send_timeout   300s;
+    proxy_read_timeout   300s;   # ИИ-разбор документа и чат отвечают до 1–2 минут
     proxy_hide_header X-Robots-Tag;
     add_header X-Robots-Tag "noindex, nofollow" always;
 }
@@ -371,6 +372,9 @@ sudo systemctl start bars-crm
 | `GET/PUT /settings/company`, `GET/POST/DELETE /settings/templates/commission_order[.docx]` | Реквизиты компании; шаблон поручения (admin) |
 | `GET /search?q=` | Глобальный поиск: сделки, клиенты, страницы, справочник; сниппеты с `<mark>` |
 | `GET /audit?before=&userId=&entityType=` | Журнал действий (admin) |
+| `GET /ai/status` | Подключён ли ИИ (`{enabled}`) |
+| `POST /ai/parse-document` (multipart `file`) | ИИ-разбор файла → `{draft}` черновик формы документа (ничего не сохраняет) |
+| `POST /ai/chat` `{messages, page}` | ИИ-чат по данным CRM (только чтение) → `{reply, tools}` |
 
 ## Справочник для звонков
 
@@ -447,16 +451,31 @@ sudo systemctl start bars-crm
 
 Демо: `npm run crm:seed -- --demo` добавляет 12 сделок на всех этапах с датами вокруг сегодняшнего дня. После обновления со старым демо: сначала `npm run crm:seed -- --remove-demo`, затем `--demo`.
 
-### Подключение ИИ-разбора документов
+### ИИ: разбор документов и чат
 
-Экран документа уже устроен как «черновик → проверка человеком → сохранение», ИИ нужно только заполнить черновик:
+Модель — Claude (`@anthropic-ai/sdk`, по умолчанию `claude-opus-5-5`, с серверным запасным вариантом `fallbacks: "default"`).
+Ключ — в `crm/.env`: `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (шлюз) или `ANTHROPIC_API_KEY` (напрямую). Без ключа
+всё ИИ просто скрыто (`GET /ai/status` → `{enabled:false}`). Переменные окружения процесса важнее `.env` — если в systemd
+задан другой `ANTHROPIC_BASE_URL`, будет использован он.
 
-1. Эндпоинт `POST /crm/api/documents/parse` (multipart, файл) отправляет PDF/картинку модели (например, Claude с PDF на входе и инструментом со строгой JSON-схемой) и возвращает черновик в формате тела `POST /documents`:
-   `{ type, number, date, currency, counterpartyName, data: { incoterms, paymentTerms }, items: [{ name, quantity, unit, price, amount }] }`.
-2. В `DocumentEditor` после выбора файла — кнопка «Распознать»: ответ раскладывается в те же поля, что заполняются руками (`setNumber`, `setItems`…); контрагент ищется по названию, если нет — предлагается новый.
-3. Excel-инвойсы можно разбирать и без ИИ — та же логика, что у вставки (`web/src/components/docs/paste.ts`).
+**Разбор документа** (`server/lib/ai-parse.ts`). В «Новом документе» бросили файл → `POST /ai/parse-document` (multipart):
+модель получает файл (PDF и фото — как есть; `.docx`/`.xlsx` — текстом, `server/lib/file-text.ts`) и справочник CRM
+(контрагенты, договоры, сделки в работе с их документами, контейнерами и товарами) и отвечает строго по JSON-схеме
+(structured outputs): тип документа, контрагент (id из справочника или новый с реквизитами), номер, дата, валюта, сумма,
+позиции, номер договора, сделка (по контейнеру, номерам инвойсов, поставщику, товарам), контейнер и вес, Incoterms,
+условия оплаты, срок действия, статья расходов, название груза, краткое описание и что проверить. `resolveDraft`
+сверяет всё с базой (несуществующие id отбрасываются, договор ищется по номеру без учёта пробелов и знаков, даты и числа
+проверяются) → черновик `DocumentDraft` (`shared/ai.ts`). Форма заполняется сама; **сохраняет человек**. Если в документе
+есть номер контейнера / вес, а в сделке их нет (или контейнер другой) — галочка «Записать в сделку». Ничего не
+сохраняется в БД до нажатия «Сохранить»; файл документа сохраняется как обычно. Разбор — 20–60 с.
 
-Перед подключением решите, можно ли отправлять документы во внешний сервис (в инвойсах и договорах — данные клиентов).
+**Чат** (`server/lib/ai-chat.ts`, `web/src/components/AiChat.tsx`): кнопка «Спросить ИИ» в шапке. `POST /ai/chat`
+`{messages:[{role,content}], page}` → `{reply, tools}`. Модель **только читает**: инструменты — это GET-запросы к нашему же
+API от имени пользователя (`app.inject` с его cookie): поиск, сделки и карточка сделки, календарь, документы, контрагенты,
+лиды, товары, база знаний, справочник для звонков. `page` — текущая страница («эта сделка»). История — в `sessionStorage`
+вкладки, на сервер уходит только текст. Ответ — markdown со ссылками на карточки CRM.
+
+Данные документов и CRM уходят во внешний сервис (шлюз → Anthropic) — так решил владелец.
 
 ### CRM: что дальше
 

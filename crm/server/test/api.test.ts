@@ -21,6 +21,9 @@ process.env.DATABASE_URL = testUrl;
 process.env.CRM_UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "crm-test-"));
 process.env.CRM_COOKIE_SECURE = "false";
 process.env.CRM_TRUST_PROXY = "false";
+// Тесты никогда не ходят в настоящий ИИ (crm/.env может содержать ключ).
+process.env.ANTHROPIC_API_KEY = "";
+process.env.ANTHROPIC_AUTH_TOKEN = "";
 
 const { config, CRM_ROOT } = await import("../config.ts");
 const { db, pool } = await import("../db/client.ts");
@@ -601,5 +604,106 @@ describe("Сделки (отгрузки) и календарь", () => {
     assert.equal(ours((await call(s, "GET", "/calendar")).json().events).length, 0);
     assert.equal(ours((await call(s, "GET", "/shipments")).json().shipments).length, 0);
     assert.equal(ours((await call(s, "GET", "/shipments?status=closed")).json().shipments).length, 1);
+  });
+});
+
+describe("ИИ: разбор документов и чат", () => {
+  // Один вход на весь блок — иначе упрёмся в лимит попыток входа с одного IP.
+  let session: Session | null = null;
+  const aiSession = async () => (session ??= await login("admin", "adminpass1"));
+
+  test("без ключа ИИ выключен", async () => {
+    const s = await aiSession();
+    assert.deepEqual((await call(s, "GET", "/ai/status")).json(), { enabled: false });
+    assert.equal((await call(s, "POST", "/ai/chat", { messages: [{ role: "user", content: "привет" }] })).statusCode, 503);
+  });
+
+  test("черновик сверяется с базой: контрагент, договор, сделка, числа и даты", async () => {
+    const { resolveDraft } = await import("../lib/ai-parse.ts");
+    const s = await aiSession();
+    const supplier = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Turf Factory Co., Ltd" })).json().counterparty;
+    const contract = (await call(s, "POST", "/documents", { type: "supplier_contract", counterpartyId: supplier.id, number: "DTF-07/26" })).json().document;
+    const sh = (await call(s, "POST", "/shipments", { title: "Трава демо", supplierId: supplier.id })).json().shipment;
+
+    const base = {
+      docType: "supplier_invoice",
+      number: " PI-DEMO-1 ",
+      date: "2026-13-45",
+      currency: "CNY",
+      amount: 1000,
+      counterparty: { matchId: 999999, name: "demo turf factory co., ltd", fullName: null, inn: null, regNumber: null, country: null, address: null },
+      contractorType: null,
+      clientMatchId: null,
+      contractNumber: "DTF 07-26",
+      shipmentMatchNumber: sh.number,
+      shipmentReason: "тот же поставщик",
+      cargoTitle: "Трава",
+      containerNo: "demu 100009-9",
+      weightKg: null,
+      incoterms: "EXW",
+      paymentTerms: null,
+      validUntil: null,
+      costCategory: "nonsense",
+      items: [
+        { name: "Grass 20mm", hsCode: "5703 30", quantity: 100, unit: "м²", price: 10, amount: 1000 },
+        { name: "  ", hsCode: null, quantity: null, unit: null, price: null, amount: null },
+      ],
+      summary: "Инвойс",
+      warnings: [],
+    };
+    const d = await resolveDraft(db, base);
+    assert.equal(d.type, "supplier_invoice");
+    assert.equal(d.number, "PI-DEMO-1");
+    assert.equal(d.date, null, "кривая дата отброшена");
+    assert.deepEqual(d.counterparty, { id: supplier.id, name: "Demo Turf Factory Co., Ltd" }, "найден по названию, несуществующий id отброшен");
+    assert.equal(d.parentId, contract.id, "договор найден по номеру без учёта пробелов и знаков");
+    assert.equal(d.shipment?.number, sh.number);
+    assert.equal(d.containerNo, "DEMU1000099");
+    assert.equal(d.costCategory, null);
+    assert.equal(d.items.length, 1);
+    assert.equal(d.items[0].hsCode, "570330");
+
+    const unknown = await resolveDraft(db, {
+      ...base,
+      docType: "contractor_invoice",
+      counterparty: { ...base.counterparty, matchId: null, name: "Demo Rail Forwarding", country: "Китай" },
+      contractorType: "carrier_cn",
+      shipmentMatchNumber: 987654,
+      items: base.items,
+    });
+    assert.deepEqual(unknown.counterparty, { id: null, name: "Demo Rail Forwarding" });
+    assert.deepEqual(unknown.newCounterparty, { country: "Китай", kind: "foreign", contractorType: "carrier_cn" });
+    assert.equal(unknown.shipment, null, "несуществующая сделка отброшена");
+    assert.equal(unknown.items.length, 0, "у счёта подрядчика позиций нет");
+    assert.equal((await resolveDraft(db, { ...base, docType: "bogus" })).type, "other");
+  });
+
+  test("инструменты чата читают API от имени пользователя", async () => {
+    const { runTool } = await import("../lib/ai-chat.ts");
+    const s = await aiSession();
+    const req = { headers: { cookie: s.cookie } } as unknown as Parameters<typeof runTool>[1];
+    const list = JSON.parse(await runTool(app, req, "list_shipments", { q: "Трава демо" }));
+    assert.equal(list.shipments.length, 1);
+    assert.equal(list.shipments[0].title, "Трава демо");
+    const card = JSON.parse(await runTool(app, req, "get_shipment", { number: list.shipments[0].number }));
+    assert.equal(card.shipment.title, "Трава демо");
+    await assert.rejects(runTool(app, req, "get_shipment", { number: 987654 }), /не найден/i);
+    await assert.rejects(runTool(app, { headers: {} } as typeof req, "list_shipments", {}), /вход/i);
+  });
+
+  test("текст из Word и Excel", async () => {
+    const { docxText, xlsxText } = await import("../lib/file-text.ts");
+    const JSZip = (await import("jszip")).default;
+    const docx = new JSZip();
+    docx.file(
+      "word/document.xml",
+      `<w:document><w:body><w:p><w:r><w:t>Контракт № DTF-07/26</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Grass</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>100 &amp; 5</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>`,
+    );
+    assert.equal(await docxText(await docx.generateAsync({ type: "nodebuffer" })), "Контракт № DTF-07/26\nGrass\t100 & 5");
+    const xlsx = new JSZip();
+    xlsx.file("xl/sharedStrings.xml", `<sst><si><t>Товар</t></si><si><t>Трава</t></si></sst>`);
+    xlsx.file("xl/workbook.xml", `<workbook><sheets><sheet name="PI" sheetId="1"/></sheets></workbook>`);
+    xlsx.file("xl/worksheets/sheet1.xml", `<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1"><v>12.5</v></c></row><row r="2"><c r="B2" t="s"><v>1</v></c></row></sheetData></worksheet>`);
+    assert.equal(await xlsxText(await xlsx.generateAsync({ type: "nodebuffer" })), "=== Лист PI\nТовар\t\t12.5\n\tТрава");
   });
 });

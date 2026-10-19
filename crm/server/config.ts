@@ -76,6 +76,13 @@ export const config = {
   trustProxy: envBool("CRM_TRUST_PROXY", true),
   /** Собранный фронтенд (vite build). */
   webDist: path.join(CRM_ROOT, "web", "dist"),
+  /** ИИ (Claude): разбор документов и чат. Без ключа функции просто выключены. */
+  ai: {
+    baseUrl: process.env.ANTHROPIC_BASE_URL?.trim() || undefined,
+    apiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
+    authToken: process.env.ANTHROPIC_AUTH_TOKEN?.trim() || undefined,
+    model: process.env.CRM_AI_MODEL?.trim() || "claude-opus-5-5",
+  },
   loginLimit: {
     /** Неудачных попыток на один логин за окно. */
     perLogin: envNumber("CRM_LOGIN_LIMIT_PER_LOGIN", 5),

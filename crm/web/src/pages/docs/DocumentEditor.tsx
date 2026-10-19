@@ -24,6 +24,7 @@ import {
   PAYMENT_STATUSES,
   SCHEMES,
 } from "../../../../shared/documents.ts";
+import type { DocumentDraft } from "../../../../shared/ai.ts";
 import { CounterpartyPicker, ensureCounterparty, type Picked } from "../../components/crm/CounterpartyPicker.tsx";
 import { type PickedShipment, ShipmentPicker } from "../../components/shipments/ShipmentPicker.tsx";
 import { docTitle } from "../../components/docs/common.tsx";
@@ -31,8 +32,10 @@ import { CostsEditor } from "../../components/docs/CostsEditor.tsx";
 import { FileDrop, FilePreview } from "../../components/docs/FilePane.tsx";
 import { emptyItem, itemAmount, ItemsEditor } from "../../components/docs/ItemsEditor.tsx";
 import { detectCurrency, parseNumber } from "../../components/docs/paste.ts";
+import { IconSparkles } from "../../components/Icons.tsx";
 import { ErrorBox, Spinner } from "../../components/ui.tsx";
-import { api, fileUrl } from "../../lib/api.ts";
+import { useAiEnabled } from "../../lib/ai.ts";
+import { api, errorMessage, fileUrl } from "../../lib/api.ts";
 import type { Counterparty, DocItem, DocumentFull, DocumentRow, ShipmentResponse } from "../../lib/types.ts";
 
 type Initial = {
@@ -146,6 +149,11 @@ function EditorForm({ initial }: { initial: Initial }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const aiEnabled = useAiEnabled();
+  const [ai, setAi] = useState<{ status: "idle" | "busy" | "done" | "error"; draft?: DocumentDraft; error?: string }>({ status: "idle" });
+  // Реквизиты нового контрагента, которые ИИ прочитал из документа (имя → поля).
+  const [aiCounterparty, setAiCounterparty] = useState<{ name: string; extra: Record<string, string> } | null>(null);
+  const [applyToDeal, setApplyToDeal] = useState(true);
 
   // Договоры, к которым можно привязать документ.
   const parentOwner = spec.party === "client" ? party?.id : party?.id;
@@ -168,12 +176,79 @@ function EditorForm({ initial }: { initial: Initial }) {
   const itemsTotal = items.reduce((s, i) => s + (itemAmount(i) ?? 0), 0);
   const usedItems = spec.items ? items.filter((i) => i.name.trim()) : [];
 
+  /** Черновик ИИ → поля формы. Человек проверяет и сохраняет. */
+  const applyDraft = (d: DocumentDraft) => {
+    const dSpec = docSpec(d.type)!;
+    setType(d.type);
+    setParty(d.counterparty);
+    setAiCounterparty(d.counterparty && d.counterparty.id === null && d.newCounterparty ? { name: d.counterparty.name, extra: d.newCounterparty } : null);
+    if (d.client && dSpec.party !== "client") setClient(d.client);
+    if (d.number) setNumber(d.number);
+    if (d.date) setDate(d.date);
+    if (d.currency) setCurrency(d.currency);
+    if (d.amount != null) setAmount(String(d.amount));
+    // Договор: найденный ИИ; сменилась сторона — прежний не подходит (подберётся первый договор новой стороны).
+    if (d.parentId) setParentId(d.parentId);
+    else if ((d.counterparty?.id ?? null) !== (party?.id ?? null)) setParentId(null);
+    if (d.incoterms) setIncoterms(d.incoterms);
+    if (d.paymentTerms) setPaymentTerms(d.paymentTerms);
+    if (d.validUntil) setValidUntil(d.validUntil);
+    if (d.costCategory) setCostCategory(d.costCategory);
+    if (dSpec.items) setItems(d.items.length ? d.items : [emptyItem()]);
+    // Сделка: пришли из карточки сделки — остаёмся в ней; иначе — что нашёл ИИ, или новая (для инвойса поставщика).
+    if (!initial.deal) {
+      if (d.shipment) {
+        setDeal({ id: d.shipment.id, number: d.shipment.number, title: d.shipment.title });
+        setNewDeal(false);
+      } else {
+        setDeal(null);
+        setNewDeal(d.type === "supplier_invoice");
+      }
+    }
+    if (d.cargoTitle) setNewTitle(d.cargoTitle);
+  };
+
+  const recognize = async (f: File) => {
+    setAi({ status: "busy" });
+    try {
+      const form = new FormData();
+      form.append("file", f);
+      const { draft } = await api<{ draft: DocumentDraft }>("/ai/parse-document", { method: "POST", form });
+      applyDraft(draft);
+      setAi({ status: "done", draft });
+    } catch (err) {
+      setAi({ status: "error", error: errorMessage(err) });
+    }
+  };
+
+  const onFile = (f: File | null) => {
+    setFile(f);
+    if (f && aiEnabled && !ex) void recognize(f);
+    if (!f) setAi({ status: "idle" });
+  };
+
+  // ИИ нашёл в документе номер контейнера / вес — предложим записать их в сделку.
+  const draft = ai.draft;
+  const dealInfo = useQuery({
+    queryKey: ["shipment", deal?.number],
+    queryFn: () => api<ShipmentResponse>(`/shipments/${deal!.number}`),
+    enabled: !!deal && !newDeal && !!(draft?.containerNo || draft?.weightKg),
+  });
+  const dealNow = dealInfo.data?.shipment;
+  const dealPatch: Record<string, unknown> = {};
+  if (dealNow && draft && !newDeal) {
+    if (draft.containerNo && draft.containerNo !== dealNow.containerNo) dealPatch.containerNo = draft.containerNo;
+    if (draft.weightKg && !dealNow.weightKg) dealPatch.weightKg = draft.weightKg;
+  }
+  const hasDealPatch = Object.keys(dealPatch).length > 0;
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const counterpartyId = spec.party ? await ensureCounterparty(party, spec.party) : null;
+      const cpExtra = party && party.id === null && aiCounterparty?.name === party.name ? aiCounterparty.extra : {};
+      const counterpartyId = spec.party ? await ensureCounterparty(party, spec.party, cpExtra) : null;
       const clientId = await ensureCounterparty(client, "client");
       const data: Record<string, unknown> = { ...data0 };
       if (type === "supplier_invoice") Object.assign(data, { incoterms, paymentTerms });
@@ -218,6 +293,9 @@ function EditorForm({ initial }: { initial: Initial }) {
         form.append("file", file);
         await api(`/documents/${docId}/files?label=${fileLabel}`, { method: "POST", form });
       }
+      if (applyToDeal && hasDealPatch && deal && !newDeal) {
+        await api(`/shipments/${deal.number}`, { method: "PATCH", body: dealPatch });
+      }
       await queryClient.invalidateQueries();
       navigate(created ? `/shipments/${created}` : deal && !ex ? `/shipments/${deal.number}` : `/documents/${docId}`);
     } catch (err) {
@@ -242,10 +320,10 @@ function EditorForm({ initial }: { initial: Initial }) {
           {ex && !file && existingFile ? (
             <div className="space-y-2">
               <FilePreview url={fileUrl(existingFile.id)} mime={existingFile.mime} name={existingFile.filename} />
-              <FileDrop file={null} onFile={setFile} />
+              <FileDrop file={null} onFile={onFile} />
             </div>
           ) : (
-            <FileDrop file={file} onFile={setFile} />
+            <FileDrop file={file} onFile={onFile} />
           )}
           {file && (
             <label className="mt-2 flex items-center gap-2 text-sm">
@@ -256,6 +334,61 @@ function EditorForm({ initial }: { initial: Initial }) {
         </div>
 
         <div className="min-w-0 space-y-5">
+          {aiEnabled && !file && ai.status === "idle" && !ex && (
+            <p className="flex items-center gap-2 rounded-md bg-accent-soft px-3 py-2 text-sm text-accent dark:bg-accent/10 dark:text-accent-bright">
+              <IconSparkles className="shrink-0" />
+              Загрузите файл — ИИ сам определит тип, стороны, суммы, позиции и сделку. Вам останется проверить и сохранить.
+            </p>
+          )}
+          {aiEnabled && file && ai.status === "idle" && (
+            <button type="button" className="btn" onClick={() => void recognize(file)}>
+              <IconSparkles /> Распознать ИИ
+            </button>
+          )}
+          {ai.status === "busy" && (
+            <div className="flex items-center gap-3 rounded-md border border-accent/30 bg-accent-soft px-3 py-2.5 text-sm dark:bg-accent/10">
+              <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+              <span>ИИ читает документ… обычно 20–60 секунд. Поля заполнятся сами.</span>
+            </div>
+          )}
+          {ai.status === "error" && file && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">
+              <span className="mr-auto">Не удалось распознать: {ai.error}</span>
+              <button type="button" className="btn btn-sm" onClick={() => void recognize(file)}>Повторить</button>
+            </div>
+          )}
+          {ai.status === "done" && draft && (
+            <div className="space-y-1.5 rounded-md border border-green-300 bg-green-50 px-3 py-2.5 text-sm dark:border-green-900 dark:bg-green-950/30">
+              <p className="flex items-start gap-2 font-medium text-green-900 dark:text-green-300">
+                <IconSparkles className="mt-0.5 shrink-0" />
+                Заполнено ИИ — проверьте поля и сохраните.
+                {file && <button type="button" className="ml-auto shrink-0 text-xs font-normal underline" onClick={() => void recognize(file)}>Распознать заново</button>}
+              </p>
+              {draft.summary && <p>{draft.summary}</p>}
+              {draft.shipment && !initial.deal && <p>Сделка: <b>№ {draft.shipment.number} «{draft.shipment.title}»</b>{draft.shipmentReason ? ` — ${draft.shipmentReason}` : ""}</p>}
+              {!draft.shipment && !spec.contract && draft.shipmentReason && <p className="muted">Сделка: {draft.shipmentReason}</p>}
+              {initial.deal && draft.shipment && draft.shipment.id !== initial.deal.id && (
+                <p className="text-amber-800 dark:text-amber-400">ИИ считает, что документ относится к сделке № {draft.shipment.number} «{draft.shipment.title}», а не к № {initial.deal.number}.</p>
+              )}
+              {draft.contractNumber && !draft.parentId && spec.parentTypes && <p className="muted">Договор № {draft.contractNumber} в CRM не найден.</p>}
+              {draft.warnings.length > 0 && (
+                <ul className="list-disc pl-5 text-amber-800 dark:text-amber-400">
+                  {draft.warnings.map((w) => <li key={w}>{w}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+          {hasDealPatch && deal && (
+            <label className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm dark:bg-neutral-800/40">
+              <input type="checkbox" className="mt-0.5" checked={applyToDeal} onChange={(e) => setApplyToDeal(e.target.checked)} />
+              <span>
+                Записать в сделку № {deal.number}:{" "}
+                {"containerNo" in dealPatch && <>контейнер <b>{String(dealPatch.containerNo)}</b>{dealNow?.containerNo ? ` (сейчас ${dealNow.containerNo})` : ""}</>}
+                {"containerNo" in dealPatch && "weightKg" in dealPatch && ", "}
+                {"weightKg" in dealPatch && <>вес <b>{Number(dealPatch.weightKg).toLocaleString("ru-RU")} кг</b></>}
+              </span>
+            </label>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Тип документа" wide>
               <select className="input" value={type} disabled={!!ex} onChange={(e) => setType(e.target.value as DocType)}>
@@ -275,7 +408,8 @@ function EditorForm({ initial }: { initial: Initial }) {
                 <CounterpartyPicker role={spec.party} value={party} onChange={setParty} />
                 {party && party.id === null && (
                   <span className="mt-1 block text-xs muted">
-                    Будет создан новый {COUNTERPARTY_ROLES[spec.party].one.toLowerCase()} — реквизиты заполните потом в его карточке.
+                    Будет создан новый {COUNTERPARTY_ROLES[spec.party].one.toLowerCase()} —{" "}
+                    {aiCounterparty?.name === party.name ? "реквизиты из документа (страна, адрес) запишутся сами, остальное — в его карточке." : "реквизиты заполните потом в его карточке."}
                     {spec.party === "contractor" && ` Вид по умолчанию: ${CONTRACTOR_TYPES.carrier_cn}.`}
                   </span>
                 )}

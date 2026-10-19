@@ -14,6 +14,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { config } from "./config.ts";
 import { HttpError } from "./lib/http.ts";
 import { loadSession, safeEqual } from "./lib/session.ts";
+import { aiRoutes } from "./routes/ai.ts";
 import { auditRoutes } from "./routes/audit.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { callRoutes } from "./routes/calls.ts";
@@ -135,6 +136,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
       await api.register(productRoutes);
       await api.register(settingsRoutes);
       await api.register(shipmentRoutes);
+      await api.register(aiRoutes, { prefix: "/ai" });
     },
     { prefix: API_PREFIX },
   );
