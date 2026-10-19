@@ -24,6 +24,7 @@ process.env.CRM_TRUST_PROXY = "false";
 // Тесты никогда не ходят в настоящий ИИ (crm/.env может содержать ключ).
 process.env.ANTHROPIC_API_KEY = "";
 process.env.ANTHROPIC_AUTH_TOKEN = "";
+process.env.CRM_RATES_FIXED = JSON.stringify({ USD: 80, EUR: 90, CNY: 11 });
 
 const { config, CRM_ROOT } = await import("../config.ts");
 const { db, pool } = await import("../db/client.ts");
@@ -48,6 +49,10 @@ async function login(loginName: string, password: string): Promise<Session> {
   assert.equal(cookie.path, "/crm");
   return { cookie: `${cookie.name}=${cookie.value}`, csrf: res.json().csrfToken };
 }
+
+// Один вход админа на поздние блоки — иначе упрёмся в лимит попыток входа с одного IP.
+let adminSessionCache: Session | null = null;
+const adminSession = async () => (adminSessionCache ??= await login("admin", "adminpass1"));
 
 function call(s: Session, method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, payload?: unknown) {
   return app.inject({
@@ -401,7 +406,7 @@ describe("Документы: договор → инвойс → сделка (
         { name: "Artificial grass", quantity: "14 600", unit: "кв. м.", price: "9,49" },
         { name: "Glue", quantity: 10, unit: "шт.", price: 50, amount: 500 },
       ],
-      newShipment: { clientId: client.id, title: "Трава зелёная 30 мм" },
+      newShipment: { clientId: client.id, title: "Трава зелёная 30 мм", weightKg: 9000, volumeM3: 60 },
     });
     assert.equal(inv.statusCode, 200, inv.body);
     const no = inv.json().shipment.number as number;
@@ -512,9 +517,12 @@ describe("Сделки (отгрузки) и календарь", () => {
     const supplier = await mk("supplier", "Test Supplier Co");
 
     // Перевозчик на месте клиента — ошибка.
-    const wrong = await call(s, "POST", "/shipments", { title: "X", clientId: carrier.id });
+    const noCargo = await call(s, "POST", "/shipments", { title: "X", clientId: client.id });
+    assert.equal(noCargo.statusCode, 400, "без веса и объёма сделку не создать");
+    assert.match(noCargo.json().error, /вес/);
+    const wrong = await call(s, "POST", "/shipments", { title: "X", clientId: carrier.id, weightKg: 1, volumeM3: 1 });
     assert.equal(wrong.statusCode, 400, wrong.body);
-    assert.equal((await call(s, "POST", "/shipments", { clientId: client.id })).statusCode, 400, "без названия груза нельзя");
+    assert.equal((await call(s, "POST", "/shipments", { clientId: client.id, weightKg: 1, volumeM3: 1 })).statusCode, 400, "без названия груза нельзя");
 
     const created = await call(s, "POST", "/shipments", {
       clientId: client.id,
@@ -522,6 +530,8 @@ describe("Сделки (отгрузки) и календарь", () => {
       carrierId: carrier.id,
       title: "Линолеум коричневый",
       transport: "rail",
+      weightKg: 12000,
+      volumeM3: 55,
       milestones: { deposit: { plan: "2026-10-03" }, ready: { plan: "2026-10-10" }, loading: { plan: "2026-10-14" }, departure: { plan: "2026-10-16" }, arrival: { plan: "2026-11-01" } },
     });
     assert.equal(created.statusCode, 200, created.body);
@@ -608,24 +618,20 @@ describe("Сделки (отгрузки) и календарь", () => {
 });
 
 describe("ИИ: разбор документов и чат", () => {
-  // Один вход на весь блок — иначе упрёмся в лимит попыток входа с одного IP.
-  let session: Session | null = null;
-  const aiSession = async () => (session ??= await login("admin", "adminpass1"));
-
   test("без ключа ИИ выключен", async () => {
-    const s = await aiSession();
+    const s = await adminSession();
     assert.deepEqual((await call(s, "GET", "/ai/status")).json(), { enabled: false });
     assert.equal((await call(s, "POST", "/ai/chat", { messages: [{ role: "user", content: "привет" }] })).statusCode, 503);
   });
 
   test("черновик сверяется с базой кодом: контрагент, договор, сделка, дубли", async () => {
     const { resolveDraft } = await import("../lib/ai-parse.ts");
-    const s = await aiSession();
+    const s = await adminSession();
     const supplier = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Turf Factory Co., Ltd" })).json().counterparty;
     const carrier = (await call(s, "POST", "/counterparties", { role: "contractor", contractorType: "carrier_cn", name: "DEMO RAIL LOGISTICS LIMITED" })).json().counterparty;
     const contract = (await call(s, "POST", "/documents", { type: "supplier_contract", counterpartyId: supplier.id, number: "DTF-07/26" })).json().document;
-    const sh = (await call(s, "POST", "/shipments", { title: "Трава демо", supplierId: supplier.id })).json().shipment;
-    const sh2 = (await call(s, "POST", "/shipments", { title: "Плитка демо", carrierId: carrier.id })).json().shipment;
+    const sh = (await call(s, "POST", "/shipments", { title: "Трава демо", supplierId: supplier.id, weightKg: 5000, volumeM3: 40 })).json().shipment;
+    const sh2 = (await call(s, "POST", "/shipments", { title: "Плитка демо", carrierId: carrier.id, weightKg: 5000, volumeM3: 40 })).json().shipment;
     await call(s, "PATCH", `/shipments/${sh2.number}`, { containerNo: "DEMU1000099" });
 
     const base = {
@@ -700,7 +706,7 @@ describe("ИИ: разбор документов и чат", () => {
 
   test("инструменты чата читают API от имени пользователя", async () => {
     const { runTool } = await import("../lib/ai-chat.ts");
-    const s = await aiSession();
+    const s = await adminSession();
     const req = { headers: { cookie: s.cookie } } as unknown as Parameters<typeof runTool>[1];
     const list = JSON.parse(await runTool(app, req, "list_shipments", { q: "Трава демо" }));
     assert.equal(list.shipments.length, 1);
@@ -725,5 +731,85 @@ describe("ИИ: разбор документов и чат", () => {
     xlsx.file("xl/workbook.xml", `<workbook><sheets><sheet name="PI" sheetId="1"/></sheets></workbook>`);
     xlsx.file("xl/worksheets/sheet1.xml", `<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1"><v>12.5</v></c></row><row r="2"><c r="B2" t="s"><v>1</v></c></row></sheetData></worksheet>`);
     assert.equal(await xlsxText(await xlsx.generateAsync({ type: "nodebuffer" })), "=== Лист PI\nТовар\t\t12.5\n\tТрава");
+  });
+});
+
+describe("Расчёт: пошлина по ТН ВЭД, КП, поручение", () => {
+  test("таможенная стоимость, ставки «%» и «€ за м²/кг», НДС 22/10 %, сохранение, пересчёт", async () => {
+    const { tnved } = await import("../db/schema.ts");
+    const { docxText } = await import("../lib/file-text.ts");
+    await db.insert(tnved).values([
+      { code: "5703290009", name: "щетинистые (turf) → прочие", tariff: "0.3 EUR за 1 м2" },
+      { code: "3918109000", name: "покрытия для пола из ПВХ → прочие", tariff: "6.5%, но не менее 0.096 EUR за 1 кг" },
+    ]);
+    const s = await adminSession();
+    const tn = (await call(s, "GET", "/tnved?q=3918")).json();
+    assert.equal(tn.codes[0].code, "3918109000");
+    assert.equal(tn.codes[0].parsed.mode, "max");
+
+    const client = (await call(s, "POST", "/counterparties", { role: "client", name: "ООО «Демо-Расчёт»" })).json().counterparty;
+    const supplier = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Calc Factory" })).json().counterparty;
+    await call(s, "POST", "/documents", { type: "commission_contract", number: "К-7", date: "2026-01-10", counterpartyId: client.id, validUntil: "2099-12-31" });
+    const inv = await call(s, "POST", "/documents", {
+      type: "supplier_invoice", number: "DCF-1", date: "2026-10-01", counterpartyId: supplier.id, currency: "CNY",
+      items: [
+        { name: "Demo grass 20 mm", hsCode: "5703290009", quantity: 1000, unit: "м²", price: 10 },
+        { name: "Demo LVT 4 mm", hsCode: "3918109000", quantity: 500, unit: "м²", price: 20 },
+      ],
+      newShipment: { clientId: client.id, title: "Расчёт демо", weightKg: 1000, volumeM3: 10 },
+    });
+    assert.equal(inv.statusCode, 200, inv.body);
+    const no = inv.json().shipment.number as number;
+    await call(s, "PATCH", `/shipments/${no}`, { transport: "rail", pickupLocation: "Сиань, Китай", deliveryLocation: "Москва" });
+
+    const before = (await call(s, "GET", `/shipments/${no}/calc`)).json();
+    assert.equal(before.calc, null);
+    assert.equal(before.defaults.broker, 20000, "брокер по умолчанию 20 000 ₽");
+    assert.match(before.defaults.transportLabel, /ЖД перевозка 10 куб/);
+    assert.equal(before.items.length, 2);
+
+    // Курсы (фиксированы в тестах): USD 80, EUR 90, CNY 11. Товар 20 000 CNY = 220 000 ₽, перевозка 2 000 USD = 160 000 ₽.
+    const res = await call(s, "POST", `/shipments/${no}/calc`, { transportAmount: 2000, transportCurrency: "USD", commission: 50000, lastMile: 10000, deliveryTerm: "20–25 дней" });
+    assert.equal(res.statusCode, 200, res.body);
+    const calc = res.json().calc;
+    // Каждой позиции — половина товара и половина «½ перевозки»: 110 000 + 40 000 = 150 000 ₽.
+    assert.deepEqual(calc.customs.lines.map((l: { customsValue: number }) => l.customsValue), [150000, 150000]);
+    // Трава: 0,3 € × 1000 м² × 90 = 27 000. ПВХ: max(6,5 % × 150 000 = 9 750; 0,096 € × 500 кг × 90 = 4 320) = 9 750.
+    assert.deepEqual(calc.customs.lines.map((l: { duty: number }) => l.duty), [27000, 9750]);
+    assert.equal(calc.customs.duty, 36750);
+    assert.equal(calc.customs.vat, Math.round((177000 * 0.22 + 159750 * 0.22) * 100) / 100);
+
+    // НДС 10 % у товара — пересчёт по сохранённому курсу.
+    const lvt = before.items.find((i: { name: string }) => i.name.includes("LVT")).productId;
+    assert.equal((await call(s, "PATCH", `/products/${lvt}`, { vat10: true })).statusCode, 200);
+    const calc2 = (await call(s, "POST", `/shipments/${no}/calc`, {})).json().calc;
+    assert.equal(calc2.customs.vat, Math.round((177000 * 0.22 + 159750 * 0.1) * 100) / 100);
+    assert.equal(calc2.commission, 50000, "параметры прошлого расчёта сохраняются");
+
+    // КП в Word.
+    const kp = await app.inject({ method: "GET", url: `${API}/shipments/${no}/kp.docx`, headers: { cookie: s.cookie } });
+    assert.equal(kp.statusCode, 200);
+    const text = await docxText(kp.rawPayload);
+    assert.match(text, /ЖД перевозка/);
+    assert.match(text, /Сиань, Китай → Москва/);
+    assert.match(text, /1\s000 кг \/ 10 куб\. м/);
+    assert.match(text, /Таможенная пошлина\t36 750 руб\./);
+    assert.doesNotMatch(text, /\{\{/);
+
+    // Поручение: таможенные платежи, перевозка, брокер и вознаграждение — из расчёта.
+    const order = await call(s, "POST", `/shipments/${no}/order`);
+    assert.equal(order.statusCode, 200, order.body);
+    const doc = (await call(s, "GET", `/documents/${order.json().document.id}`)).json().document;
+    const cost = (cat: string) => doc.data.costs.find((c: { category: string }) => c.category === cat);
+    assert.equal(cost("customs").amount, Math.round((36750 + calc2.customs.vat) * 100) / 100);
+    assert.deepEqual([cost("transport").amount, cost("transport").currency], [2000, "USD"]);
+    assert.equal(cost("broker").amount, 20000);
+    assert.equal(cost("commission").amount, 50000);
+
+    // Пересчёт перед таможней видит сумму из поручения; в истории сделки — событие.
+    const after = (await call(s, "GET", `/shipments/${no}/calc`)).json();
+    assert.equal(after.order.customs, cost("customs").amount);
+    const events = (await call(s, "GET", `/shipments/${no}`)).json().events;
+    assert.ok(events.some((e: { kind: string }) => e.kind === "calc"));
   });
 });

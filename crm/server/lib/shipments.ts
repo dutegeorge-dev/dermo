@@ -262,6 +262,14 @@ export async function refreshStage(tx: DbOrTx, shipmentId: number, userId: numbe
 export type MilestoneInput = Partial<Record<MilestoneKey, { plan?: unknown; fact?: unknown }>>;
 
 /** Новая сделка. title обязателен; договоры подбираются сами. */
+/** Новая сделка из интерфейса: вес и объём обязательны — без них не посчитать пошлину и КП. */
+export function requireCargo(input: Record<string, unknown>): void {
+  for (const [key, label] of [["weightKg", "вес, кг"], ["volumeM3", "объём, м³"]] as const) {
+    const n = Number(String(input[key] ?? "").replace(/\s/g, "").replace(",", "."));
+    if (!input[key] || !Number.isFinite(n) || n <= 0) throw new HttpError(400, `Укажите ${label} груза`);
+  }
+}
+
 export async function createShipment(tx: DbOrTx, input: Record<string, unknown>, userId: number | null): Promise<ShipmentRow> {
   const v = await parseShipmentFields(tx, input);
   if (!v.title) throw new HttpError(400, "Укажите название груза");

@@ -17,6 +17,7 @@
     "db:migrate": "node --import tsx server/cli/migrate.ts",
     "create-admin": "node --import tsx server/cli/create-admin.ts",
     "seed": "node --import tsx server/cli/seed.ts",
+    "tnved:update": "node --import tsx server/cli/tnved.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json",
     "test": "node --import tsx --test server/test/*.test.ts"
   },

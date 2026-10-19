@@ -1,0 +1,12 @@
+# Ежедневное обновление справочника ТН ВЭД со ставками пошлин для /crm/ (расчёт таможенных платежей).
+#
+# Установка:
+#   sudo cp deploy/cron/bars-crm-tnved /etc/cron.d/bars-crm-tnved
+#   sudo chmod 644 /etc/cron.d/bars-crm-tnved
+# Лог: /var/log/bars-crm-tnved.log
+#
+# 01:10 UTC = 04:10 МСК. Источник — выгрузка tws.by; при сбое справочник остаётся прежним.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+10 1 * * * www-data cd /var/www/tlkbars/repo && npm --prefix crm run tnved:update >> /var/log/bars-crm-tnved.log 2>&1

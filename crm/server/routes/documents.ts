@@ -8,7 +8,7 @@ import { db } from "../db/client.ts";
 import { attachments, documents, users } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { documentLabel } from "../lib/deals.ts";
-import { addShipmentEvent, createShipment } from "../lib/shipments.ts";
+import { addShipmentEvent, createShipment, requireCargo } from "../lib/shipments.ts";
 import {
   assertSingleOrder,
   documentItemsOf,
@@ -138,7 +138,8 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       // Новая сделка из документа (обычно — из инвойса поставщика).
       let created: { number: number } | null = null;
       if (!fields.shipmentId && input.newShipment && typeof input.newShipment === "object") {
-        const ns = input.newShipment as { clientId?: unknown; title?: unknown; scheme?: unknown };
+        const ns = input.newShipment as { clientId?: unknown; title?: unknown; scheme?: unknown; weightKg?: unknown; volumeM3?: unknown };
+        requireCargo(ns);
         const firstItem = Array.isArray(input.items) ? (input.items[0] as { name?: string } | undefined)?.name : undefined;
         const title =
           (typeof ns.title === "string" && ns.title.trim()) || firstItem || `${spec.label}${fields.number ? ` № ${fields.number}` : ""}`;
@@ -149,6 +150,8 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
             scheme: ns.scheme === "supply" || ns.scheme === "teu" ? ns.scheme : "commission",
             clientId: ns.clientId ?? null,
             supplierId: spec.party === "supplier" ? (fields.counterpartyId ?? null) : null,
+            weightKg: ns.weightKg,
+            volumeM3: ns.volumeM3,
           },
           user.id,
         );

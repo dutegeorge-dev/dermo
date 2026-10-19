@@ -121,7 +121,13 @@
     первая версия (Opus, файл и справочник CRM целиком в запросе) тратила 150–650 тыс. на документ — владелец
     сказал «очень дорого». Теперь: модель Haiku 5.5, текст из файла достаёт код, сопоставление со справочником и
     сделками — код; 2–4 тыс. на документ, 4–6 тыс. на вопрос в чате. Не возвращать дорогую схему без согласия.
-12. **Сайт не трогать** без надобности: `/crm/` — отдельный пакет, деплоится
+12. **Расчёт для клиента (октябрь 2026).** Очерёдность владельца: инвойс поставщика → сделка → он сам вписывает
+    стоимость перевозки (инвойса перевозчика ещё нет) → считается пошлина → КП и поручение из **одной формы**.
+    Посчитанные пошлины **хранятся в сделке** и пересчитываются перед таможней по новому курсу. Таможенная стоимость =
+    товар + ½ доставки; НДС 22 % (10 % — галочкой у товара); брокер — 20 000 ₽ по умолчанию; сбор за таможенные
+    операции не считаем. Вес и объём — обязательны при создании сделки. Ставки — из справочника ТН ВЭД (выгрузка
+    tws.by), а не «ИИ гуглит пошлину» (дорого и ненадёжно). Шаблон КП — из docx владельца (`templates/kp.docx`).
+13. **Сайт не трогать** без надобности: `/crm/` — отдельный пакет, деплоится
     отдельно (`deploy/deploy-crm.sh`), сайт байт-в-байт тот же (кроме robots.txt).
 
 Стиль работы с владельцем: пишет по-русски коротко и эмоционально, присылает
@@ -171,8 +177,10 @@ crm/
                         stageOf(), SHIPMENT_FIELDS + SHIPMENT_FIELD_GROUPS (поля сделки), TRANSPORTS, addDays/daysBetween
     company.ts          реквизиты ООО ТЛК БАРС (тип/значения по умолчанию)
     ai.ts               DocumentDraft — черновик документа от ИИ (сервер → форма)
+    customs.ts          расчёт для клиента: parseTariff (ставки ЕТТ), calcCustoms (там. стоимость, пошлина, НДС), kpLines, ShipmentCalc
   drizzle/              SQL-миграции 0000…0006 + meta (снимки drizzle-kit)
   templates/commission_order.docx   шаблон поручения ({{…}}); свой можно загрузить в «Реквизитах компании»
+  templates/kp.docx     шаблон КП (из docx владельца: kp.*, FOR l IN lines); свой — CRM_UPLOAD_DIR/templates/kp.docx
   seed/kb-call-script.json          исходник справочника для звонков
   scripts/backup.sh     pg_dump + архив вложений, ротация, rclone в облако, Telegram при сбое
   server/
@@ -192,9 +200,15 @@ crm/
       ai.ts             клиент Claude (ключ/шлюз из .env), aiBase (модель + fallbacks), понятные ошибки
       ai-parse.ts       разбор: текст из файла (код) → модель (JSON-схема, без справочника) → resolveDraft (сопоставление кодом)
       ai-chat.ts        чат: инструменты = GET к своему API через app.inject с cookie пользователя (только чтение)
+      calc.ts           расчёт сделки: товары инвойсов + коды/ставки → computeCalc; КП DOCX (renderKpDocx)
+      rates.ts          курсы ЦБ на дату (XML ЦБ, кэш; CRM_RATES_FIXED — фиксированные для тестов)
+      tnved.ts          справочник ТН ВЭД: загрузка выгрузки tws.by, поиск, коды → ставки
+      product-match.ts  ключ товара (название без размеров в скобках) — сопоставление позиций с товарами
       file-text.ts      текст из PDF (pdfjs-dist, строки по координатам), .docx / .xlsx (jszip) для модели
       settings.ts call-script.ts text.ts
     routes/             auth users kb files calls search audit deals counterparties documents orders products settings shipments ai
+                        calc (GET/POST /shipments/:n/calc, kp.docx, GET /tnved)
+    cli/tnved.ts        npm run tnved:update [--if-empty] [--file]
                         (shipments.ts — список/карточка/правка/даты/флажки/этап/статус/подрядчики/комментарии + GET /calendar)
     cli/                migrate.ts, create-admin.ts, seed.ts (реквизиты, пространства БЗ, справочник, --demo/--remove-demo), demo.ts
     test/api.test.ts    интеграционные тесты на живой PostgreSQL (БД очищается!)
@@ -207,7 +221,8 @@ crm/
     components/
       AiChat.tsx        кнопка «Спросить ИИ» в шапке + окно чата (портал, история в sessionStorage, мини-markdown)
       crm/              воронка: Board, DealPanel (карточка лида), CreateDealDialog, DealsTable, StagesEditor, CounterpartyPicker, DealPicker
-      shipments/        common (EventDialog, DueLabel, ShipmentStage, useShipmentActions), StageTimeline («Ход сделки» + чек-лист
+      shipments/        CalcBlock («Расчёт для клиента»: форма сметы, таблица пошлин с правкой кода/НДС 10 %, КП, поручение),
+                        common (EventDialog, DueLabel, ShipmentStage, useShipmentActions), StageTimeline («Ход сделки» + чек-лист
                         этапа 1 с поручением), ShipmentDocs (документы, ContractsBlock, PartiesBlock, FinanceBlock),
                         ShipmentFields (поля справа, правка на месте), ShipmentForm (создание), ShipmentParts (Stepper, History),
                         ShipmentPicker
@@ -233,7 +248,7 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   seq_no, currency, amount, status, payment_status, paid_amount, paid_at, valid_until, data jsonb, notes),
   `document_items` (product_id, name, batch_no, hs_code, qty, unit, price, amount), `products`, `settings` (company).
 
-**Миграции:** 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).
@@ -253,8 +268,12 @@ counterparties) → 0004 сделки-отгрузки → **0005** перено
   перевозчик и «инвойс перевозчика» сделки. `newShipment` в `POST /documents` создаёт сделку из инвойса (этап 1).
 - **Договоры подбираются сами** (`autoContracts`): действующий договор клиента по схеме (`CLIENT_CONTRACT_BY_SCHEME`),
   контракт поставщика (для ТЭУ — контракт клиента с поставщиком). Сменили клиента/схему/поставщика — подбираются заново.
+- **Расчёт** `POST /shipments/:n/calc` → `computeCalc`: товары инвойсов (код — у товара, иначе у позиции; ставка из
+  `tnved`), курсы — сохранённые (пошлина не «плывёт») или свежие ЦБ (`refreshRates`) → `shipments.calc`; изменение
+  таможенных платежей — событие `calc` в истории. КП — `kpTemplateData` + `templates/kp.docx`.
 - **Поручение** `POST /shipments/:n/order`: только схема «комиссия» и есть договор комиссии; номер = следующий
-  `seq_no` по договору; позиции из всех инвойсов поставщика сделки; смета `defaultCostLines`; DOCX —
+  `seq_no` по договору; позиции из всех инвойсов поставщика сделки; смета `defaultCostLines`, заполненная из
+  `shipments.calc` (перевозка, брокер, СВХ, таможенные платежи, вознаграждение); в «Ходе сделки» кнопка ведёт к расчёту; DOCX —
   `GET /documents/:id/docx` (`renderOrderDocx`; свой шаблон — `CRM_UPLOAD_DIR/templates/commission_order.docx`).
 - **Сертификаты в карточке**: `conformity`, привязанные к сделке **или** с позициями на товары сделки.
 - **Поиск** `GET /search`: лиды, сделки (название груза, контейнер, ТН ВЭД, номер), контрагенты, документы,
@@ -289,6 +308,10 @@ counterparties) → 0004 сделки-отгрузки → **0005** перено
   на :3100 не висит старый процесс сервера (иначе новый молча не стартует, а отвечает старый код). Шлюз списывает лимит
   ≈ 3,79 × цена модели — Opus в 40 раз дороже Haiku. Haiku: путала цену за м², если она написана один раз на несколько
   строк, и считала вес сама — лечится правилами в промпте; суммы и пустые позиции проверяет код, не модель.
+- **Тесты расчёта** не ходят в ЦБ: `CRM_RATES_FIXED` (USD 80, EUR 90, CNY 11) и свои строки `tnved`. Вход в тестах —
+  один на поздние блоки (`adminSession`), иначе 429 от лимита входов.
+- **Postgres в контейнере** мог остановиться между сессиями → `service postgresql start`, затем `db:migrate` и
+  `tnved:update -- --file …` (выгрузку можно скачать `curl -L https://www.tws.by/tws/tnved/download/excel`).
 - **Никогда не коммитить реальные данные клиентов** и их документы (однажды попали в тест — переписывали
   историю). Демо и тесты — только вымышленные компании/ИНН/контейнеры (`DEMU…`).
 
@@ -323,6 +346,8 @@ E2E-проверка интерфейса: Playwright с Chromium из `/opt/pw-
 - Полная установка с нуля — `crm/README.md → Деплой → Первый раз` (postgres, .env, systemd, nginx-блок, cron).
 - Конфиг nginx на живом сервере старше, чем в репо (нет default-444, 404 и правил для dotfiles) — вставлять
   только блок `/crm/`, остальное не перетирать.
+- **Справочник ТН ВЭД**: `deploy-crm.sh` загружает его, если пуст; ежедневно — cron
+  `sudo cp deploy/cron/bars-crm-tnved /etc/cron.d/ && sudo chmod 644 /etc/cron.d/bars-crm-tnved`; вручную — `npm run crm:tnved`.
 - **ИИ на сервере:** в `crm/.env` строки `ANTHROPIC_BASE_URL=https://claude-gateway.ru/api` и `ANTHROPIC_AUTH_TOKEN=…`
   (токен — у владельца, в git его нет), затем `systemctl restart bars-crm`. В nginx у `location ^~ /crm/` таймауты
   `proxy_read_timeout`/`proxy_send_timeout` 300s (разбор документа идёт до 1–2 минут).
@@ -333,7 +358,8 @@ E2E-проверка интерфейса: Playwright с Chromium из `/opt/pw-
 **Сделано:** вход и роли, база знаний, справочник для звонков, воронка (этапы редактируются), контрагенты,
 документы (реестр, загрузка, вставка позиций из Excel/PDF, оплаты, сроки действия), товары с ценами, сделки
 (8 этапов, доска, список, календарь, карточка «всё сразу», «Ход сделки», поручение DOCX, план/факт,
-сертификаты по товарам), глобальный поиск, журнал действий, бэкапы, демо, тесты, ИИ-разбор документов
+сертификаты по товарам), расчёт для клиента (КП + поручение, пошлина по ТН ВЭД и курсу ЦБ, пересчёт), глобальный
+поиск, журнал действий, бэкапы, демо, тесты, ИИ-разбор документов
 (черновик формы из PDF/фото/Word/Excel) и ИИ-чат по данным CRM (только чтение).
 
 **Идеи / бэклог** (ничего не начато без согласования):

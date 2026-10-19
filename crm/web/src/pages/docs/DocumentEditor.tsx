@@ -124,6 +124,8 @@ function EditorForm({ initial }: { initial: Initial }) {
   const [newDeal, setNewDeal] = useState(!ex && !initial.deal && type === "supplier_invoice");
   const [scheme, setScheme] = useState<keyof typeof SCHEMES>("commission");
   const [newTitle, setNewTitle] = useState("");
+  const [newWeight, setNewWeight] = useState("");
+  const [newVolume, setNewVolume] = useState("");
   const [parentId, setParentId] = useState<number | null>(ex?.parentId ?? null);
   const [number, setNumber] = useState(ex?.number ?? "");
   const [date, setDate] = useState(ex?.date ?? new Date().toISOString().slice(0, 10));
@@ -206,6 +208,7 @@ function EditorForm({ initial }: { initial: Initial }) {
       }
     }
     if (d.cargoTitle) setNewTitle(d.cargoTitle);
+    if (d.weightKg) setNewWeight(String(d.weightKg));
   };
 
   const recognize = async (f: File) => {
@@ -277,7 +280,9 @@ function EditorForm({ initial }: { initial: Initial }) {
       }
       if (spec.validity) body.validUntil = validUntil || null;
       if (spec.signable) body.status = status;
-      if (!ex && newDeal && !spec.contract) body.newShipment = { clientId, scheme, title: newTitle.trim() || null };
+      if (!ex && newDeal && !spec.contract) {
+        body.newShipment = { clientId, scheme, title: newTitle.trim() || null, weightKg: parseNumber(newWeight), volumeM3: parseNumber(newVolume) };
+      }
 
       let docId = ex?.id;
       let created: number | null = null;
@@ -462,6 +467,17 @@ function EditorForm({ initial }: { initial: Initial }) {
                         {Object.entries(SCHEMES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                       </select>
                     </label>
+                    <div className="grid grid-cols-2 gap-2 sm:col-span-2 sm:w-1/2">
+                      <label>
+                        <span className="label">Вес, кг *</span>
+                        <input className="input tabular-nums" inputMode="decimal" required value={newWeight} onChange={(e) => setNewWeight(e.target.value)} />
+                      </label>
+                      <label>
+                        <span className="label">Объём, м³ *</span>
+                        <input className="input tabular-nums" inputMode="decimal" required value={newVolume} onChange={(e) => setNewVolume(e.target.value)} />
+                      </label>
+                    </div>
+                    <p className="text-xs muted sm:col-span-2">Вес и объём нужны для расчёта пошлины и КП.</p>
                   </div>
                 ) : (
                   <ShipmentPicker value={deal} onChange={setDeal} />
@@ -484,6 +500,7 @@ function EditorForm({ initial }: { initial: Initial }) {
                 items={items}
                 onChange={setItems}
                 currency={currency}
+                showHs={type === "supplier_invoice" || type === "specification"}
                 onPasteInfo={(text) => {
                   const c = detectCurrency(text);
                   if (c) setCurrency(c);
@@ -497,7 +514,7 @@ function EditorForm({ initial }: { initial: Initial }) {
           {type === "commission_order" && (
             <section className="space-y-3">
               <h2 className="text-xs font-semibold uppercase tracking-wide muted">Товары</h2>
-              <ItemsEditor items={items} onChange={setItems} currency={currency} showBatch />
+              <ItemsEditor items={items} onChange={setItems} currency={currency} showBatch showHs />
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Город"><input className="input" value={city} onChange={(e) => setCity(e.target.value)} /></Field>
                 <Field label="Условия поставки"><input className="input" value={incoterms} onChange={(e) => setIncoterms(e.target.value)} /></Field>

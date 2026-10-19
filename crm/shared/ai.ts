@@ -24,7 +24,19 @@ export type DocumentDraft = {
   paymentTerms: string | null;
   validUntil: string | null;
   costCategory: string | null;
-  items: { productId: null; name: string; batchNo: null; hsCode: string | null; quantity: number | null; unit: string | null; price: number | null; amount: number | null }[];
+  /** productId — товар нашёлся в справочнике; hsAuto — код ТН ВЭД подобран ИИ (проверить); tariff — ставка пошлины. */
+  items: {
+    productId: number | null;
+    name: string;
+    batchNo: null;
+    hsCode: string | null;
+    hsAuto: boolean;
+    tariff?: string | null;
+    quantity: number | null;
+    unit: string | null;
+    price: number | null;
+    amount: number | null;
+  }[];
   summary: string;
   warnings: string[];
 };

@@ -111,6 +111,7 @@ npm run crm:dev
 | `npm run crm:create-admin -- --login L --name "Имя" [--email E] [--reset]` | Создать администратора. Пароль спрашивается без отображения (или `CRM_ADMIN_PASSWORD=…`). `--reset` — задать новый пароль существующему и сделать его admin (если доступ потерян) |
 | `npm run crm:seed [-- --file путь.json] [-- --force]` | Начальные данные (идемпотентно), см. [ниже](#импорт) |
 | `npm run crm:seed -- --demo` / `-- --remove-demo` | Добавить / удалить демо-данные (метка «демо»): сделки на всех этапах, клиенты, поставщики и подрядчики с реквизитами, договоры, инвойсы с товарами, поручения, счета, накладная, ДТ, сертификат, доверенность, оплаты, страницы базы знаний. Справочник для звонков не трогается |
+| `npm run crm:tnved [-- --if-empty] [-- --file x.xlsx]` | Обновить справочник ТН ВЭД со ставками пошлин (выгрузка tws.by, ~13 тыс. кодов). `--if-empty` — только если пуст (так делает `deploy-crm.sh`); раз в сутки — cron `deploy/cron/bars-crm-tnved` |
 | `npm run crm:test` | Интеграционные тесты API — нужна **отдельная** БД: `CRM_TEST_DATABASE_URL=postgres://…/crm_test` (она очищается) |
 
 В `crm/`: `npm run typecheck`, `npm run db:generate` (новая миграция после правки `server/db/schema.ts`), `npm start` (прод-запуск).
@@ -162,9 +163,10 @@ sudo cp /etc/nginx/sites-available/tlkbars /etc/nginx/sites-available/tlkbars.ba
 sudo cp deploy/nginx/tlkbars.live.conf /etc/nginx/sites-available/tlkbars
 sudo nginx -t && sudo systemctl reload nginx
 
-# 7. Бэкапы
+# 7. Бэкапы и ежедневное обновление справочника ТН ВЭД
 sudo cp deploy/cron/bars-crm-backup /etc/cron.d/bars-crm-backup
-sudo chmod 644 /etc/cron.d/bars-crm-backup
+sudo cp deploy/cron/bars-crm-tnved /etc/cron.d/bars-crm-tnved
+sudo chmod 644 /etc/cron.d/bars-crm-backup /etc/cron.d/bars-crm-tnved
 sudo bash crm/scripts/backup.sh                   # проверить вручную
 #    облако — см. «Бэкапы в облако» ниже
 
@@ -306,10 +308,11 @@ sudo systemctl start bars-crm
 | `deals` | Лид воронки продаж (работа с клиентом до депозита), ключ `key` = `BARS-` + `number` (последовательность `deal_number_seq`), поля ниже. Груз, поставщик, договоры и документы — не здесь, а в `shipments` (миграция 0005 перенесла их туда) |
 | `documents` | Документ любого типа (`type`, справочник — `shared/documents.ts`): `number`, `date`, `counterparty_id` (вторая сторона), `client_id` (клиент, к которому относится документ поставщика/подрядчика), `shipment_id` (сделка), `parent_id` (договор: поручение → договор комиссии, инвойс → контракт), `seq_no` (номер приложения в договоре), `currency`, `amount`, `status` (`draft`/`signed`/`cancelled`), `payment_status` (`unpaid`/`partial`/`paid`), `paid_amount`, `paid_at`, `valid_until`, `data` (jsonb: Incoterms, условия оплаты, смета поручения, статья расходов…), `notes`. Файлы — `attachments` с `owner_type='document'` и меткой `original`/`signed` |
 | `document_items` | Позиции документа: `product_id`, `name` (как в документе), `batch_no` («партийный номер» поручения), `hs_code`, `quantity`, `unit`, `price`, `amount` |
-| `products` | Справочник товаров: `name`, `name_ru`, `hs_code`, `unit`. Пополняется сам из позиций (поиск по названию без учёта регистра) |
+| `products` | Справочник товаров: `name`, `name_ru`, `hs_code`, `unit`, `vat10` (НДС при ввозе 10 % вместо 22 %). Пополняется сам из позиций (поиск по названию и ключу названия без размеров в скобках — `server/lib/product-match.ts`); код ТН ВЭД из позиции записывается товару, если у него не было |
+| `tnved` | Справочник ТН ВЭД ЕАЭС: `code` (10 цифр), `name`, `tariff` (ставка текстом: «6.5%, но не менее 0.096 EUR за 1 кг»; разбор — `parseTariff` в `shared/customs.ts`). Заполняется `npm run crm:tnved` |
 | `settings` | Настройки, ключ → JSON. `company` — реквизиты ООО ТЛК БАРС, счета (`accounts`) и какой счёт ставить в поручения |
 | `deal_comments` | Комментарии: `deal_id`, `author_id`, `body` |
-| `shipments` | Сделка (заказ / отгрузка) — начинается с оплаты депозита, независима от воронки. `title` (название груза — как вы его называете), `number` (последовательность `shipment_number_seq`, вторичный «№ 12»), `status` (`active`/`closed`/`cancelled`, закрывается вручную), `stage` 1–8 (вычисляется из фактических дат), `scheme` (`commission`/`supply`/`teu`), `client_id`, `contact_id`, `supplier_id`, `carrier_id`, `carrier_invoice_id`, `client_contract_id`, `supplier_contract_id` (подбираются сами), `deal_id` (лид из воронки, необязательно), `assignee_id`, `container_no`, `hs_code`, `weight_kg`, `volume_m3`, `transport`, `pickup_location`, `delivery_location`, `export_license`, `certificates`, `certificate_holder`, `chestny_znak`, `flags` (jsonb: отмеченные ожидания → дата), `notes` |
+| `shipments` | Сделка (заказ / отгрузка) — начинается с оплаты депозита, независима от воронки. `title` (название груза — как вы его называете), `number` (последовательность `shipment_number_seq`, вторичный «№ 12»), `status` (`active`/`closed`/`cancelled`, закрывается вручную), `stage` 1–8 (вычисляется из фактических дат), `scheme` (`commission`/`supply`/`teu`), `client_id`, `contact_id`, `supplier_id`, `carrier_id`, `carrier_invoice_id`, `client_contract_id`, `supplier_contract_id` (подбираются сами), `deal_id` (лид из воронки, необязательно), `assignee_id`, `container_no`, `hs_code`, `weight_kg`, `volume_m3`, `transport`, `pickup_location`, `delivery_location`, `export_license`, `certificates`, `certificate_holder`, `chestny_znak`, `flags` (jsonb: отмеченные ожидания → дата), `calc` (jsonb `ShipmentCalc`: расчёт для клиента — смета КП/поручения, курсы ЦБ и их дата, таможенные платежи по товарам), `notes`. Вес и объём обязательны при создании сделки (`POST /shipments`, `newShipment`) |
 | `shipment_parties` | Подрядчики сделки (перевозчики, брокер, СВХ…) — `shipment_id` + `counterparty_id`; добавляются сами из их счетов |
 | `shipment_milestones` | Ключевые даты сделки: `shipment_id` + `key` (`deposit`, `ready`, `loading`, `departure`, `border`, `transshipment`, `arrival`, `release`, `delivery`), `plan`, `fact` |
 | `shipment_events` | История сделки: переносы дат, факты, этапы, флажки, правки полей, комментарии |
@@ -368,7 +371,11 @@ sudo systemctl start bars-crm
 | `POST /shipments/:number/stage` `{stage}`, `POST /shipments/:number/status` `{status}` | Перенос на доске; закрыть / отменить / вернуть |
 | `POST/DELETE /shipments/:number/parties[/:id]`, `POST /shipments/:number/comments` | Подрядчики, комментарии |
 | `GET /calendar` | События календаря по сделкам в работе |
-| `GET/POST /products`, `GET/PATCH/DELETE /products/:id`, `POST /products/:id/merge` | Товары; объединение дублей |
+| `GET/POST /products`, `GET/PATCH/DELETE /products/:id`, `POST /products/:id/merge` | Товары (`hsCode` — 10 цифр, `vat10`); карточка со ставкой из ТН ВЭД; объединение дублей |
+| `GET /tnved?q=` | Справочник ТН ВЭД: по началу кода или словам; `parsed` — разобранная ставка |
+| `GET /shipments/:number/calc` | Расчёт сделки (или параметры по умолчанию), товары с кодами и ставками, таможенные платежи из поручения |
+| `POST /shipments/:number/calc` `{transportAmount, transportCurrency, transportLabel, fxPercent, broker, terminal, commission, lastMile, deliveryTerm, refreshRates}` | Рассчитать и сохранить; курс — прошлого расчёта, `refreshRates: true` — свежий ЦБ |
+| `GET /shipments/:number/kp.docx` | КП в Word по шаблону `templates/kp.docx` (свой — `CRM_UPLOAD_DIR/templates/kp.docx`) |
 | `GET/PUT /settings/company`, `GET/POST/DELETE /settings/templates/commission_order[.docx]` | Реквизиты компании; шаблон поручения (admin) |
 | `GET /search?q=` | Глобальный поиск: сделки, клиенты, страницы, справочник; сниппеты с `<mark>` |
 | `GET /audit?before=&userId=&entityType=` | Журнал действий (admin) |
@@ -450,6 +457,28 @@ sudo systemctl start bars-crm
 - клик по событию — выполнено (с датой) или перенос; при переносе можно сдвинуть все следующие даты этой сделки на столько же дней (задержали поезд на 5 дней — прибытие, выпуск и доставка сдвинулись сами).
 
 Демо: `npm run crm:seed -- --demo` добавляет 12 сделок на всех этапах с датами вокруг сегодняшнего дня. После обновления со старым демо: сначала `npm run crm:seed -- --remove-demo`, затем `--demo`.
+
+### Расчёт для клиента: КП, поручение, таможенные платежи
+
+Порядок: инвойс поставщика → сделка (вес и объём обязательны) → в карточке сделки блок «Расчёт для клиента»:
+вводите стоимость перевозки (в любой валюте) и наши статьи → «Рассчитать» → «КП (Word)» и «Сформировать поручение».
+Расчёт хранится в сделке (`shipments.calc`); перед таможней — «Пересчитать по курсу ЦБ на сегодня», рядом видно,
+сколько было в поручении.
+
+- **Таможенная стоимость** = товар + ½ перевозки, в рублях по курсу ЦБ (`server/lib/rates.ts`, XML ЦБ; кэш 3 ч).
+  Делится между позициями пропорционально стоимости.
+- **Пошлина** — по коду ТН ВЭД товара (код в справочнике товаров; если нет — из позиции инвойса) и ставке из
+  справочника `tnved`: процент, «€/$ за кг / т / м² / шт / пар / л», «%, но не менее …» (большее), «% плюс …».
+  Вес для «за кг» — вес сделки пропорционально стоимости; м², шт, пар, л — количество позиции в той же единице.
+- **НДС** = (таможенная стоимость + пошлина) × 22 %, у товаров с галочкой «НДС 10 %» — 10 %.
+- **Смета**: брокер по умолчанию 20 000 ₽, комиссия за валютный перевод 4 % от перевозки, СВХ, комиссия ТК,
+  доставка до склада (примерно). В поручение уходят перевозка, брокер, СВХ, таможенные платежи, вознаграждение.
+- Сбор за таможенные операции и антидемпинговые пошлины не считаются.
+- Код ТН ВЭД и НДС 10 % правятся прямо в таблице расчёта — пишутся в товар и действуют во всех сделках.
+
+Новые товары из инвойса: ИИ-разбор называет примерный код (`hsGuess`), код берёт из справочника варианты с этим
+началом (≤ 40), один — подставляет, несколько — Haiku выбирает (≈ 1–2 тыс. единиц лимита); такие коды помечены
+«ИИ, проверьте». Знакомые товары берут код из справочника товаров без ИИ.
 
 ### ИИ: разбор документов и чат
 

@@ -61,6 +61,19 @@ export async function buildOrderDraft(tx: DbOrTx, shipmentId: number) {
   const costs = defaultCostLines(currency);
   costs[0].amount = goodsTotal ? Math.round(goodsTotal * 100) / 100 : null;
   costs[1].name = `Оплата транспорта по маршруту ${[shipment.pickupLocation, shipment.deliveryLocation].filter(Boolean).join(" - ")}`.trim();
+  // Расчёт сделки (КП): перевозка, брокер, СВХ, таможенные платежи, вознаграждение — в смету поручения.
+  const calc = shipment.calc;
+  if (calc) {
+    const set = (category: CostLine["category"], amount: number | null, cur?: string) => {
+      const line = costs.find((c) => c.category === category);
+      if (line && amount) Object.assign(line, { amount: Math.round(amount * 100) / 100, ...(cur ? { currency: cur } : {}) });
+    };
+    set("transport", calc.transportAmount, calc.transportCurrency);
+    set("broker", calc.broker, "RUB");
+    set("terminal", calc.terminal, "RUB");
+    set("customs", calc.customs.duty + calc.customs.vat, "RUB");
+    set("commission", calc.commission, "RUB");
+  }
 
   const data: OrderData = {
     city: company.city || "г. Красногорск",

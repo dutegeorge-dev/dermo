@@ -6,10 +6,10 @@
  */
 
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 
 import { daysBetween, FLAGS, type FlagKey, MILESTONES, type MilestoneSpec, SHIPMENT_STAGES, type StageSpec } from "../../../../shared/shipments.ts";
-import { api, BASE, errorMessage } from "../../lib/api.ts";
+import { BASE, errorMessage } from "../../lib/api.ts";
 import type { ShipmentResponse } from "../../lib/types.ts";
 import { formatDay, StatusChip } from "../docs/common.tsx";
 import { IconCheck } from "../Icons.tsx";
@@ -21,8 +21,7 @@ const milestoneOf = (stage: StageSpec): MilestoneSpec | undefined => MILESTONES.
 
 export function StageTimeline({ data, saveField }: { data: ShipmentResponse; saveField: SaveField }) {
   const shipment = data.shipment;
-  const { milestone, flag, refresh } = useShipmentActions();
-  const navigate = useNavigate();
+  const { milestone, flag } = useShipmentActions();
   const [shift, setShift] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -98,20 +97,7 @@ export function StageTimeline({ data, saveField }: { data: ShipmentResponse; sav
                     </div>
 
                     {st.no === 1 && (
-                      <OrderChecklist
-                        data={data}
-                        disabled={!active}
-                        onCreateOrder={async () => {
-                          setError(null);
-                          try {
-                            const res = await api<{ document: { id: number } }>(`/shipments/${shipment.number}/order`, { method: "POST" });
-                            refresh(shipment.number);
-                            navigate(`/documents/${res.document.id}/edit`);
-                          } catch (e) {
-                            setError(errorMessage(e));
-                          }
-                        }}
-                      />
+                      <OrderChecklist data={data} />
                     )}
 
                     {(st.flags.length > 0 || st.no === 3) && (
@@ -355,7 +341,7 @@ function Check({ done, children }: { done: boolean; children: React.ReactNode })
 }
 
 /** Этап 1: инвойс поставщика → поручение клиенту → подписанное поручение (до оплаты депозита). */
-function OrderChecklist({ data, disabled, onCreateOrder }: { data: ShipmentResponse; disabled: boolean; onCreateOrder: () => Promise<void> }) {
+function OrderChecklist({ data }: { data: ShipmentResponse }) {
   const sh = data.shipment;
   const invoices = data.documents.filter((d) => d.type === "supplier_invoice");
   const order = data.documents.find((d) => d.id === data.finance.orderId);
@@ -390,15 +376,17 @@ function OrderChecklist({ data, disabled, onCreateOrder }: { data: ShipmentRespo
                 </a>
               </>
             ) : (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled={disabled || invoices.length === 0}
-                title={invoices.length === 0 ? "Сначала загрузите инвойс поставщика — товары и суммы берутся из него" : undefined}
-                onClick={() => void onCreateOrder()}
+              <a
+                href="#calc"
+                className={`btn btn-primary btn-sm ${invoices.length === 0 ? "pointer-events-none opacity-50" : ""}`}
+                title={invoices.length === 0 ? "Сначала загрузите инвойс поставщика — товары и суммы берутся из него" : "Перевозка, пошлина, КП и поручение — в блоке «Расчёт для клиента»"}
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById("calc")?.scrollIntoView({ behavior: "smooth" });
+                }}
               >
-                Сформировать поручение
-              </button>
+                Рассчитать и сформировать ↓
+              </a>
             )}
           </Check>
           <Check done={order?.status === "signed"}>

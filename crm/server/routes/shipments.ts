@@ -29,6 +29,7 @@ import {
   addShipmentEvent,
   autoContracts,
   createShipment,
+  requireCargo,
   loadMilestones,
   moveToStage,
   parseShipmentFields,
@@ -197,7 +198,9 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
   app.post("/shipments", async (request) => {
     const user = currentUser(request);
     return db.transaction(async (tx) => {
-      const row = await createShipment(tx, body(request), user.id);
+      const input = body(request);
+      requireCargo(input);
+      const row = await createShipment(tx, input, user.id);
       await audit(tx, { userId: user.id, action: "create", entityType: "shipment", entityId: row.number, summary: `Создал сделку «${row.title}»`, ip: request.ip });
       return { shipment: await getShipmentDto(tx, row.id) };
     });

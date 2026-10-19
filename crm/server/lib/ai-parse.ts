@@ -16,10 +16,12 @@ import type { DocumentDraft } from "../../shared/ai.ts";
 import { CONTRACTOR_TYPES, COST_CATEGORIES, CURRENCIES, DOC_TYPES, docSpec, type DocType } from "../../shared/documents.ts";
 import type { DbOrTx } from "../db/client.ts";
 import { counterparties, documents, shipmentParties } from "../db/schema.ts";
-import { type AiUsage, aiBase, aiClient, aiError, usageOf } from "./ai.ts";
+import { addUsage, type AiUsage, aiBase, aiClient, aiError, usageOf } from "./ai.ts";
 import { docxText, pdfText, xlsxText } from "./file-text.ts";
 import { HttpError } from "./http.ts";
+import { loadProducts, matchProduct } from "./product-match.ts";
 import { listShipments } from "./shipment-query.ts";
+import { searchTnved, tnvedByCodes, tnvedCount } from "./tnved.ts";
 
 /** Ограничение размера файла для разбора (сканы уходят модели целиком). */
 export const AI_MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -85,10 +87,11 @@ const DRAFT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "hsCode", "quantity", "unit", "price", "amount"],
+        required: ["name", "hsCode", "hsGuess", "quantity", "unit", "price", "amount"],
         properties: {
           name: { type: "string" },
           hsCode: nullable("string"),
+          hsGuess: nullable("string"),
           quantity: nullable("number"),
           unit: nullable("string"),
           price: nullable("number"),
@@ -118,7 +121,7 @@ export type ModelDraft = {
   paymentTerms: string | null;
   validUntil: string | null;
   costCategory: string | null;
-  items: { name: string; hsCode: string | null; quantity: number | null; unit: string | null; price: number | null; amount: number | null }[];
+  items: { name: string; hsCode: string | null; hsGuess?: string | null; quantity: number | null; unit: string | null; price: number | null; amount: number | null }[];
   summary: string;
 };
 
@@ -131,7 +134,7 @@ docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k
 - contractorType — для подрядчиков: carrier_cn (перевозчик/экспедитор в Китае), carrier_ru, broker, warehouse (СВХ), agent, other.
 - clientName — наш клиент, если явно назван (грузополучатель, маркировка), иначе null.
 - contractNumber — номер договора / контракта, на который ссылается документ. relatedNumbers — другие номера из документа: заказ, заявка, B/L, накладная, инвойс, на который ссылаются.
-- items — для инвойсов поставщика, спецификаций, сертификатов: каждая строка отдельно. name коротко: товар + артикул + размер («Искусственная трава 20 мм, 2×25 м (52 рул.)»), общие характеристики не повторяй; число рулонов/мест — в скобках. quantity — в единице цены (м², кг, шт); unit по-русски (м², м, шт, кг, рул.); price — цена за единицу, amount — сумма строки. Если цена за м² написана один раз на несколько строк — она общая для них; м² = ширина × длина рулона × число рулонов (проверь: quantity × price = amount). Доп. расходы (упаковка) — отдельной строкой. Для счетов подрядчиков items пустой.
+- items — для инвойсов поставщика, спецификаций, сертификатов: каждая строка отдельно. name коротко: товар + артикул + размер («Искусственная трава 20 мм, 2×25 м (52 рул.)»), общие характеристики не повторяй; число рулонов/мест — в скобках. quantity — в единице цены (м², кг, шт); unit по-русски (м², м, шт, кг, рул.); price — цена за единицу, amount — сумма строки. Если цена за м² написана один раз на несколько строк — она общая для них; м² = ширина × длина рулона × число рулонов (проверь: quantity × price = amount). Доп. расходы (упаковка) — отдельной строкой (hsGuess null). hsCode — код, если он напечатан в документе; hsGuess — твой код ТН ВЭД ЕАЭС для товара, как можно точнее (минимум 4 цифры, например 5703, 391810). Для счетов подрядчиков items пустой.
 - Числа: «37 456,95», «7503,30» — десятичная запятая. ￥, RMB, 元 — CNY. Даты — YYYY-MM-DD; «15/10/2026» — день/месяц/год.
 - amount — итог документа (для ДТ — таможенные платежи в рублях). containerNo — 4 буквы + 7 цифр. weightKg — только если в документе прямо написан общий вес брутто (не считай сам).
 - incoterms кратко («EXW Xinle»); paymentTerms кратко по-русски («30% депозит, 70% до погрузки»). validUntil — срок действия. costCategory — для счетов подрядчиков (transport, broker, terminal…).
@@ -244,7 +247,7 @@ function matchCounterparty(rows: CpRow[], role: string | null, c: { name?: strin
 }
 
 /** Ответ модели → черновик формы: ссылки только на существующее в базе. */
-export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<DocumentDraft> {
+export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<DocumentDraft & { hsGuesses: (string | null)[] }> {
   const type: DocType = raw.docType in DOC_TYPES ? (raw.docType as DocType) : "other";
   const spec = docSpec(type)!;
   const warnings: string[] = [];
@@ -353,16 +356,30 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
         .filter((i) => typeof i?.name === "string" && i.name.trim())
         .slice(0, 200)
         .map((i) => ({
-          productId: null,
+          productId: null as number | null,
           name: i.name.trim().slice(0, 500),
           batchNo: null,
-          hsCode: text(i.hsCode, 20)?.replace(/\s/g, "") ?? null,
+          hsCode: text(i.hsCode, 20)?.replace(/\D/g, "") || null,
+          hsGuess: text(i.hsGuess, 20)?.replace(/\D/g, "") || null,
+          hsAuto: false,
           quantity: num(i.quantity),
           unit: text(i.unit, 30),
           price: num(i.price),
           amount: num(i.amount),
         }))
     : [];
+
+  // Товары: найденные в справочнике — с их кодом ТН ВЭД.
+  if (items.length) {
+    const catalog = await loadProducts(tx);
+    for (const it of items) {
+      const p = matchProduct(catalog, it.name);
+      if (p) {
+        it.productId = p.id;
+        if (p.hsCode) it.hsCode = p.hsCode;
+      }
+    }
+  }
 
   // Проверки кодом: суммы строк против итога, строки без цены.
   const amount = num(raw.amount);
@@ -395,14 +412,84 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
     paymentTerms: text(raw.paymentTerms, 300),
     validUntil: isDate(raw.validUntil) ? raw.validUntil : null,
     costCategory: type === "contractor_invoice" && raw.costCategory && raw.costCategory in COST_CATEGORIES ? raw.costCategory : null,
-    items,
+    items: items.map(({ hsGuess: _g, ...i }) => i),
+    hsGuesses: items.map((i) => i.hsGuess),
     summary: text(raw.summary, 1000) ?? "",
     warnings,
   };
 }
 
+// ── Код ТН ВЭД для новых товаров ───────────────────────────────────────────
+
+const HS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["codes"],
+  properties: { codes: { type: "array", items: { type: "object", additionalProperties: false, required: ["n", "code"], properties: { n: { type: "integer" }, code: nullable("string") } } } },
+} as const;
+
+/**
+ * Товарам без кода (новым в справочнике) подбираем код: кандидаты — коды справочника ТН ВЭД,
+ * начинающиеся с догадки модели (сужаем до ≤ 40); один кандидат — берём его, несколько —
+ * одним коротким запросом просим модель выбрать. Подобранное помечается hsAuto — человек проверяет.
+ */
+async function suggestHsCodes(tx: DbOrTx, draft: DocumentDraft & { hsGuesses: (string | null)[] }): Promise<AiUsage | null> {
+  if (!draft.items.length || (await tnvedCount(tx)) === 0) return null;
+  const known = await tnvedByCodes(tx, draft.items.map((i) => i.hsCode ?? ""));
+  const ask: { n: number; name: string; options: { code: string; name: string; tariff: string }[] }[] = [];
+  for (const [n, item] of draft.items.entries()) {
+    if (item.hsCode && known.has(item.hsCode)) continue;
+    const guess = (item.hsCode || draft.hsGuesses[n] || "").slice(0, 10);
+    if (guess.length < 4) continue;
+    let options: { code: string; name: string; tariff: string }[] = [];
+    for (const len of [10, 8, 6, 4]) {
+      if (guess.length < len) continue;
+      const found = await searchTnved(tx, guess.slice(0, len), 41);
+      if (found.length) {
+        options = found;
+        if (found.length <= 40) break;
+      }
+    }
+    if (options.length === 1) Object.assign(item, { hsCode: options[0].code, hsAuto: true });
+    else if (options.length > 1) ask.push({ n, name: item.name, options: options.slice(0, 40) });
+  }
+  if (!ask.length) return null;
+  const list = ask
+    .map((a) => `Товар ${a.n}: ${a.name}\n${a.options.map((o) => `  ${o.code} — ${o.name.slice(-160)}`).join("\n")}`)
+    .join("\n\n");
+  let response: Anthropic.Beta.BetaMessage;
+  try {
+    response = await aiClient().beta.messages.create({
+      ...aiBase(),
+      max_tokens: 2000,
+      thinking: { type: "disabled" },
+      output_config: { effort: "low", format: { type: "json_schema", schema: HS_SCHEMA as unknown as Record<string, unknown> } },
+      system: "Ты таможенный декларант ЕАЭС. Для каждого товара выбери самый подходящий 10-значный код ТН ВЭД из предложенных вариантов. Если ни один не подходит — code null.",
+      messages: [{ role: "user", content: list }],
+    });
+  } catch {
+    return null; // без подсказки кода документ всё равно разобран
+  }
+  try {
+    const { codes } = JSON.parse(response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("")) as { codes: { n: number; code: string | null }[] };
+    for (const c of codes) {
+      const a = ask.find((x) => x.n === c.n);
+      const code = (c.code ?? "").replace(/\D/g, "");
+      if (a && a.options.some((o) => o.code === code)) Object.assign(draft.items[c.n], { hsCode: code, hsAuto: true });
+    }
+  } catch {
+    // неразборчивый ответ — оставляем без кода
+  }
+  return usageOf(response);
+}
+
 export async function parseDocumentFile(tx: DbOrTx, buffer: Buffer, filename: string, mime: string): Promise<{ draft: DocumentDraft; usage: AiUsage }> {
   if (buffer.length > AI_MAX_FILE_BYTES) throw new HttpError(413, `Для разбора ИИ файл должен быть не больше ${AI_MAX_FILE_BYTES / 1024 / 1024} МБ`);
   const { raw, usage } = await askModel(buffer, filename, mime);
-  return { draft: await resolveDraft(tx, raw), usage };
+  const { hsGuesses, ...draft } = await resolveDraft(tx, raw);
+  const extra = await suggestHsCodes(tx, { ...draft, hsGuesses });
+  // Ставки ТН ВЭД — чтобы в форме было видно пошлину по каждой позиции.
+  const tariffs = await tnvedByCodes(tx, draft.items.map((i) => i.hsCode ?? ""));
+  for (const i of draft.items) i.tariff = i.hsCode ? (tariffs.get(i.hsCode)?.tariff ?? null) : null;
+  return { draft, usage: extra ? addUsage(usage, extra) : usage };
 }

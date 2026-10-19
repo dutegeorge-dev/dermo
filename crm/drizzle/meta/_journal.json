@@ -50,6 +50,13 @@
       "when": 1791885916835,
       "tag": "0006_deposit_stage",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792396471168,
+      "tag": "0007_customs_calc",
+      "breakpoints": true
     }
   ]
 }

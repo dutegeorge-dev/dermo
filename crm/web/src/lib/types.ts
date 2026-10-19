@@ -230,6 +230,8 @@ export type DocItem = {
   name: string;
   batchNo: string | null;
   hsCode: string | null;
+  /** Код ТН ВЭД подобран ИИ — проверить. */
+  hsAuto?: boolean;
   quantity: number | null;
   unit: string | null;
   price: number | null;
@@ -252,6 +254,9 @@ export type ProductRow = {
   nameRu: string | null;
   hsCode: string | null;
   unit: string | null;
+  vat10: boolean;
+  /** Ставка пошлины по коду (из справочника ТН ВЭД). */
+  tariff: string | null;
   updatedAt: string;
   lastPrice: number | null;
   lastCurrency: string | null;

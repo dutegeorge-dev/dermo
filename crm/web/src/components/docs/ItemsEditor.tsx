@@ -30,17 +30,54 @@ function NumCell({ value, onChange, label }: { value: number | null; onChange: (
   );
 }
 
+/** Ставка пошлины по коду ТН ВЭД (из справочника). */
+export function useTariff(code: string | null | undefined) {
+  const valid = !!code && /^\d{10}$/.test(code);
+  const { data } = useQuery({
+    queryKey: ["tnved", code],
+    queryFn: () => api<{ codes: { code: string; name: string; tariff: string }[] }>(`/tnved?q=${code}`),
+    enabled: valid,
+    staleTime: 60 * 60_000,
+  });
+  if (!valid) return null;
+  const row = data?.codes.find((c) => c.code === code);
+  return data ? (row ?? { code: code!, name: "", tariff: "" }) : undefined;
+}
+
+/** Код ТН ВЭД позиции: поле + ставка под ним; «ИИ» — код подобран автоматически, проверьте. */
+function HsCell({ item, onChange }: { item: DocItem; onChange: (hsCode: string | null) => void }) {
+  const tariff = useTariff(item.hsCode);
+  return (
+    <div>
+      <input
+        className={`input px-1.5 font-mono text-xs ${item.hsAuto ? "border-amber-400 dark:border-amber-600" : ""}`}
+        aria-label="Код ТН ВЭД"
+        value={item.hsCode ?? ""}
+        placeholder="10 цифр"
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 10) || null)}
+      />
+      <div className="mt-0.5 text-[10px] leading-tight muted" title={tariff?.name}>
+        {item.hsAuto && <span className="mr-1 text-amber-700 dark:text-amber-400">ИИ, проверьте ·</span>}
+        {tariff === null ? (item.hsCode ? "нужно 10 цифр" : "") : tariff === undefined ? "…" : tariff.tariff || <span className="text-amber-700 dark:text-amber-400">нет в справочнике</span>}
+      </div>
+    </div>
+  );
+}
+
 export function ItemsEditor({
   items,
   onChange,
   currency,
   showBatch = false,
+  showHs = false,
   onPasteInfo,
 }: {
   items: DocItem[];
   onChange: (items: DocItem[]) => void;
   currency: string | null;
   showBatch?: boolean;
+  /** Колонка «ТН ВЭД» со ставкой пошлины (инвойс поставщика, поручение). */
+  showHs?: boolean;
   onPasteInfo?: (text: string) => void;
 }) {
   const listId = useId();
@@ -71,12 +108,13 @@ export function ItemsEditor({
         {data?.products.map((p) => <option key={p.id} value={p.name}>{p.hsCode ?? ""}</option>)}
       </datalist>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className={`w-full ${showHs ? "min-w-[780px]" : "min-w-[640px]"} text-sm`}>
           <thead>
             <tr className="text-left text-xs muted">
               <th className="w-6 pb-1 font-medium">№</th>
               <th className="pb-1 font-medium">Наименование</th>
               {showBatch && <th className="w-16 pb-1 font-medium">Партия</th>}
+              {showHs && <th className="w-32 pb-1 font-medium">ТН ВЭД</th>}
               <th className="w-24 pb-1 text-right font-medium">Кол-во</th>
               <th className="w-20 pb-1 font-medium">Ед.</th>
               <th className="w-24 pb-1 text-right font-medium">Цена</th>
@@ -95,13 +133,23 @@ export function ItemsEditor({
                     value={it.name}
                     placeholder={i === 0 ? "Наименование — или вставьте таблицу из Excel (Ctrl+V)" : ""}
                     aria-label="Наименование"
-                    onChange={(e) => update(i, { name: e.target.value, productId: null })}
+                    onChange={(e) => {
+                      // Выбрали товар из справочника — берём его код ТН ВЭД.
+                      const p = data?.products.find((x) => x.name === e.target.value);
+                      update(i, p ? { name: p.name, productId: p.id, hsCode: p.hsCode ?? it.hsCode, hsAuto: false } : { name: e.target.value, productId: null });
+                    }}
                     onPaste={onPaste(i)}
                   />
+                  {it.productId ? <div className="mt-0.5 text-[10px] text-green-700 dark:text-green-400">в справочнике товаров</div> : it.name.trim() && showHs ? <div className="mt-0.5 text-[10px] muted">новый товар</div> : null}
                 </td>
                 {showBatch && (
                   <td className="py-0.5 pr-1">
                     <input className="input px-1.5" value={it.batchNo ?? ""} aria-label="Партийный номер" onChange={(e) => update(i, { batchNo: e.target.value || null })} />
+                  </td>
+                )}
+                {showHs && (
+                  <td className="py-0.5 pr-1">
+                    <HsCell item={it} onChange={(hsCode) => update(i, { hsCode, hsAuto: false })} />
                   </td>
                 )}
                 <td className="py-0.5 pr-1"><NumCell label="Количество" value={it.quantity} onChange={(v) => update(i, { quantity: v })} /></td>

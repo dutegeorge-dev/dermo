@@ -8,6 +8,7 @@ import type { DbOrTx } from "../db/client.ts";
 import { counterparties, documentItems, documents, products, shipmentParties, shipments } from "../db/schema.ts";
 import { addShipmentEvent, findActiveContract } from "./shipments.ts";
 import { HttpError } from "./http.ts";
+import { loadProducts, matchProduct, type ProductRef } from "./product-match.ts";
 
 type DocInsert = typeof documents.$inferInsert;
 
@@ -147,23 +148,29 @@ export type ItemInput = {
   amount?: unknown;
 };
 
-/** Ищет товар по названию (без учёта регистра) или создаёт — справочник пополняется сам. */
-async function resolveProduct(tx: DbOrTx, userId: number | null, item: { productId: number | null; name: string; hsCode: string | null; unit: string | null }) {
-  if (item.productId) {
-    const [p] = await tx.select({ id: products.id }).from(products).where(eq(products.id, item.productId));
-    if (p) return p.id;
+/**
+ * Ищет товар (по id, названию, ключу названия — product-match.ts) или создаёт — справочник пополняется сам.
+ * Код ТН ВЭД: у товара его нет, а в позиции есть — записываем товару; в позиции нет — берём у товара.
+ */
+async function resolveProduct(
+  tx: DbOrTx,
+  userId: number | null,
+  item: { productId: number | null; name: string; hsCode: string | null; unit: string | null },
+  catalog: () => Promise<ProductRef[]>,
+) {
+  const pick = { id: products.id, hsCode: products.hsCode };
+  const [byId] = item.productId ? await tx.select(pick).from(products).where(eq(products.id, item.productId)) : [];
+  const found = byId ?? (await tx.select(pick).from(products).where(sql`lower(${products.name}) = lower(${item.name})`).limit(1))[0] ?? matchProduct(await catalog(), item.name);
+  if (found) {
+    if (!found.hsCode && item.hsCode) await tx.update(products).set({ hsCode: item.hsCode, updatedAt: new Date() }).where(eq(products.id, found.id));
+    return { id: found.id, hsCode: item.hsCode ?? found.hsCode };
   }
-  const [found] = await tx
-    .select({ id: products.id })
-    .from(products)
-    .where(sql`lower(${products.name}) = lower(${item.name})`)
-    .limit(1);
-  if (found) return found.id;
   const [created] = await tx
     .insert(products)
     .values({ name: item.name, hsCode: item.hsCode, unit: item.unit, createdBy: userId })
     .returning({ id: products.id });
-  return created.id;
+  (await catalog()).push({ id: created.id, name: item.name, hsCode: item.hsCode });
+  return { id: created.id, hsCode: item.hsCode };
 }
 
 /** Заменяет позиции документа. Возвращает сумму позиций (для суммы документа). */
@@ -172,6 +179,8 @@ export async function replaceItems(tx: DbOrTx, userId: number | null, documentId
   if (raw.length > 500) throw new HttpError(400, "Слишком много позиций");
   await tx.delete(documentItems).where(eq(documentItems.documentId, documentId));
   let total: number | null = null;
+  let loaded: Promise<ProductRef[]> | null = null;
+  const catalog = () => (loaded ??= loadProducts(tx));
   for (const [i, r] of (raw as ItemInput[]).entries()) {
     const name = str(r?.name, 500);
     if (!name) continue;
@@ -179,21 +188,21 @@ export async function replaceItems(tx: DbOrTx, userId: number | null, documentId
     const price = numberOrNull(r.price, `Позиция ${i + 1}: цена`);
     let amount = numberOrNull(r.amount, `Позиция ${i + 1}: сумма`);
     if (amount === null && quantity !== null && price !== null) amount = String(Math.round(Number(quantity) * Number(price) * 100) / 100);
-    const hsCode = str(r.hsCode, 20);
+    const hs = typeof r.hsCode === "string" || typeof r.hsCode === "number" ? String(r.hsCode).replace(/\D/g, "").slice(0, 10) : "";
     const unit = str(r.unit, 30);
-    const productId = await resolveProduct(tx, userId, {
+    const product = await resolveProduct(tx, userId, {
       productId: r.productId ? Number(r.productId) : null,
       name,
-      hsCode,
+      hsCode: hs || null,
       unit,
-    });
+    }, catalog);
     await tx.insert(documentItems).values({
       documentId,
       position: i,
-      productId,
+      productId: product.id,
       name,
       batchNo: str(r.batchNo, 50),
-      hsCode,
+      hsCode: product.hsCode,
       quantity,
       unit,
       price,

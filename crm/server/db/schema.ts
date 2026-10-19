@@ -32,6 +32,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import type { ShipmentCalc } from "../../shared/customs.ts";
+
 /** Полнотекстовый индекс PostgreSQL. */
 const tsvector = customType<{ data: string }>({
   dataType() {
@@ -433,6 +435,8 @@ export const products = pgTable(
     nameRu: text("name_ru"),
     hsCode: text("hs_code"),
     unit: text("unit"),
+    /** НДС при ввозе 10 % (льготный перечень) вместо 22 %. */
+    vat10: boolean("vat10").notNull().default(false),
     notes: text("notes").notNull().default(""),
     createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
@@ -514,6 +518,15 @@ export const documentItems = pgTable(
 );
 
 /** Настройки: реквизиты своей компании, счета. Ключ → JSON. */
+/** Справочник ТН ВЭД ЕАЭС со ставками ввозных пошлин (обновляется командой tnved:update). */
+export const tnved = pgTable("tnved", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  /** Ставка как в ЕТТ: «6.5%, но не менее 0.096 EUR за 1 кг». */
+  tariff: text("tariff").notNull().default(""),
+  updatedAt: updatedAt(),
+});
+
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),
@@ -566,6 +579,8 @@ export const shipments = pgTable(
     chestnyZnak: chestnyZnak("chestny_znak"),
     /** Отмеченные флажки ожиданий: ключ → дата отметки. */
     flags: jsonb("flags").$type<Record<string, string>>().notNull().default({}),
+    /** Расчёт для клиента: смета КП / поручения и таможенные платежи (shared/customs.ts). */
+    calc: jsonb("calc").$type<ShipmentCalc>(),
     notes: text("notes").notNull().default(""),
     createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),

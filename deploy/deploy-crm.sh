@@ -36,6 +36,8 @@ echo "→ 3/5 зависимости, сборка фронтенда, мигр�
 npm --prefix crm ci
 npm --prefix crm run build
 npm --prefix crm run db:migrate
+# Справочник ТН ВЭД со ставками пошлин — при первом деплое (дальше обновляет cron).
+npm --prefix crm run tnved:update -- --if-empty || echo "! Справочник ТН ВЭД не загрузился — запустите позже: npm run crm:tnved"
 
 echo "→ 4/5 владелец www-data и перезапуск bars-crm"
 chown -R www-data:www-data "$REPO"

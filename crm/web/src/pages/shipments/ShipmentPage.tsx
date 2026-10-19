@@ -11,6 +11,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { formatMoney } from "../../../../shared/documents.ts";
 import { formatDay, ValidityChip } from "../../components/docs/common.tsx";
 import { IconCheck } from "../../components/Icons.tsx";
+import { CalcBlock } from "../../components/shipments/CalcBlock.tsx";
 import { ShipmentStage } from "../../components/shipments/common.tsx";
 import { FinanceBlock, ShipmentDocs } from "../../components/shipments/ShipmentDocs.tsx";
 import { ShipmentFields } from "../../components/shipments/ShipmentFields.tsx";
@@ -208,6 +209,7 @@ export function ShipmentPage() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
           <StageTimeline data={data} saveField={save} />
+          <CalcBlock data={data} />
           <FinanceBlock data={data} />
           <GoodsBlock data={data} />
           <ShipmentDocs data={data} />

@@ -4,7 +4,7 @@ import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import { db } from "../db/client.ts";
-import { counterparties, documentItems, documents, products, shipments } from "../db/schema.ts";
+import { counterparties, documentItems, documents, products, shipments, tnved } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
 
@@ -18,7 +18,12 @@ function productValues(input: Record<string, unknown>) {
     v.name = name;
   }
   if ("nameRu" in input) v.nameRu = s(input.nameRu, 500);
-  if ("hsCode" in input) v.hsCode = s(input.hsCode, 20);
+  if ("hsCode" in input) {
+    const code = typeof input.hsCode === "string" ? input.hsCode.replace(/\D/g, "") : "";
+    if (code && code.length !== 10) throw new HttpError(400, "Код ТН ВЭД — 10 цифр");
+    v.hsCode = code || null;
+  }
+  if ("vat10" in input) v.vat10 = Boolean(input.vat10);
   if ("unit" in input) v.unit = s(input.unit, 30);
   if ("notes" in input) v.notes = typeof input.notes === "string" ? input.notes.slice(0, 5000) : "";
   return v;
@@ -35,6 +40,8 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         nameRu: products.nameRu,
         hsCode: products.hsCode,
         unit: products.unit,
+        vat10: products.vat10,
+        tariff: sql<string | null>`(select t.tariff from tnved t where t.code = "products"."hs_code")`,
         updatedAt: products.updatedAt,
         // Последняя закупочная цена — из самого свежего инвойса поставщика.
         lastPrice: sql<number | null>`(select i.price::float8 from document_items i join documents d on d.id = i.document_id
@@ -68,6 +75,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const id = intParam((request.params as { id: string }).id);
     const [product] = await db.select().from(products).where(eq(products.id, id));
     if (!product) throw new HttpError(404, "Товар не найден");
+    const [tn] = product.hsCode ? await db.select().from(tnved).where(eq(tnved.code, product.hsCode)) : [];
     const lines = await db
       .select({
         documentId: documents.id,
@@ -95,6 +103,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       .limit(500);
     return {
       product,
+      tnved: tn ? { name: tn.name, tariff: tn.tariff } : null,
       purchases: lines.filter((l) => l.type === "supplier_invoice"),
       sales: lines.filter((l) => l.type === "commission_order" || l.type === "specification"),
       certificates: lines.filter((l) => l.type === "conformity"),

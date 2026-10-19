@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from "react-router";
 
 import { formatMoney } from "../../../../shared/documents.ts";
 import { docTypeLabel, formatDay } from "../../components/docs/common.tsx";
+import { useTariff } from "../../components/docs/ItemsEditor.tsx";
 import { IconSearch } from "../../components/Icons.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { EmptyState, ErrorBox, Modal, PageHeader, Spinner } from "../../components/ui.tsx";
@@ -49,7 +50,10 @@ export function ProductsPage() {
                     <Link to={`/products/${p.id}`} onClick={(e) => e.stopPropagation()} className="font-medium">{p.name}</Link>
                     {p.nameRu && <span className="ml-2 text-xs muted">{p.nameRu}</span>}
                   </td>
-                  <td className="px-4 py-2 font-mono text-xs">{p.hsCode ?? ""}</td>
+                  <td className="px-4 py-2">
+                    <span className="font-mono text-xs">{p.hsCode ?? ""}</span>
+                    {p.tariff && <span className="block text-[11px] muted">пошлина {p.tariff}{p.vat10 ? " · НДС 10 %" : ""}</span>}
+                  </td>
                   <td className="whitespace-nowrap px-4 py-2 text-right tabular-nums">
                     {p.lastPrice !== null ? formatMoney(p.lastPrice, p.lastCurrency) : "—"}
                     {p.unit && p.lastPrice !== null && <span className="muted"> / {p.unit}</span>}
@@ -109,10 +113,12 @@ export function ProductPage() {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["product", pid],
-    queryFn: () => api<{ product: ProductRow & { notes: string }; purchases: ProductLine[]; sales: ProductLine[]; certificates: ProductLine[] }>(`/products/${pid}`),
+    queryFn: () =>
+      api<{ product: ProductRow & { notes: string }; tnved: { name: string; tariff: string } | null; purchases: ProductLine[]; sales: ProductLine[]; certificates: ProductLine[] }>(`/products/${pid}`),
   });
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", nameRu: "", hsCode: "", unit: "", notes: "" });
+  const [form, setForm] = useState({ name: "", nameRu: "", hsCode: "", unit: "", notes: "", vat10: false });
+  const tariff = useTariff(editing ? form.hsCode.replace(/\D/g, "") : null);
   const [err, setErr] = useState<unknown>(null);
   if (isLoading) return <Content><Spinner /></Content>;
   if (!data) return <Content><ErrorBox error={error} /></Content>;
@@ -123,13 +129,13 @@ export function ProductPage() {
       <div className="mb-1 text-xs muted"><Link to="/products" className="hover:underline">Товары</Link></div>
       <PageHeader
         title={p.name}
-        meta={[p.nameRu, p.hsCode && `ТН ВЭД ${p.hsCode}`, p.unit].filter(Boolean).join(" · ")}
+        meta={[p.nameRu, p.hsCode && `ТН ВЭД ${p.hsCode}`, data.tnved?.tariff && `пошлина ${data.tnved.tariff}`, p.vat10 ? "НДС 10 %" : p.hsCode ? "НДС 22 %" : null, p.unit].filter(Boolean).join(" · ")}
         actions={
           <button
             type="button"
             className="btn"
             onClick={() => {
-              setForm({ name: p.name, nameRu: p.nameRu ?? "", hsCode: p.hsCode ?? "", unit: p.unit ?? "", notes: p.notes ?? "" });
+              setForm({ name: p.name, nameRu: p.nameRu ?? "", hsCode: p.hsCode ?? "", unit: p.unit ?? "", notes: p.notes ?? "", vat10: p.vat10 });
               setEditing(true);
             }}
           >
@@ -137,6 +143,7 @@ export function ProductPage() {
           </button>
         }
       />
+      {data.tnved && <p className="mb-3 text-xs muted">ТН ВЭД {p.hsCode}: {data.tnved.name}</p>}
       {p.notes && <p className="mb-5 whitespace-pre-wrap text-sm">{p.notes}</p>}
       <section className="mb-8">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">Закупки у поставщиков</h2>
@@ -186,6 +193,13 @@ export function ProductPage() {
                 <input className="input" value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
               </label>
             ))}
+            <p className="-mt-2 text-xs muted">
+              {tariff === undefined ? "…" : tariff ? (tariff.tariff ? `Пошлина: ${tariff.tariff}. ${tariff.name.slice(-120)}` : "Такого кода нет в справочнике ТН ВЭД") : "Код ТН ВЭД — 10 цифр; по нему считается пошлина."}
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.vat10} onChange={(e) => setForm({ ...form, vat10: e.target.checked })} />
+              НДС при ввозе 10 % (льготный перечень) — иначе 22 %
+            </label>
             <label className="block">
               <span className="label">Заметки</span>
               <textarea className="input" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />

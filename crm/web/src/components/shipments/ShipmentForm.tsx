@@ -22,6 +22,8 @@ export type ShipmentFormState = {
   pickupLocation: string;
   deliveryLocation: string;
   depositDate: string;
+  weightKg: string;
+  volumeM3: string;
 };
 
 export function emptyForm(): ShipmentFormState {
@@ -37,6 +39,8 @@ export function emptyForm(): ShipmentFormState {
     pickupLocation: "",
     deliveryLocation: "",
     depositDate: "",
+    weightKg: "",
+    volumeM3: "",
   };
 }
 
@@ -58,6 +62,8 @@ export async function formPayload(f: ShipmentFormState): Promise<Record<string, 
     transport: f.transport || null,
     pickupLocation: f.pickupLocation,
     deliveryLocation: f.deliveryLocation,
+    weightKg: f.weightKg.replace(/\s/g, "").replace(",", ".") || null,
+    volumeM3: f.volumeM3.replace(/\s/g, "").replace(",", ".") || null,
     ...(f.depositDate ? { milestones: { deposit: { fact: f.depositDate } } } : {}),
   };
 }
@@ -110,6 +116,15 @@ export function ShipmentForm({ value, onChange }: { value: ShipmentFormState; on
             </option>
           ))}
         </select>
+      </label>
+      <label className="block">
+        <span className="label">Вес груза, кг *</span>
+        <input className="input tabular-nums" inputMode="decimal" required value={value.weightKg} onChange={(e) => set("weightKg", e.target.value)} placeholder="12 000" />
+      </label>
+      <label className="block">
+        <span className="label">Объём, м³ *</span>
+        <input className="input tabular-nums" inputMode="decimal" required value={value.volumeM3} onChange={(e) => set("volumeM3", e.target.value)} placeholder="60" />
+        <span className="mt-0.5 block text-[11px] muted">Вес и объём нужны для расчёта пошлины и КП</span>
       </label>
       <label className="block">
         <span className="label">Депозит уже оплачен? (дата)</span>
