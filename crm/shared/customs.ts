@@ -37,7 +37,7 @@ export type CalcParams = {
   transportLabel: string;
   transportAmount: number | null;
   transportCurrency: string;
-  /** Комиссия за валютный перевод, % от стоимости перевозки. */
+  /** Комиссия за валютный перевод, % от (стоимость товара + перевозка). */
   fxPercent: number | null;
   /** Таможенное оформление (брокер), ₽. */
   broker: number | null;
@@ -197,7 +197,7 @@ export function kpLines(calc: ShipmentCalc): { lines: { name: string; amount: nu
   const rub = (a: number | null, c: string) => (a === null ? null : round2(toRub(a, c, calc.rates)));
   const goodsRub = round2(toRub(calc.goodsAmount, calc.goodsCurrency, calc.rates));
   const transport = rub(calc.transportAmount, calc.transportCurrency);
-  const fx = calc.fxPercent && transport ? round2((transport * calc.fxPercent) / 100) : null;
+  const fx = calc.fxPercent ? round2(((goodsRub + (transport ?? 0)) * calc.fxPercent) / 100) : null;
   const dutyRates = [...new Set(calc.customs.lines.map((l) => l.tariff ?? "—"))];
   const vatRates = [...new Set(calc.customs.lines.map((l) => l.vatRate))];
   const lines: { name: string; amount: number | null; approx?: boolean; indent?: boolean }[] = [];

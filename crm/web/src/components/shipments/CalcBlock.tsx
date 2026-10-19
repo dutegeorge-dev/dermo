@@ -173,7 +173,7 @@ export function CalcBlock({ data }: { data: ShipmentResponse }) {
                   </select>
                 </div>
               </label>
-              <Num label="Комиссия за валютный перевод" suffix="%" value={form.fxPercent} onChange={(v) => set("fxPercent", v)} />
+              <Num label="Комиссия за перевод, % от товара + доставки" suffix="%" value={form.fxPercent} onChange={(v) => set("fxPercent", v)} />
               <Num label="Таможенное оформление (брокер)" suffix="₽" value={form.broker} onChange={(v) => set("broker", v)} />
               <Num label="Хранение на СВХ, досмотры" suffix="₽" value={form.terminal} onChange={(v) => set("terminal", v)} />
               <Num label="Комиссия транспортной компании" suffix="₽" value={form.commission} onChange={(v) => set("commission", v)} />
