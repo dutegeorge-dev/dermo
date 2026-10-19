@@ -11,7 +11,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { DOC_GROUPS, DOC_TYPES } from "../../shared/documents.ts";
 import { FLAGS, MILESTONES, SHIPMENT_STAGES } from "../../shared/shipments.ts";
 import { config } from "../config.ts";
-import { aiBase, aiClient, aiError } from "./ai.ts";
+import { addUsage, type AiUsage, aiBase, aiClient, aiError, usageOf } from "./ai.ts";
 import { currentUser, HttpError } from "./http.ts";
 
 type Input = Record<string, unknown>;
@@ -39,6 +39,39 @@ const id = (v: unknown, name: string) => {
   return n;
 };
 
+// ── Компактные ответы: модели — только нужные поля (токены = деньги) ────────
+
+type Obj = Record<string, unknown>;
+const pick = (o: unknown, keys: string[]): Obj => {
+  const src = (o ?? {}) as Obj;
+  const out: Obj = {};
+  for (const k of keys) if (src[k] !== undefined) out[k] = src[k];
+  return out;
+};
+const nameOf = (o: unknown) => (o as { name?: string } | null)?.name ?? null;
+
+/** Сделка: суть без служебных id. Даты — «план»/«факт» только заполненные. */
+function shipmentBrief(raw: unknown): Obj {
+  const s = raw as Obj & { milestones?: Record<string, { plan: string | null; fact: string | null }>; flags?: Record<string, string> };
+  const dates: Obj = {};
+  for (const [k, v] of Object.entries(s.milestones ?? {})) {
+    if (v?.fact) dates[k] = `факт ${v.fact}`;
+    else if (v?.plan) dates[k] = `план ${v.plan}`;
+  }
+  return {
+    ...pick(s, ["id", "number", "title", "status", "stage", "scheme", "containerNo", "hsCode", "weightKg", "transport", "pickupLocation", "deliveryLocation"]),
+    stageName: SHIPMENT_STAGES[Number(s.stage) - 1]?.name,
+    client: nameOf(s.client),
+    supplier: nameOf(s.supplier),
+    carrier: nameOf(s.carrier),
+    carrierInvoice: s.carrierInvoice ? pick(s.carrierInvoice, ["number", "amount", "currency", "paymentStatus"]) : null,
+    dates,
+    flagsDone: s.flags,
+  };
+}
+
+const DOC_KEYS = ["id", "type", "number", "date", "counterpartyName", "clientName", "shipmentNumber", "shipmentTitle", "currency", "amount", "paymentStatus", "paidAmount", "paidAt", "status", "validUntil"];
+
 const TOOLS: Record<string, ToolSpec> = {
   search: {
     description: "Глобальный поиск по всему: сделки (груз, контейнер, ТН ВЭД, номер), лиды воронки, контрагенты, документы, товары, база знаний, справочник для звонков.",
@@ -54,7 +87,7 @@ const TOOLS: Record<string, ToolSpec> = {
       q: { type: "string", description: "Фильтр: груз, контейнер, ТН ВЭД, клиент, поставщик, перевозчик, номер" },
     },
     path: (i) => `/shipments${qs({ status: i.status, stage: i.stage, q: i.q })}`,
-    shape: (d) => ({ shipments: (d as { shipments: unknown[] }).shipments }),
+    shape: (d) => ({ shipments: (d as { shipments: unknown[] }).shipments.slice(0, 60).map(shipmentBrief) }),
   },
   get_shipment: {
     description: "Полная карточка сделки по номеру: поля, стороны, ключевые даты, флажки, документы, план/факт по деньгам, товары, сертификаты, последние события истории.",
@@ -62,8 +95,16 @@ const TOOLS: Record<string, ToolSpec> = {
     required: ["number"],
     path: (i) => `/shipments/${id(i.number, "number")}`,
     shape: (d) => {
-      const r = d as { events?: unknown[] };
-      return { ...r, events: (r.events ?? []).slice(0, 30) };
+      const r = d as { shipment: unknown; events?: unknown[]; parties?: unknown[]; documents?: unknown[]; finance?: unknown; items?: unknown[]; certificates?: unknown[] };
+      return {
+        shipment: shipmentBrief(r.shipment),
+        parties: (r.parties ?? []).map((p) => pick(p, ["name", "contractorType"])),
+        documents: (r.documents ?? []).map((x) => pick(x, DOC_KEYS)),
+        finance: r.finance,
+        items: (r.items ?? []).slice(0, 40).map((x) => pick(x, ["name", "quantity", "unit", "price", "amount", "currency", "hsCode"])),
+        certificates: (r.certificates ?? []).map((x) => pick(x, ["number", "type", "validUntil"])),
+        lastEvents: (r.events ?? []).slice(0, 8).map((x) => pick(x, ["kind", "field", "newValue", "createdAt"])),
+      };
     },
   },
   calendar: {
@@ -77,9 +118,9 @@ const TOOLS: Record<string, ToolSpec> = {
     shape: (d, i) => {
       const from = s(i.from);
       const to = s(i.to);
-      const events = (d as { events: { date: string | null; done: boolean }[] }).events.filter(
-        (e) => (i.includeDone || !e.done) && (!e.date || ((!from || e.date >= from) && (!to || e.date <= to))),
-      );
+      const events = (d as { events: { date: string | null; done: boolean; shipment: unknown }[] }).events
+        .filter((e) => (i.includeDone || !e.done) && (!e.date || ((!from || e.date >= from) && (!to || e.date <= to))))
+        .map((e) => ({ ...pick(e, ["title", "date", "done", "payment"]), shipment: pick(e.shipment, ["number", "title", "containerNo", "client"]) }));
       return { events };
     },
   },
@@ -95,13 +136,21 @@ const TOOLS: Record<string, ToolSpec> = {
       q: { type: "string", description: "Номер, заметки, стороны, позиции" },
       limit: { type: "integer" },
     },
-    path: (i) => `/documents${qs({ type: i.type, group: i.group, payment: i.payment, expiring: i.expiring, client: i.counterparty, shipment: i.shipment, q: i.q, limit: i.limit ?? 100 })}`,
+    path: (i) => `/documents${qs({ type: i.type, group: i.group, payment: i.payment, expiring: i.expiring, client: i.counterparty, shipment: i.shipment, q: i.q, limit: Math.min(Number(i.limit) || 40, 100) })}`,
+    shape: (d) => ({ documents: (d as { documents: unknown[] }).documents.map((x) => pick(x, DOC_KEYS)) }),
   },
   get_document: {
     description: "Документ по id: поля, позиции, файлы, приложения.",
     properties: { id: { type: "integer" } },
     required: ["id"],
     path: (i) => `/documents/${id(i.id, "id")}`,
+    shape: (d) => {
+      const r = d as { document: Obj; items?: unknown[]; parentLabel?: string | null };
+      return {
+        document: { ...pick(r.document, [...DOC_KEYS, "data", "notes"]), contract: r.parentLabel },
+        items: (r.items ?? []).slice(0, 60).map((x) => pick(x, ["name", "quantity", "unit", "price", "amount", "hsCode"])),
+      };
+    },
   },
   list_counterparties: {
     description: "Контрагенты: клиенты, поставщики, подрядчики (перевозчики, брокеры, СВХ).",
@@ -109,7 +158,8 @@ const TOOLS: Record<string, ToolSpec> = {
       role: { type: "string", enum: ["client", "supplier", "contractor"] },
       q: { type: "string", description: "Название, ИНН, контакт, телефон" },
     },
-    path: (i) => `/counterparties${qs({ role: i.role, q: i.q, limit: 100 })}`,
+    path: (i) => `/counterparties${qs({ role: i.role, q: i.q, limit: 60 })}`,
+    shape: (d) => ({ counterparties: (d as { counterparties: unknown[] }).counterparties.map((x) => pick(x, ["id", "role", "contractorType", "name", "inn", "country", "contactName", "contactPhone", "dealCount"])) }),
   },
   get_counterparty: {
     description: "Карточка контрагента по id: реквизиты, контакты, сделки, документы, товары с ценами.",
@@ -124,6 +174,7 @@ const TOOLS: Record<string, ToolSpec> = {
       q: { type: "string" },
     },
     path: (i) => `/deals${qs({ outcome: i.outcome ?? "open", q: i.q })}`,
+    shape: (d) => ({ leads: (d as { deals: unknown[] }).deals.slice(0, 60).map((x) => pick(x, ["key", "title", "product", "statusKey", "clientName", "contactName", "contactPhone", "assigneeName", "dueDate", "priority", "outcome", "updatedAt"])) }),
   },
   get_lead: {
     description: "Лид воронки по ключу BARS-12: описание, комментарии, история.",
@@ -135,6 +186,7 @@ const TOOLS: Record<string, ToolSpec> = {
     description: "Справочник товаров: ТН ВЭД, последняя закупочная цена.",
     properties: { q: { type: "string" } },
     path: (i) => `/products${qs({ q: i.q })}`,
+    shape: (d) => ({ products: (d as { products: unknown[] }).products.slice(0, 60).map((x) => pick(x, ["id", "name", "nameRu", "hsCode", "unit", "lastPrice", "lastCurrency"])) }),
   },
   get_product: {
     description: "Товар по id: цены по поставщикам и клиентам, документы.",
@@ -175,7 +227,7 @@ function compact(value: unknown): unknown {
   return value;
 }
 
-const MAX_RESULT_CHARS = 60_000;
+const MAX_RESULT_CHARS = 16_000;
 
 export async function runTool(app: FastifyInstance, request: FastifyRequest, name: string, input: Input): Promise<string> {
   const tool = TOOLS[name];
@@ -205,7 +257,7 @@ function systemPrompt(userName: string): string {
 - Контрагенты: клиенты, поставщики, подрядчики. Валюты: CNY, USD, EUR, RUB.
 
 Правила:
-- Данные бери только через инструменты, ничего не выдумывай. Нужно несколько запросов — делай их сразу параллельно.
+- Данные бери только через инструменты, ничего не выдумывай. Обходись минимумом запросов: один-два хорошо отфильтрованных лучше пяти; независимые делай сразу параллельно.
 - Ты только читаешь данные. Если просят что-то изменить — объясни, где это сделать в интерфейсе (и дай ссылку).
 - Отвечай по-русски, коротко и по делу: сначала ответ, потом детали. Списки — маркированные. Суммы — с валютой, даты — «20 окт», «пн 21 окт».
 - Ссылки на объекты — markdown-ссылками, текст ссылки — имя объекта: [№ 12 «Трава»](/shipments/12), [BARS-5](/deals/BARS-5), [инвойс PI-0412](/documents/34), [ООО «Ромашка»](/clients/7). Пути: сделка /shipments/НОМЕР, лид /deals/КЛЮЧ, документ /documents/ID, клиент /clients/ID, поставщик /suppliers/ID, подрядчик /contractors/ID, товар /products/ID, календарь /calendar.
@@ -215,7 +267,7 @@ function systemPrompt(userName: string): string {
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
-const MAX_TURNS = 12;
+const MAX_TURNS = 6;
 
 /** Один ответ чата: история (только текст) → цикл с инструментами → текст ответа. */
 export async function chatReply(
@@ -223,33 +275,37 @@ export async function chatReply(
   request: FastifyRequest,
   history: ChatMessage[],
   page: string | null,
-): Promise<{ reply: string; tools: string[] }> {
+): Promise<{ reply: string; tools: string[]; usage: AiUsage }> {
   const user = currentUser(request);
   const messages: Anthropic.Beta.BetaMessageParam[] = history.map((m) => ({ role: m.role, content: m.content }));
   const last = messages[messages.length - 1];
   if (page && last?.role === "user") last.content = `${String(last.content)}\n\n(Пользователь сейчас на странице CRM: ${page})`;
 
   const used: string[] = [];
+  let usage: AiUsage = { input: 0, cacheRead: 0, output: 0 };
   const client = aiClient();
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     let response: Anthropic.Beta.BetaMessage;
     try {
       response = await client.beta.messages.create({
         ...aiBase(),
-        max_tokens: 16000,
+        max_tokens: 8000,
         output_config: { effort: "low" },
+        // Кэш: инструкция и инструменты одинаковы, внутри одного ответа растёт только переписка.
+        cache_control: { type: "ephemeral" },
         system: systemPrompt(user.name),
         tools: TOOL_DEFS,
         messages,
       });
+      usage = addUsage(usage, usageOf(response));
     } catch (error) {
       throw aiError(error);
     }
-    if (response.stop_reason === "refusal") return { reply: "Не могу ответить на этот запрос.", tools: used };
+    if (response.stop_reason === "refusal") return { reply: "Не могу ответить на этот запрос.", tools: used, usage };
     const toolUses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
     if (response.stop_reason !== "tool_use" || !toolUses.length) {
       const reply = response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim();
-      return { reply: reply || "Не получилось сформулировать ответ — переспросите иначе.", tools: used };
+      return { reply: reply || "Не получилось сформулировать ответ — переспросите иначе.", tools: used, usage };
     }
     // Ответ модели — целиком (с блоками размышлений), затем все результаты одним сообщением.
     messages.push({ role: "assistant", content: response.content });
@@ -265,5 +321,5 @@ export async function chatReply(
     );
     messages.push({ role: "user", content: results });
   }
-  return { reply: "Слишком много шагов — уточните вопрос.", tools: used };
+  return { reply: "Слишком много шагов — уточните вопрос.", tools: used, usage };
 }

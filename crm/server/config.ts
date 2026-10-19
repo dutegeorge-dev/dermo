@@ -81,7 +81,8 @@ export const config = {
     baseUrl: process.env.ANTHROPIC_BASE_URL?.trim() || undefined,
     apiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
     authToken: process.env.ANTHROPIC_AUTH_TOKEN?.trim() || undefined,
-    model: process.env.CRM_AI_MODEL?.trim() || "claude-opus-5-5",
+    /** Дешёвая модель по умолчанию: разбор документов и чат укладываются в неё. */
+    model: process.env.CRM_AI_MODEL?.trim() || "claude-haiku-5-5",
   },
   loginLimit: {
     /** Неудачных попыток на один логин за окно. */

@@ -618,12 +618,15 @@ describe("ИИ: разбор документов и чат", () => {
     assert.equal((await call(s, "POST", "/ai/chat", { messages: [{ role: "user", content: "привет" }] })).statusCode, 503);
   });
 
-  test("черновик сверяется с базой: контрагент, договор, сделка, числа и даты", async () => {
+  test("черновик сверяется с базой кодом: контрагент, договор, сделка, дубли", async () => {
     const { resolveDraft } = await import("../lib/ai-parse.ts");
     const s = await aiSession();
     const supplier = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Turf Factory Co., Ltd" })).json().counterparty;
+    const carrier = (await call(s, "POST", "/counterparties", { role: "contractor", contractorType: "carrier_cn", name: "DEMO RAIL LOGISTICS LIMITED" })).json().counterparty;
     const contract = (await call(s, "POST", "/documents", { type: "supplier_contract", counterpartyId: supplier.id, number: "DTF-07/26" })).json().document;
     const sh = (await call(s, "POST", "/shipments", { title: "Трава демо", supplierId: supplier.id })).json().shipment;
+    const sh2 = (await call(s, "POST", "/shipments", { title: "Плитка демо", carrierId: carrier.id })).json().shipment;
+    await call(s, "PATCH", `/shipments/${sh2.number}`, { containerNo: "DEMU1000099" });
 
     const base = {
       docType: "supplier_invoice",
@@ -631,14 +634,13 @@ describe("ИИ: разбор документов и чат", () => {
       date: "2026-13-45",
       currency: "CNY",
       amount: 1000,
-      counterparty: { matchId: 999999, name: "demo turf factory co., ltd", fullName: null, inn: null, regNumber: null, country: null, address: null },
+      counterparty: { name: "DEMO TURF FACTORY CO.,LTD.", fullName: null, inn: null, regNumber: null, country: "Китай", address: null },
       contractorType: null,
-      clientMatchId: null,
+      clientName: null,
       contractNumber: "DTF 07-26",
-      shipmentMatchNumber: sh.number,
-      shipmentReason: "тот же поставщик",
+      relatedNumbers: [],
       cargoTitle: "Трава",
-      containerNo: "demu 100009-9",
+      containerNo: null,
       weightKg: null,
       incoterms: "EXW",
       paymentTerms: null,
@@ -649,33 +651,51 @@ describe("ИИ: разбор документов и чат", () => {
         { name: "  ", hsCode: null, quantity: null, unit: null, price: null, amount: null },
       ],
       summary: "Инвойс",
-      warnings: [],
     };
     const d = await resolveDraft(db, base);
     assert.equal(d.type, "supplier_invoice");
     assert.equal(d.number, "PI-DEMO-1");
     assert.equal(d.date, null, "кривая дата отброшена");
-    assert.deepEqual(d.counterparty, { id: supplier.id, name: "Demo Turf Factory Co., Ltd" }, "найден по названию, несуществующий id отброшен");
+    assert.deepEqual(d.counterparty, { id: supplier.id, name: "Demo Turf Factory Co., Ltd" }, "найден по названию без «Co., Ltd» и знаков");
     assert.equal(d.parentId, contract.id, "договор найден по номеру без учёта пробелов и знаков");
-    assert.equal(d.shipment?.number, sh.number);
-    assert.equal(d.containerNo, "DEMU1000099");
+    assert.equal(d.shipment?.number, sh.number, "сделка — по договору");
     assert.equal(d.costCategory, null);
     assert.equal(d.items.length, 1);
     assert.equal(d.items[0].hsCode, "570330");
 
+    // Счёт перевозчика: контейнер важнее всего; название — частичное совпадение.
+    const bill = await resolveDraft(db, {
+      ...base,
+      docType: "contractor_invoice",
+      number: "DN-1",
+      contractNumber: null,
+      counterparty: { ...base.counterparty, name: "Demo Rail Logistics" },
+      containerNo: "demu 100009-9",
+      items: base.items,
+    });
+    assert.deepEqual(bill.counterparty, { id: carrier.id, name: "DEMO RAIL LOGISTICS LIMITED" });
+    assert.equal(bill.containerNo, "DEMU1000099");
+    assert.equal(bill.shipment?.number, sh2.number);
+    assert.match(bill.shipmentReason ?? "", /контейнер/);
+    assert.equal(bill.items.length, 0, "у счёта подрядчика позиций нет");
+
+    // Новый контрагент — с реквизитами из документа; сделки нет.
     const unknown = await resolveDraft(db, {
       ...base,
       docType: "contractor_invoice",
-      counterparty: { ...base.counterparty, matchId: null, name: "Demo Rail Forwarding", country: "Китай" },
+      contractNumber: null,
+      counterparty: { ...base.counterparty, name: "Совсем Новый Экспедитор" },
       contractorType: "carrier_cn",
-      shipmentMatchNumber: 987654,
-      items: base.items,
     });
-    assert.deepEqual(unknown.counterparty, { id: null, name: "Demo Rail Forwarding" });
+    assert.deepEqual(unknown.counterparty, { id: null, name: "Совсем Новый Экспедитор" });
     assert.deepEqual(unknown.newCounterparty, { country: "Китай", kind: "foreign", contractorType: "carrier_cn" });
-    assert.equal(unknown.shipment, null, "несуществующая сделка отброшена");
-    assert.equal(unknown.items.length, 0, "у счёта подрядчика позиций нет");
+    assert.equal(unknown.shipment, null);
     assert.equal((await resolveDraft(db, { ...base, docType: "bogus" })).type, "other");
+
+    // Повторная загрузка того же инвойса — предупреждение.
+    await call(s, "POST", "/documents", { type: "supplier_invoice", counterpartyId: supplier.id, number: "PI-DEMO-1", shipmentId: sh.id });
+    const again = await resolveDraft(db, { ...base, number: "PI DEMO 1" });
+    assert.match(again.warnings[0] ?? "", /уже есть/);
   });
 
   test("инструменты чата читают API от имени пользователя", async () => {

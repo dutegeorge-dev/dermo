@@ -348,7 +348,7 @@ function EditorForm({ initial }: { initial: Initial }) {
           {ai.status === "busy" && (
             <div className="flex items-center gap-3 rounded-md border border-accent/30 bg-accent-soft px-3 py-2.5 text-sm dark:bg-accent/10">
               <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-              <span>ИИ читает документ… обычно 20–60 секунд. Поля заполнятся сами.</span>
+              <span>ИИ читает документ… обычно 10–30 секунд. Поля заполнятся сами.</span>
             </div>
           )}
           {ai.status === "error" && file && (

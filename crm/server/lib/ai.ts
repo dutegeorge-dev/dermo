@@ -27,15 +27,24 @@ export function aiClient(): Anthropic {
 }
 
 /**
- * Общие параметры запроса: модель и серверный запасной вариант на случай отказа
- * (fallbacks: "default" — API сам перезапускает запрос на подходящей модели).
+ * Общие параметры запроса. Серверный запасной вариант на случай отказа (fallbacks) есть
+ * только у Opus / Sonnet / Fable — у дешёвой Haiku его нет.
  */
-export function aiBase(): { model: string; betas: Anthropic.Beta.AnthropicBeta[]; fallbacks: "default" } {
-  return {
-    model: config.ai.model,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-  };
+export function aiBase(): { model: string; betas?: Anthropic.Beta.AnthropicBeta[]; fallbacks?: "default" } {
+  const model = config.ai.model;
+  if (!/opus|sonnet|fable/.test(model)) return { model };
+  return { model, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
+}
+
+export type AiUsage = { input: number; cacheRead: number; output: number };
+
+export function usageOf(response: Anthropic.Beta.BetaMessage): AiUsage {
+  const u = response.usage;
+  return { input: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0), cacheRead: u.cache_read_input_tokens ?? 0, output: u.output_tokens ?? 0 };
+}
+
+export function addUsage(a: AiUsage, b: AiUsage): AiUsage {
+  return { input: a.input + b.input, cacheRead: a.cacheRead + b.cacheRead, output: a.output + b.output };
 }
 
 /** Понятное сообщение вместо технической ошибки API. */

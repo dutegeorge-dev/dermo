@@ -1,9 +1,57 @@
 /**
- * Текст из Word (.docx) и Excel (.xlsx) — для разбора ИИ: PDF и картинки модель читает
- * сама, а офисные файлы ей передаём текстом (таблицы — через табуляцию).
+ * Текст из PDF, Word (.docx) и Excel (.xlsx) — для разбора ИИ. Модели отдаём текст, а не
+ * сам файл: так в разы дешевле. PDF — строки восстанавливаем по координатам (колонки
+ * таблиц разделены пробелами, как у pdftotext -layout); если текстового слоя нет (скан) —
+ * пустая строка, тогда модель получит сам файл.
  */
 
 import JSZip from "jszip";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+
+type PdfItem = { str: string; x: number; y: number; w: number; h: number };
+
+export async function pdfText(buffer: Buffer): Promise<string> {
+  const pdf = await getDocument({ data: new Uint8Array(buffer), useSystemFonts: false, verbosity: 0 }).promise;
+  const pages: string[] = [];
+  try {
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n);
+      const content = await page.getTextContent();
+      const items: PdfItem[] = [];
+      for (const it of content.items) {
+        if (!("str" in it) || !it.str.trim()) continue;
+        const [, , , d, x, y] = it.transform as number[];
+        items.push({ str: it.str, x, y, w: it.width, h: Math.abs(d) || it.height || 10 });
+      }
+      // Строки: элементы с близкой высотой Y (сверху вниз), внутри — слева направо.
+      items.sort((a, b) => b.y - a.y || a.x - b.x);
+      const lines: PdfItem[][] = [];
+      for (const it of items) {
+        const line = lines[lines.length - 1];
+        if (line && Math.abs(line[0].y - it.y) <= Math.max(2, it.h * 0.4)) line.push(it);
+        else lines.push([it]);
+      }
+      const out: string[] = [];
+      for (const line of lines) {
+        line.sort((a, b) => a.x - b.x);
+        let text = "";
+        let end = 0;
+        for (const it of line) {
+          const gap = it.x - end;
+          if (text) text += gap > it.h * 1.5 ? "   " : gap > it.h * 0.15 ? " " : "";
+          text += it.str;
+          end = it.x + it.w;
+        }
+        out.push(text.replace(/\s+$/, ""));
+      }
+      pages.push(out.join("\n"));
+      page.cleanup();
+    }
+  } finally {
+    await pdf.destroy();
+  }
+  return pages.map((p, i) => (pages.length > 1 ? `--- стр. ${i + 1}\n${p}` : p)).join("\n").trim();
+}
 
 function decodeXml(s: string): string {
   return s
