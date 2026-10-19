@@ -755,7 +755,7 @@ describe("Расчёт: пошлина по ТН ВЭД, КП, поручени�
     const inv = await call(s, "POST", "/documents", {
       type: "supplier_invoice", number: "DCF-1", date: "2026-10-01", counterpartyId: supplier.id, currency: "CNY",
       items: [
-        { name: "Demo grass 20 mm", hsCode: "5703290009", quantity: 1000, unit: "м²", price: 10 },
+        { name: "Demo calc grass 20 mm", hsCode: "5703290009", quantity: 1000, unit: "м²", price: 10 },
         { name: "Demo LVT 4 mm", hsCode: "3918109000", quantity: 500, unit: "м²", price: 20 },
       ],
       newShipment: { clientId: client.id, title: "Расчёт демо", weightKg: 1000, volumeM3: 10 },
@@ -1057,5 +1057,91 @@ describe("Упаковочный лист, спецификация для пе�
     const dt = (await call(s, "POST", "/documents", { type: "customs_declaration", number: "10000000/101026/0000001", shipmentId, currency: "RUB", amount: 1 })).json().document;
     assert.deepEqual([(await doc(dt.id)).paymentStatus, (await doc(dt.id)).paidAt], ["paid", "2026-10-10"]);
     assert.equal((await flags()).customs_payment, "2026-10-10");
+  });
+});
+
+describe("Товары: варианты, объединение; ставки доставки; расчёт цены для клиента", () => {
+  test("размер рулона и цвет — варианты одного товара; дубли объединяются вместе с ценами фабрик", async () => {
+    const s = await adminSession();
+    const a = (await call(s, "POST", "/products", { name: "Demo merge mat 0,5×25 м, серый" })).json().product;
+    const b = (await call(s, "POST", "/products", { name: "Demo merge mat 1×25 м, синий/зелёный", hsCode: "3918109000" })).json().product;
+    const group = (await call(s, "GET", "/products/duplicates")).json().groups.find((g: { baseName: string }) => g.baseName === "Demo merge mat");
+    assert.ok(group, "группа дублей найдена");
+    assert.equal(group.products.length, 2);
+    const f = (await call(s, "POST", "/factories", { name: "Demo mat factory", offers: [{ productId: b.id, name: "1×25 м, синий", price: 18, unit: "м²" }] })).json().factory;
+    const merged = await call(s, "POST", "/products/merge", { ids: [a.id, b.id], name: "Demo merge mat" });
+    assert.equal(merged.statusCode, 200, merged.body);
+    const product = (await call(s, "GET", `/products/${a.id}`)).json();
+    assert.equal(product.product.name, "Demo merge mat");
+    assert.equal(product.product.hsCode, "3918109000", "код взят у второго товара");
+    assert.equal((await call(s, "GET", `/products/${b.id}`)).statusCode, 404);
+    assert.equal((await call(s, "GET", `/factories/${f.id}`)).json().offers[0].productId, a.id, "цена фабрики перешла к товару");
+    assert.equal((await call(s, "DELETE", `/products/${a.id}`)).statusCode, 409, "есть цены фабрик — не удалить");
+
+    // Новая позиция инвойса с другим размером — к тому же товару, вариант виден в карточке.
+    const supplier = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Mat Supplier" })).json().counterparty;
+    const inv = await call(s, "POST", "/documents", {
+      type: "supplier_invoice", number: "DMS-1", counterpartyId: supplier.id, currency: "CNY",
+      items: [{ name: "Demo merge mat 2×25 м, жёлтый (10 рул.)", quantity: 500, unit: "м²", price: 18 }],
+    });
+    assert.equal(inv.statusCode, 200, inv.body);
+    const card = (await call(s, "GET", `/products/${a.id}`)).json();
+    assert.equal(card.purchases.length, 1);
+    assert.ok(card.variants.some((v: { name: string }) => v.name.startsWith("Demo merge mat 2×25 м")));
+    const row = (await call(s, "GET", "/products?q=жёлтый")).json().products.find((p: { id: number }) => p.id === a.id);
+    assert.ok(row, "поиск по названию варианта");
+    assert.equal(row.factoryCount, 1);
+    assert.deepEqual(row.bestOffer, { price: 18, currency: "CNY", unit: "м²" });
+  });
+
+  test("ставки доставки, расчёт цены партии (сборный груз и контейнер), маржа, КП", async () => {
+    const { docxText } = await import("../lib/file-text.ts");
+    const s = await adminSession();
+    assert.equal((await call(s, "POST", "/freight-rates", { origin: "Демо-Сиань" })).statusCode, 400, "без ставки нельзя");
+    const lcl = (await call(s, "POST", "/freight-rates", {
+      transport: "rail", mode: "cbm", origin: "Демо-Сиань", destination: "Москва", rate: "250", currency: "usd", kgPerCbm: 500, minCbm: 1, fee: 120, feeCurrency: "USD", transitDays: 20, etd: "по пятницам",
+    })).json().rate;
+    assert.deepEqual([lcl.mode, lcl.container, lcl.rate, lcl.currency, lcl.kgPerCbm], ["cbm", null, 250, "USD", 500]);
+    const fcl = (await call(s, "POST", "/freight-rates", { transport: "rail", mode: "container", container: "40HQ", origin: "Демо-Цзинань", destination: "Москва", rate: 55000, currency: "CNY", kgPerCbm: 500 })).json().rate;
+    assert.equal(fcl.kgPerCbm, null, "у контейнерной ставки нет «кг в м³»");
+    assert.equal((await call(s, "GET", "/freight-rates")).json().rates.length, 2);
+    assert.deepEqual((await call(s, "GET", "/cbr-rates")).json().rates, { RUB: 1, USD: 80, EUR: 90, CNY: 11 });
+
+    const product = (await call(s, "POST", "/products", { name: "Demo quote LVT 4 мм", hsCode: "3918109000", unit: "м²" })).json().product;
+    const params = { price: 4, currency: "CNY", unit: "м²", quantity: 5000, kgPerUnit: 4, m3PerUnit: 0.005, transportMode: "rate", freightRateId: lcl.id, fxPercent: 4, broker: 20000, margin: 100000, marginInKp: "line", clientName: "ООО «Демо-Клиент»" };
+    const res = await call(s, "POST", `/products/${product.id}/quotes`, { params });
+    assert.equal(res.statusCode, 200, res.body);
+    const q = res.json().result;
+    // Платный объём: max(25 м³, 20 000 кг / 500, 1) = 40 м³ → 40 × 250 + 120 = 10 120 USD × 80.
+    assert.equal(q.chargeableCbm, 40);
+    assert.equal(q.transportRub, 809600);
+    assert.equal(q.goodsRub, 220000);
+    // Пошлина: max(6,5 % от 220 000 + 809 600 / 2; 0,096 € × 20 000 кг × 90) = 172 800; НДС 22 % от (624 800 + 172 800).
+    assert.equal(q.customs.duty, 172800);
+    assert.equal(q.customs.vat, 175472);
+    assert.equal(q.fxRub, 41184);
+    assert.equal(q.costRub, 1439056);
+    assert.equal(q.totalRub, 1539056);
+    assert.equal(q.perUnitRub, 307.81);
+
+    // Контейнер: 5000 м² при 15 000 в 40HQ — 1 контейнер.
+    const fq = (await call(s, "POST", `/products/${product.id}/quotes`, { params: { ...params, freightRateId: fcl.id, perContainer: 15000 } })).json().result;
+    assert.equal(fq.containers, 1);
+    assert.equal(fq.transportRub, 605000);
+    // Вручную.
+    const mq = (await call(s, "POST", `/products/${product.id}/quotes`, { params: { ...params, transportMode: "manual", transportAmount: 5000, transportCurrency: "USD" } })).json().result;
+    assert.equal(mq.transportRub, 400000);
+
+    const list = (await call(s, "GET", `/products/${product.id}/quotes`)).json().quotes;
+    assert.equal(list.length, 3);
+    const kp = await app.inject({ method: "GET", url: `${API}/quotes/${list[2].id}/kp.docx`, headers: { cookie: s.cookie } });
+    assert.equal(kp.statusCode, 200);
+    const text = await docxText(kp.rawPayload);
+    assert.match(text, /Коммерческое предложение: Demo quote LVT 4 мм/);
+    assert.match(text, /Объём партии: 5\s000 м²/);
+    assert.match(text, /Вознаграждение/);
+    assert.match(text, /1\s539\s056 руб\. \(307,81 руб\. за м²\)/);
+    assert.match(text, /Демо-Сиань — Москва/);
+    assert.equal((await call(s, "DELETE", `/quotes/${list[0].id}`)).statusCode, 200);
   });
 });

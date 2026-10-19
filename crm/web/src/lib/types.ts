@@ -265,6 +265,9 @@ export type ProductRow = {
   lastCurrency: string | null;
   supplierCount: number;
   clientCount: number;
+  variantCount: number;
+  factoryCount: number;
+  bestOffer: { price: number; currency: string; unit: string | null } | null;
 };
 
 export type ProductLine = {

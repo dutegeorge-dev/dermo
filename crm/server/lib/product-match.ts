@@ -55,9 +55,13 @@ export async function loadProducts(tx: DbOrTx): Promise<ProductRef[]> {
   return tx.select({ id: products.id, name: products.name, hsCode: products.hsCode }).from(products).limit(20000);
 }
 
-/** Товар по ключу названия; null — нового товара в справочнике ещё нет. */
+/**
+ * Товар по названию позиции: сначала тот же ключ, затем то же название без варианта (размер рулона, цвет) —
+ * «Трава 20 мм, 4×25 м» идёт к товару «Трава 20 мм». null — товара в справочнике ещё нет.
+ */
 export function matchProduct(list: ProductRef[], name: string): ProductRef | null {
   const key = productKey(name);
   if (!key) return null;
-  return list.find((p) => productKey(p.name) === key) ?? null;
+  const base = productBaseKey(name);
+  return list.find((p) => productKey(p.name) === key) ?? list.find((p) => productBaseKey(p.name) === base) ?? null;
 }

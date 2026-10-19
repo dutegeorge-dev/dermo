@@ -151,6 +151,16 @@
     образцы, код ТН ВЭД) и цены, работник проверяет. Дубли — по WeChat ID / телефону / имени; про чужого
     кандидата сообщаем только, кто его нашёл. Цены фабрик (`product_offers`) привязаны к товарам справочника:
     размер рулона и цвет — вариант, а не новый товар.
+16. **Товары и расчёт цены для клиента (октябрь 2026).** Товары раньше заводились «втупую» из каждой строки инвойса
+    («трава 20 мм 1×25 м», «… 2×25 м» — разные товары) — владелец: из-за цвета или размера рулона это не новый
+    товар. Теперь товар = название без варианта (`productBaseName`: без «N×M м», цветов, скобок), варианты — названия
+    позиций и цен фабрик; старые дубли объединяются кнопкой на странице «Товары» (предложение по группам, владелец
+    подтверждает). Толщина ворса («20 мм» / «35 мм») — разные товары. В карточке товара — «Рассчитать для клиента»:
+    цена фабрики × объём + доставка + 4 % за перевод + пошлина/НДС по коду товара + брокер 20 000 + СВХ / до склада
+    + **маржа суммой на партию** (решение владельца) → цена за единицу в рублях и КП в Word (`templates/product_kp.docx`
+    — из КП владельца). Доставка — **ставки перевозчиков в справочнике** «Ставки доставки» (за контейнер или сборный
+    груз за м³ с «1 м³ = N кг» и сбором за отправку; вставить переписку — ИИ разберёт) **или вручную** — владелец
+    просил оба варианта. Реальные ставки перевозчиков в git не кладём — их заносят в CRM.
 14. **Сайт не трогать** без надобности: `/crm/` — отдельный пакет, деплоится
     отдельно (`deploy/deploy-crm.sh`), сайт байт-в-байт тот же (кроме robots.txt).
 
@@ -228,6 +238,9 @@ crm/
       ai-chat.ts        чат: инструменты = GET к своему API через app.inject с cookie пользователя (только чтение)
       factories.ts      база фабрик: factoryAccess (кто что видит), factoryValues/profileValues, offerValues, replaceOffers
                         (товар по названию без варианта или новый)
+      quotes.ts         ставки доставки (freightValues, freightDto), параметры расчёта (quoteParams), serverQuote,
+                        КП товара (quoteKpData, renderQuoteKp — templates/product_kp.docx или свой в CRM_UPLOAD_DIR/templates)
+      ai-rates.ts       ставки доставки из переписки / скриншота (recognizeRates)
       ai-factory.ts     карточка фабрики по скриншотам / фото / прайсам (recognizeFactory; сканы PDF не отправляем)
       payments.ts       галочки оплат ↔ оплата документов: flagDocuments, markFlagDocuments, paymentForNewDocument, syncPaymentFlags
       carrier-spec.ts   спецификация для перевозчика: specData (упаковочный лист + инвойс → строки по позициям),
@@ -242,7 +255,9 @@ crm/
       settings.ts call-script.ts text.ts
     routes/             auth users kb files calls search audit deals counterparties documents orders products settings shipments ai
                         factories (список, дубли, карточка, цены, «сделать поставщиком», GET /products/:id/offers);
-                        файлы фабрики — files.ts POST /factories/:id/files; ИИ — ai.ts POST /ai/recognize-factory
+                        файлы фабрики — files.ts POST /factories/:id/files; ИИ — ai.ts POST /ai/recognize-factory, /ai/recognize-rates
+                        quotes (ставки доставки CRUD, GET /cbr-rates, расчёты товара и КП /quotes/:id/kp.docx)
+                        products (+ GET /products/duplicates, POST /products/merge)
                         calc (GET/POST /shipments/:n/calc, kp.docx, GET /tnved)
                         cargo (GET/PUT /shipments/:n/spec, spec.xlsx, customs-pack[.zip])
     cli/tnved.ts        npm run tnved:update [--if-empty] [--file]
@@ -256,7 +271,10 @@ crm/
                         docs/DocumentsPage|DocumentPage|DocumentEditor, shipments/ShipmentsPage (доска/список/календарь),
                         shipments/ShipmentPage (карточка), shipments/CalendarPage (CalendarView), SettingsPage, Users, Audit,
                         factories/FactoriesPage (карточки с фото, фильтры анкеты), factories/FactoryPage (новая и карточка:
-                        файлы → ИИ, дубли, анкета, цены; components/factories/common — OffersEditor, статус)
+                        файлы → ИИ, дубли, анкета, цены; components/factories/common — OffersEditor, статус),
+                        factories/FreightRatesPage (/freight-rates: ставки, «вставить из переписки»),
+                        crm/ProductsPage (список + DuplicatesBanner «объединить варианты»; карточка: расчёт, цены фабрик
+                        с фото, варианты), components/products/QuoteCalculator (расчёт в браузере, сохранение, КП)
     components/
       AiChat.tsx        кнопка «Спросить ИИ» в шапке + окно чата (портал, история в sessionStorage, мини-markdown)
       crm/              воронка: Board, DealPanel (карточка лида), CreateDealDialog, DealsTable, StagesEditor, CounterpartyPicker, DealPicker
@@ -288,12 +306,14 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   status new/contacted/samples/approved/rejected, profile jsonb — анкета, found_by, counterparty_id — после договора),
   `product_offers` (factory_id, product_id, name — позиция с характеристиками, price, currency, unit, moq,
   per_container — штук в 40HQ, kg_per_unit, m3_per_unit, conditions, quoted_at); файлы — attachments owner_type
-  `factory`, label photo/catalog/screenshot.
+  `factory`, label photo/catalog/screenshot. `freight_rates` (transport, mode container/cbm, container, origin,
+  destination, rate, currency, kg_per_cbm, min_cbm, fee — за отправку, transit_days, etd, quoted_at),
+  `product_quotes` (product_id, params / result / freight / rates jsonb — расчёт как был на момент сохранения).
 - **Документы:** `documents` (type, number, date, counterparty_id, client_id, **shipment_id**, parent_id (договор),
   seq_no, currency, amount, status, payment_status, paid_amount, paid_at, valid_until, data jsonb, notes),
   `document_items` (product_id, name, batch_no, hs_code, qty, unit, price, amount), `products`, `settings` (company).
 
-**Миграции:** … **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).
@@ -305,6 +325,13 @@ counterparties) → 0004 сделки-отгрузки → **0005** перено
   `setMilestone(…, {plan, shift:true})` двигает плановые даты всех последующих точек без факта на ту же дельту.
   Доска: `POST /shipments/:n/stage` → `moveToStage` ставит факты сегодняшним днём (вперёд) или снимает (назад).
 - **Флажки** (`flags` jsonb: ключ → дата отметки): срок флажка — плановая дата ключевой точки его этапа.
+- **Расчёт цены товара** (`shared/quote.ts` → `computeQuote`, одна функция для браузера и сервера): вес / объём =
+  объём партии × на единицу; доставка: контейнер — число контейнеров (явно / объём ÷ «единиц в 40HQ» / по м³ и
+  весу вместимости 40HQ 68 м³ / 26 т) × ставка + сбор; сборный — платный объём max(м³, кг ÷ «кг в м³», минимум) ×
+  ставка + сбор; вручную — сумма. Таможня — `calcCustoms` (стоимость + ½ доставки, пошлина по коду товара, вес — для
+  ставок «за кг»). Комиссия за перевод — % от (товар + доставка). Итог = себестоимость + маржа; цена = итог ÷ объём.
+  Сохранение пересчитывает на сервере по курсам, которые видел пользователь. КП: маржа строкой «Вознаграждение» или
+  в стоимости товара.
 - **Галочки оплат ↔ документы** (`lib/payments.ts`): balance — инвойсы поставщика сделки, freight — счета
   перевозчика (`carrier_invoice_id`, счета `carrier_id`, подрядчики carrier_*), customs_payment — ДТ. Отметили галочку
   (с датой оплаты) — документы «Оплачен» этой датой, сняли — «Не оплачен». Изменили оплату документа (PATCH) — галочка

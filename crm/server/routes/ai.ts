@@ -7,6 +7,7 @@ import { db } from "../db/client.ts";
 import { aiEnabled } from "../lib/ai.ts";
 import { type ChatMessage, chatReply } from "../lib/ai-chat.ts";
 import { recognizeFactory } from "../lib/ai-factory.ts";
+import { recognizeRates } from "../lib/ai-rates.ts";
 import { parseDocumentFile } from "../lib/ai-parse.ts";
 import { body, HttpError } from "../lib/http.ts";
 
@@ -35,6 +36,20 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
     const { draft, usage } = await recognizeFactory(files);
     request.log.info({ ai: "factory", model: config.ai.model, files: files.length, usage }, "ИИ: карточка фабрики");
     return { draft };
+  });
+
+  /** multipart: поле text (вставленная переписка) и/или скриншоты → черновики ставок доставки. */
+  app.post("/recognize-rates", async (request) => {
+    if (!aiEnabled()) throw new HttpError(503, "ИИ не подключён");
+    const files: { buffer: Buffer; filename: string; mime: string }[] = [];
+    let text = "";
+    for await (const part of request.parts({ limits: { files: 6 } })) {
+      if (part.type === "file") files.push({ buffer: await part.toBuffer(), filename: part.filename || "file", mime: part.mimetype || "application/octet-stream" });
+      else if (part.fieldname === "text") text = String(part.value ?? "");
+    }
+    const { rates, usage } = await recognizeRates({ text, files });
+    request.log.info({ ai: "rates", model: config.ai.model, files: files.length, usage }, "ИИ: ставки доставки");
+    return { rates };
   });
 
   /** { messages: [{ role, content }], page? } → { reply }. История — только текст, её хранит браузер. */

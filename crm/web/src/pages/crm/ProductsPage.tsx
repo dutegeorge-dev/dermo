@@ -7,10 +7,11 @@ import { Link, useNavigate, useParams } from "react-router";
 import { formatMoney } from "../../../../shared/documents.ts";
 import { docTypeLabel, formatDay } from "../../components/docs/common.tsx";
 import { useTariff } from "../../components/docs/ItemsEditor.tsx";
-import { IconSearch } from "../../components/Icons.tsx";
+import { IconChevronDown, IconChevronRight, IconSearch } from "../../components/Icons.tsx";
+import { type ProductOffer, QuoteCalculator } from "../../components/products/QuoteCalculator.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { EmptyState, ErrorBox, Modal, PageHeader, Spinner } from "../../components/ui.tsx";
-import { api } from "../../lib/api.ts";
+import { api, fileUrl } from "../../lib/api.ts";
 import type { ProductLine, ProductRow } from "../../lib/types.ts";
 
 export function ProductsPage() {
@@ -23,7 +24,16 @@ export function ProductsPage() {
   });
   return (
     <Content wide>
-      <PageHeader title="Товары" meta="Справочник пополняется сам из позиций инвойсов и поручений" />
+      <PageHeader
+        title="Товары"
+        meta="Пополняется сам из инвойсов и цен фабрик. Размер рулона и цвет — варианты товара, а не новые товары."
+        actions={
+          <Link to="/freight-rates" className="btn">
+            Ставки доставки
+          </Link>
+        }
+      />
+      <DuplicatesBanner />
       <label className="relative mb-4 block max-w-sm">
         <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input type="search" className="input pl-8" placeholder="Наименование или код ТН ВЭД" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -39,6 +49,7 @@ export function ProductsPage() {
                 <th className="px-4 py-2 font-medium">Наименование</th>
                 <th className="px-4 py-2 font-medium">ТН ВЭД</th>
                 <th className="px-4 py-2 text-right font-medium">Последняя закупка</th>
+                <th className="px-4 py-2 text-right font-medium">Цены фабрик</th>
                 <th className="px-4 py-2 text-right font-medium">Поставщиков</th>
                 <th className="px-4 py-2 text-right font-medium">Клиентов</th>
               </tr>
@@ -49,6 +60,7 @@ export function ProductsPage() {
                   <td className="px-4 py-2">
                     <Link to={`/products/${p.id}`} onClick={(e) => e.stopPropagation()} className="font-medium">{p.name}</Link>
                     {p.nameRu && <span className="ml-2 text-xs muted">{p.nameRu}</span>}
+                    {p.variantCount > 1 && <span className="block text-[11px] muted">{p.variantCount} вариантов</span>}
                   </td>
                   <td className="px-4 py-2">
                     <span className="font-mono text-xs">{p.hsCode ?? ""}</span>
@@ -57,6 +69,19 @@ export function ProductsPage() {
                   <td className="whitespace-nowrap px-4 py-2 text-right tabular-nums">
                     {p.lastPrice !== null ? formatMoney(p.lastPrice, p.lastCurrency) : "—"}
                     {p.unit && p.lastPrice !== null && <span className="muted"> / {p.unit}</span>}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2 text-right tabular-nums">
+                    {p.bestOffer ? (
+                      <>
+                        от {formatMoney(p.bestOffer.price, p.bestOffer.currency)}
+                        {p.bestOffer.unit && <span className="muted"> / {p.bestOffer.unit}</span>}
+                        <span className="block text-[11px] muted">{p.factoryCount} фабр.</span>
+                      </>
+                    ) : p.factoryCount ? (
+                      `${p.factoryCount} фабр.`
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums">{p.supplierCount}</td>
                   <td className="px-4 py-2 text-right tabular-nums">{p.clientCount}</td>
@@ -114,8 +139,20 @@ export function ProductPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["product", pid],
     queryFn: () =>
-      api<{ product: ProductRow & { notes: string }; tnved: { name: string; tariff: string } | null; purchases: ProductLine[]; sales: ProductLine[]; certificates: ProductLine[] }>(`/products/${pid}`),
+      api<{
+        product: ProductRow & { notes: string };
+        variants: { name: string; documents: number; offers: number }[];
+        tnved: { name: string; tariff: string } | null;
+        purchases: ProductLine[];
+        sales: ProductLine[];
+        certificates: ProductLine[];
+      }>(`/products/${pid}`),
   });
+  const offers = useQuery({
+    queryKey: ["product-offers", pid],
+    queryFn: () => api<{ offers: ProductOffer[]; photos: { id: string; factoryId: number; filename: string }[] }>(`/products/${pid}/offers`),
+  });
+  const [calcOpen, setCalcOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: "", nameRu: "", hsCode: "", unit: "", notes: "", vat10: false });
   const tariff = useTariff(editing ? form.hsCode.replace(/\D/g, "") : null);
@@ -145,6 +182,90 @@ export function ProductPage() {
       />
       {data.tnved && <p className="mb-3 text-xs muted">ТН ВЭД {p.hsCode}: {data.tnved.name}</p>}
       {p.notes && <p className="mb-5 whitespace-pre-wrap text-sm">{p.notes}</p>}
+      {!p.hsCode && <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">Нет кода ТН ВЭД — пошлина в расчёте будет 0. Нажмите «Изменить» и впишите код.</p>}
+
+      <section className="panel mb-6 p-4">
+        <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => setCalcOpen(!calcOpen)} aria-expanded={calcOpen}>
+          {calcOpen ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+          <span className="text-sm font-semibold">Рассчитать для клиента</span>
+          <span className="text-xs muted">цена за {p.unit ?? "ед."} с доставкой, таможней и маржой · КП</span>
+        </button>
+        {calcOpen && offers.data && (
+          <div className="mt-4">
+            <QuoteCalculator product={p} offers={offers.data.offers} />
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">Цены фабрик</h2>
+        {offers.data && offers.data.photos.length > 0 && (
+          <ul className="mb-3 flex gap-2 overflow-x-auto pb-1">
+            {offers.data.photos.map((ph) => (
+              <li key={ph.id} className="shrink-0">
+                <a href={fileUrl(ph.id)} target="_blank" rel="noreferrer">
+                  <img src={fileUrl(ph.id)} alt={ph.filename} loading="lazy" className="h-24 w-24 rounded object-cover" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+        {offers.data && offers.data.offers.length === 0 && (
+          <p className="text-sm muted">
+            Пока нет. Цены появятся из <Link to="/factories" className="link">базы фабрик</Link>.
+          </p>
+        )}
+        {offers.data && offers.data.offers.length > 0 && (
+          <div className="panel overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs muted dark:border-neutral-800">
+                  <th className="px-3 py-2 font-medium">Фабрика</th>
+                  <th className="px-3 py-2 font-medium">Позиция</th>
+                  <th className="px-3 py-2 text-right font-medium">Цена</th>
+                  <th className="px-3 py-2 text-right font-medium">Мин. заказ</th>
+                  <th className="px-3 py-2 text-right font-medium">В 40HQ</th>
+                  <th className="px-3 py-2 font-medium">Дата</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-neutral-800">
+                {offers.data.offers.map((o) => (
+                  <tr key={o.id}>
+                    <td className="px-3 py-2">
+                      <Link to={`/factories/${o.factoryId}`} className="link">{o.factoryNameRu || o.factoryName}</Link>
+                      <span className="block text-[11px] muted">{[o.factoryLocation, o.supplierId ? "поставщик" : "кандидат"].filter(Boolean).join(" · ")}</span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {o.name}
+                      {o.conditions && <span className="block text-[11px] muted">{o.conditions}</span>}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+                      {o.price !== null ? formatMoney(o.price, o.currency) : "—"}
+                      {o.unit && <span className="muted"> / {o.unit}</span>}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{o.moq ? `${o.moq.toLocaleString("ru-RU")} ${o.unit ?? ""}` : "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{o.perContainer ? o.perContainer.toLocaleString("ru-RU") : "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-xs">{formatDay(o.quotedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {data.variants.length > 1 && (
+        <section className="mb-8">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">Варианты (размер, цвет, характеристики)</h2>
+          <ul className="flex flex-wrap gap-1.5 text-xs">
+            {data.variants.map((v) => (
+              <li key={v.name} className="rounded border border-slate-200 px-2 py-0.5 dark:border-neutral-800" title={`в документах: ${v.documents}, у фабрик: ${v.offers}`}>
+                {v.name}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="mb-8">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">Закупки у поставщиков</h2>
         <LinesTable lines={data.purchases} who="supplier" />
@@ -209,5 +330,95 @@ export function ProductPage() {
         </Modal>
       )}
     </Content>
+  );
+}
+
+type DuplicateGroup = { baseName: string; products: { id: number; name: string; hsCode: string | null; uses: number }[] };
+
+/** Дубли: одно название без размера рулона и цвета — предложение объединить в один товар. */
+function DuplicatesBanner() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({ queryKey: ["products", "duplicates"], queryFn: () => api<{ groups: DuplicateGroup[] }>("/products/duplicates") });
+  const [open, setOpen] = useState(false);
+  const [skip, setSkip] = useState<Set<string>>(new Set());
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  if (!data?.groups.length) return null;
+  const groups = data.groups;
+  const merge = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      for (const g of groups) {
+        if (skip.has(g.baseName)) continue;
+        // Главный — самый используемый (его история цен больше).
+        const ordered = [...g.products].sort((a, b) => b.uses - a.uses);
+        await api("/products/merge", { method: "POST", body: { ids: ordered.map((p) => p.id), name: names[g.baseName] ?? g.baseName } });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["products"] });
+      setOpen(false);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+        <span>
+          Похожих товаров: {groups.length} {groups.length === 1 ? "группа" : "групп"} — отличаются только размером рулона или цветом.
+        </span>
+        <button type="button" className="btn btn-sm" onClick={() => setOpen(true)}>
+          Посмотреть и объединить
+        </button>
+      </div>
+      {open && (
+        <Modal
+          title="Объединить варианты в товары"
+          onClose={() => setOpen(false)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setOpen(false)}>Отмена</button>
+              <button type="button" className="btn btn-primary" disabled={busy || skip.size === groups.length} onClick={() => void merge()}>
+                {busy ? "Объединяем…" : `Объединить (${groups.length - skip.size})`}
+              </button>
+            </>
+          }
+        >
+          <p className="mb-3 text-sm muted">Позиции инвойсов и цены фабрик перейдут к одному товару; названия позиций (размер, цвет) сохранятся.</p>
+          <ul className="space-y-3">
+            {groups.map((g) => (
+              <li key={g.baseName} className="rounded-md border border-slate-200 p-2 dark:border-neutral-800">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={!skip.has(g.baseName)}
+                    onChange={(e) => {
+                      const next = new Set(skip);
+                      if (e.target.checked) next.delete(g.baseName);
+                      else next.add(g.baseName);
+                      setSkip(next);
+                    }}
+                  />
+                  <input className="input py-1" value={names[g.baseName] ?? g.baseName} onChange={(e) => setNames({ ...names, [g.baseName]: e.target.value })} aria-label="Название товара" />
+                </label>
+                <ul className="ml-6 mt-1 text-xs muted">
+                  {g.products.map((p) => (
+                    <li key={p.id}>
+                      {p.name}
+                      {p.hsCode ? ` · ${p.hsCode}` : ""}
+                    </li>
+                  ))}
+                </ul>
+                {new Set(g.products.map((p) => p.hsCode).filter(Boolean)).size > 1 && <p className="ml-6 text-[11px] text-amber-700 dark:text-amber-400">Разные коды ТН ВЭД — останется код главного товара, проверьте.</p>}
+              </li>
+            ))}
+          </ul>
+          <ErrorBox error={error} />
+        </Modal>
+      )}
+    </>
   );
 }

@@ -36,6 +36,7 @@ import {
 import type { SpecParams } from "../../shared/cargo.ts";
 import type { ShipmentCalc } from "../../shared/customs.ts";
 import type { FactoryProfile } from "../../shared/factories.ts";
+import type { FreightRate, QuoteParams, QuoteResult } from "../../shared/quote.ts";
 
 /** Полнотекстовый индекс PostgreSQL. */
 const tsvector = customType<{ data: string }>({
@@ -508,6 +509,53 @@ export const productOffers = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [index("product_offers_factory_idx").on(t.factoryId, t.position), index("product_offers_product_idx").on(t.productId)],
+);
+
+/** Ставки доставки от перевозчиков (shared/quote.ts → FreightRate): для расчёта цены товара для клиента. */
+export const freightRates = pgTable("freight_rates", {
+  id: serial("id").primaryKey(),
+  carrierName: text("carrier_name").notNull().default(""),
+  transport: text("transport").notNull().default("rail"),
+  /** container — за контейнер; cbm — сборный груз за м³. */
+  mode: text("mode").notNull().default("container"),
+  container: text("container"),
+  origin: text("origin").notNull().default(""),
+  destination: text("destination").notNull().default(""),
+  rate: numeric("rate", { precision: 16, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("USD"),
+  kgPerCbm: numeric("kg_per_cbm", { precision: 10, scale: 2 }),
+  minCbm: numeric("min_cbm", { precision: 10, scale: 3 }),
+  fee: numeric("fee", { precision: 16, scale: 2 }),
+  feeCurrency: text("fee_currency").notNull().default("USD"),
+  transitDays: integer("transit_days"),
+  etd: text("etd").notNull().default(""),
+  validUntil: date("valid_until"),
+  quotedAt: date("quoted_at"),
+  notes: text("notes").notNull().default(""),
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** Сохранённые расчёты цены товара для клиента (параметры и результат на момент расчёта). */
+export const productQuotes = pgTable(
+  "product_quotes",
+  {
+    id: serial("id").primaryKey(),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    offerId: integer("offer_id").references(() => productOffers.id, { onDelete: "set null" }),
+    clientName: text("client_name").notNull().default(""),
+    params: jsonb("params").$type<QuoteParams>().notNull(),
+    result: jsonb("result").$type<QuoteResult>().notNull(),
+    freight: jsonb("freight").$type<FreightRate | null>(),
+    ratesDate: date("rates_date"),
+    rates: jsonb("rates").$type<Record<string, number>>().notNull(),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("product_quotes_product_idx").on(t.productId, t.createdAt)],
 );
 
 /**

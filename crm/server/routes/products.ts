@@ -4,9 +4,10 @@ import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import { db } from "../db/client.ts";
-import { counterparties, documentItems, documents, products, shipments, tnved } from "../db/schema.ts";
+import { counterparties, documentItems, documents, productOffers, products, shipments, tnved } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
+import { productBaseKey, productBaseName } from "../lib/product-match.ts";
 
 const s = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) || null : null);
 
@@ -31,6 +32,8 @@ function productValues(input: Record<string, unknown>) {
 
 export async function productRoutes(app: FastifyInstance): Promise<void> {
   app.get("/products", async (request) => {
+    const user = currentUser(request);
+    const visible = user.role === "admin" ? sql`true` : sql`(f.counterparty_id is not null or f.found_by = ${user.id})`;
     const q = String((request.query as { q?: string }).q ?? "").trim().slice(0, 100);
     const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     const rows = await db
@@ -53,9 +56,27 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         clientCount: sql<number>`(select count(distinct coalesce(d.client_id, sh.client_id))::int from document_items i
           join documents d on d.id = i.document_id left join shipments sh on sh.id = d.shipment_id
           where i.product_id = "products"."id")`,
+        // Варианты — разные названия позиций (размер рулона, цвет) у документов и цен фабрик.
+        variantCount: sql<number>`(select count(*)::int from (select lower(i.name) from document_items i where i.product_id = "products"."id"
+          union select lower(o.name) from product_offers o where o.product_id = "products"."id") v)`,
+        factoryCount: sql<number>`(select count(distinct o.factory_id)::int from product_offers o join factories f on f.id = o.factory_id
+          where o.product_id = "products"."id" and ${visible})`,
+        bestOffer: sql<{ price: number; currency: string; unit: string | null } | null>`(select json_build_object('price', o.price::float8, 'currency', o.currency, 'unit', o.unit)
+          from product_offers o join factories f on f.id = o.factory_id
+          where o.product_id = "products"."id" and o.price is not null and ${visible} order by (o.currency = 'CNY') desc, o.price limit 1)`,
       })
       .from(products)
-      .where(q ? or(ilike(products.name, like), ilike(products.nameRu, like), ilike(products.hsCode, like)) : undefined)
+      .where(
+        q
+          ? or(
+              ilike(products.name, like),
+              ilike(products.nameRu, like),
+              ilike(products.hsCode, like),
+              sql`exists (select 1 from document_items i where i.product_id = "products"."id" and i.name ilike ${like})`,
+              sql`exists (select 1 from product_offers o where o.product_id = "products"."id" and o.name ilike ${like})`,
+            )
+          : undefined,
+      )
       .orderBy(asc(products.name))
       .limit(q ? 30 : 1000);
     return { products: rows };
@@ -101,8 +122,15 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       .where(eq(documentItems.productId, id))
       .orderBy(desc(documents.date), desc(documents.id))
       .limit(500);
+    // Варианты: как товар называется в документах и у фабрик (размер рулона, цвет, плотность).
+    const variants = await db.execute<{ name: string; documents: number; offers: number }>(sql`
+      select min(name) as name, sum(d)::int as documents, sum(o)::int as offers from (
+        select name, 1 as d, 0 as o from document_items where product_id = ${id}
+        union all select name, 0, 1 from product_offers where product_id = ${id}) x
+      group by lower(name) order by min(name) limit 200`);
     return {
       product,
+      variants: variants.rows,
       tnved: tn ? { name: tn.name, tariff: tn.tariff } : null,
       purchases: lines.filter((l) => l.type === "supplier_invoice"),
       sales: lines.filter((l) => l.type === "commission_order" || l.type === "specification"),
@@ -123,7 +151,72 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     return { product };
   });
 
-  /** Объединить дубли: позиции товара from переходят к товару id, from удаляется. */
+  /**
+   * Дубли: товары, у которых название без варианта (размер рулона, цвет, число мест) совпадает —
+   * «Трава 20 мм, 1×25 м» и «Трава 20 мм, 2×25 м» — это один товар.
+   */
+  app.get("/products/duplicates", async () => {
+    const rows = await db
+      .select({
+        id: products.id,
+        name: products.name,
+        hsCode: products.hsCode,
+        uses: sql<number>`(select count(*)::int from document_items i where i.product_id = "products"."id")
+          + (select count(*)::int from product_offers o where o.product_id = "products"."id")`,
+      })
+      .from(products)
+      .orderBy(asc(products.name));
+    const groups = new Map<string, { baseName: string; products: typeof rows }>();
+    for (const r of rows) {
+      const key = productBaseKey(r.name);
+      if (!key) continue;
+      const g = groups.get(key) ?? { baseName: productBaseName(r.name), products: [] };
+      g.products.push(r);
+      groups.set(key, g);
+    }
+    return { groups: [...groups.values()].filter((g) => g.products.length > 1) };
+  });
+
+  /** Объединить товары ids в первый: позиции документов и цены фабрик переходят к нему, остальные удаляются. */
+  app.post("/products/merge", async (request) => {
+    const user = currentUser(request);
+    const input = body<{ ids: unknown; name: unknown }>(request);
+    const ids = [...new Set((Array.isArray(input.ids) ? input.ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    if (ids.length < 2) throw new HttpError(400, "Выберите хотя бы два товара");
+    const name = s(input.name, 500);
+    return db.transaction(async (tx) => {
+      const found = await tx.select().from(products).where(inArray(products.id, ids));
+      if (found.length !== ids.length) throw new HttpError(404, "Товар не найден");
+      const [targetId, ...fromIds] = ids;
+      const target = found.find((p) => p.id === targetId)!;
+      await tx.update(documentItems).set({ productId: targetId }).where(inArray(documentItems.productId, fromIds));
+      await tx.update(productOffers).set({ productId: targetId }).where(inArray(productOffers.productId, fromIds));
+      const others = found.filter((p) => p.id !== targetId);
+      await tx
+        .update(products)
+        .set({
+          name: name ?? target.name,
+          nameRu: target.nameRu ?? others.find((p) => p.nameRu)?.nameRu ?? null,
+          hsCode: target.hsCode ?? others.find((p) => p.hsCode)?.hsCode ?? null,
+          unit: target.unit ?? others.find((p) => p.unit)?.unit ?? null,
+          vat10: target.vat10 || others.some((p) => p.vat10),
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, targetId));
+      await tx.delete(products).where(inArray(products.id, fromIds));
+      await audit(tx, {
+        userId: user.id,
+        action: "update",
+        entityType: "product",
+        entityId: targetId,
+        summary: `Объединил товары ${others.map((p) => `«${p.name}»`).join(", ")} в «${name ?? target.name}»`,
+        ip: request.ip,
+      });
+      return { ok: true, id: targetId };
+    });
+  });
+
+  /** Объединить дубли: позиции и цены товара from переходят к товару id, from удаляется. */
   app.post("/products/:id/merge", async (request) => {
     const user = currentUser(request);
     const id = intParam((request.params as { id: string }).id);
@@ -133,6 +226,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       const found = await tx.select().from(products).where(inArray(products.id, [id, fromId]));
       if (found.length !== 2) throw new HttpError(404, "Товар не найден");
       await tx.update(documentItems).set({ productId: id }).where(eq(documentItems.productId, fromId));
+      await tx.update(productOffers).set({ productId: id }).where(eq(productOffers.productId, fromId));
       const [removed] = await tx.delete(products).where(eq(products.id, fromId)).returning();
       await audit(tx, { userId: user.id, action: "update", entityType: "product", entityId: id, summary: `Объединил товар «${removed.name}» с «${found.find((p) => p.id === id)!.name}»`, ip: request.ip });
       return { ok: true };
@@ -144,6 +238,8 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const id = intParam((request.params as { id: string }).id);
     const [used] = await db.select({ id: documentItems.id }).from(documentItems).where(and(eq(documentItems.productId, id))).limit(1);
     if (used) throw new HttpError(409, "Товар есть в документах — удалить нельзя (можно объединить с другим)");
+    const [offered] = await db.select({ id: productOffers.id }).from(productOffers).where(eq(productOffers.productId, id)).limit(1);
+    if (offered) throw new HttpError(409, "На товар есть цены фабрик — удалить нельзя (можно объединить с другим)");
     const [removed] = await db.delete(products).where(eq(products.id, id)).returning();
     if (!removed) throw new HttpError(404, "Товар не найден");
     await audit(db, { userId: admin.id, action: "delete", entityType: "product", entityId: id, summary: `Удалил товар «${removed.name}»`, ip: request.ip });

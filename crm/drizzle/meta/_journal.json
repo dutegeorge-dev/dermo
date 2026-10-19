@@ -78,6 +78,13 @@
       "when": 1792403910461,
       "tag": "0010_factories",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792404724019,
+      "tag": "0011_freight_quotes",
+      "breakpoints": true
     }
   ]
 }

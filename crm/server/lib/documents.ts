@@ -8,7 +8,7 @@ import type { DbOrTx } from "../db/client.ts";
 import { counterparties, documentItems, documents, products, shipmentParties, shipments } from "../db/schema.ts";
 import { addShipmentEvent, findActiveContract } from "./shipments.ts";
 import { HttpError } from "./http.ts";
-import { loadProducts, matchProduct, type ProductRef } from "./product-match.ts";
+import { loadProducts, matchProduct, productBaseName, type ProductRef } from "./product-match.ts";
 
 type DocInsert = typeof documents.$inferInsert;
 
@@ -165,11 +165,13 @@ async function resolveProduct(
     if (!found.hsCode && item.hsCode) await tx.update(products).set({ hsCode: item.hsCode, updatedAt: new Date() }).where(eq(products.id, found.id));
     return { id: found.id, hsCode: item.hsCode ?? found.hsCode };
   }
+  // Новый товар — без варианта: размер рулона и цвет остаются в позиции.
+  const name = productBaseName(item.name);
   const [created] = await tx
     .insert(products)
-    .values({ name: item.name, hsCode: item.hsCode, unit: item.unit, createdBy: userId })
+    .values({ name, hsCode: item.hsCode, unit: item.unit, createdBy: userId })
     .returning({ id: products.id });
-  (await catalog()).push({ id: created.id, name: item.name, hsCode: item.hsCode });
+  (await catalog()).push({ id: created.id, name, hsCode: item.hsCode });
   return { id: created.id, hsCode: item.hsCode };
 }
 

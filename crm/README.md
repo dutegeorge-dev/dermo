@@ -310,7 +310,9 @@ sudo systemctl start bars-crm
 | `document_items` | Позиции документа: `product_id`, `name` (как в документе), `batch_no` («партийный номер» поручения), `hs_code`, `quantity`, `unit`, `price`, `amount` |
 | `factories` | База фабрик: `name` (как в WeChat), `name_ru`, `wechat_id`, `contact_name`, `phone`, `email`, `website`, `location` (место производства), `categories` text[], `status` (`new`/`contacted`/`samples`/`approved`/`rejected`), `profile` jsonb (анкета — `shared/factories.ts`), `notes`, `found_by` (кто нашёл — видит кандидата), `counterparty_id` (поставщик после договора; тогда фабрику видят все) |
 | `product_offers` | Цены фабрик: `factory_id`, `product_id` (товар справочника — по названию без размера рулона и цвета), `name` (позиция с характеристиками), `price`, `currency`, `unit`, `moq`, `per_container` (единиц в 40HQ), `kg_per_unit`, `m3_per_unit`, `conditions`, `quoted_at` |
-| `products` | Справочник товаров: `name`, `name_ru`, `hs_code`, `unit`, `vat10` (НДС при ввозе 10 % вместо 22 %). Пополняется сам из позиций (поиск по названию и ключу названия без размеров в скобках — `server/lib/product-match.ts`); код ТН ВЭД из позиции записывается товару, если у него не было |
+| `freight_rates` | Ставки доставки: `transport` (rail/truck/sea/multimodal), `mode` (`container` / `cbm`), `container`, `origin`, `destination`, `rate`, `currency`, `kg_per_cbm`, `min_cbm`, `fee` + `fee_currency` (за отправку), `transit_days`, `etd`, `valid_until`, `quoted_at`, `carrier_name`, `notes` |
+| `product_quotes` | Расчёты цены товара для клиента: `product_id`, `offer_id`, `client_name`, `params` / `result` / `freight` / `rates` (jsonb, `shared/quote.ts`), `rates_date` |
+| `products` | Справочник товаров: `name`, `name_ru`, `hs_code`, `unit`, `vat10` (НДС при ввозе 10 % вместо 22 %). Пополняется сам из позиций и цен фабрик: товар — название без варианта (размер рулона «2×25 м», цвет, число мест в скобках — `server/lib/product-match.ts`), сама позиция хранит полное название; код ТН ВЭД из позиции записывается товару, если у него не было |
 | `tnved` | Справочник ТН ВЭД ЕАЭС: `code` (10 цифр), `name`, `tariff` (ставка текстом: «6.5%, но не менее 0.096 EUR за 1 кг»; разбор — `parseTariff` в `shared/customs.ts`). Заполняется `npm run crm:tnved` |
 | `settings` | Настройки, ключ → JSON. `company` — реквизиты ООО ТЛК БАРС, счета (`accounts`) и какой счёт ставить в поручения |
 | `deal_comments` | Комментарии: `deal_id`, `author_id`, `body` |
@@ -394,6 +396,11 @@ sudo systemctl start bars-crm
 | `GET/PATCH/DELETE /factories/:id` | Карточка (анкета, цены, файлы) / правка (offers — заменить целиком) / удаление (кандидата — нашедший или админ, поставщика — админ) |
 | `POST /factories/:id/files?label=photo\|catalog\|screenshot`, `POST /factories/:id/supplier` | Файл фабрики; «сделать поставщиком» |
 | `GET /products/:id/offers` | Цены фабрик на товар (с учётом доступа) и их фото |
+| `GET /products/duplicates`, `POST /products/merge` `{ids, name}` | Группы похожих товаров (одно название без варианта); объединить в первый (позиции и цены фабрик переходят) |
+| `GET/POST /freight-rates`, `PATCH/DELETE /freight-rates/:id` | Ставки доставки |
+| `POST /ai/recognize-rates` (multipart: `text` и/или файлы) | ИИ: ставки из переписки с перевозчиком → черновики |
+| `GET /cbr-rates` | Курсы ЦБ на сегодня (для расчёта в браузере) |
+| `GET/POST /products/:id/quotes` `{params, rates?, ratesDate?}`, `GET /quotes/:id/kp.docx`, `DELETE /quotes/:id` | Расчёты цены товара (сервер пересчитывает), КП в Word, удаление (автор / админ) |
 
 ## Справочник для звонков
 
@@ -437,6 +444,16 @@ sudo systemctl start bars-crm
 заполняет имя, WeChat ID, менеджера, анкету (10 вопросов) и цены; дубли подсвечиваются по WeChat ID, телефону,
 имени. Список — карточки с фото; поиск по названию, WeChat, городу, категории, товару; фильтры: статус, поставщики,
 экспортная лицензия, ВТБ Шанхай, работали с РФ. «Сделать поставщиком» — контрагент-поставщик с контактом WeChat.
+
+**Товары — варианты и расчёт.** Товар — название без размера рулона и цвета; разные размеры/цвета — варианты
+(видны в карточке). Похожие товары («… 1×25 м», «… 2×25 м») страница «Товары» предлагает объединить: позиции
+документов и цены фабрик переходят к одному товару. В карточке товара: «Рассчитать для клиента» — выбрать цену
+фабрики, объём, доставку (ставка из справочника или вручную), брокер, СВХ, маржу на партию → цена за единицу в
+рублях с доставкой и таможней; «КП в Word» и сохранённые расчёты. Ниже — цены всех фабрик с фото и варианты.
+
+**Ставки доставки** (`/crm/freight-rates`, кнопка на странице «Товары»): за контейнер (40HQ / 40GP / 20GP) или
+сборный груз за м³ (1 м³ = N кг, минимум, сбор за отправку), срок, дни отправки. «Вставить из переписки» — текст или
+скриншот сообщения перевозчика, ИИ разбирает ставки, вы проверяете и сохраняете.
 
 **Товары** (`/crm/products`): справочник с последней закупочной ценой; карточка — у каких поставщиков и почём брали, каким клиентам и по какой цене шло в поручения/спецификации.
 
