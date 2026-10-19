@@ -829,6 +829,23 @@ describe("Упаковочный лист, спецификация для пе�
     return app.inject({ method: "POST", url: `${API}${url}`, headers: { cookie: s.cookie, "x-csrf-token": s.csrf, "content-type": m.type }, payload: m.payload });
   };
 
+  test("схемы ответа ИИ проходят ограничения API (≤16 объединений, enum без null-типа)", async () => {
+    const { DRAFT_SCHEMA, HS_SCHEMA } = await import("../lib/ai-parse.ts");
+    const { MAPPING_SCHEMA } = await import("../lib/carrier-spec.ts");
+    for (const schema of [DRAFT_SCHEMA, HS_SCHEMA, MAPPING_SCHEMA]) {
+      let unions = 0;
+      const walk = (n: unknown) => {
+        if (!n || typeof n !== "object") return;
+        const o = n as Record<string, unknown>;
+        if (Array.isArray(o.type) || o.anyOf) unions++;
+        assert.ok(!(Array.isArray(o.type) && o.enum), `enum при type-массиве: ${JSON.stringify(o).slice(0, 80)}`);
+        for (const v of Object.values(o)) walk(v);
+      };
+      walk(schema);
+      assert.ok(unions <= 16, `объединений ${unions}`);
+    }
+  });
+
   test("заполнение ячеек Excel: есть ячейка, нет ячейки, нет строки", async () => {
     const { setCell } = await import("../lib/xlsx-fill.ts");
     const xml = `<worksheet><sheetData><row r="2"><c r="A2" s="3"><v>1</v></c><c r="D2" s="4"/></row><row r="5"><c r="A5"/></row></sheetData></worksheet>`;

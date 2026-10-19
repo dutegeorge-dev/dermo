@@ -45,10 +45,22 @@ const TYPE_HINTS: Partial<Record<DocType, string>> = {
   payment_order: "платёжное поручение, SWIFT, подтверждение оплаты инвойса / счёта",
 };
 
-const nullable = (type: "string" | "number") => ({ type: [type, "null"] });
+// Структурированный ответ API: не больше 16 полей с объединёнными типами (type-массивы, anyOf). Поэтому
+// «нет значения» у строк и перечислений — пустая строка (в null её превращает emptyToNull), а null — только у чисел.
+const STR = { type: "string" } as const;
+const NUM = { type: ["number", "null"] } as const;
+const optEnum = (values: readonly string[]) => ({ type: "string", enum: [...values, ""] });
+
+/** "" → null во всём ответе модели; пустые строки из массивов строк убираются. */
+function emptyToNull<T>(v: T): T {
+  if (v === "") return null as T;
+  if (Array.isArray(v)) return v.filter((x) => x !== "").map(emptyToNull) as T;
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, emptyToNull(x)])) as T;
+  return v;
+}
 
 /** JSON-схема ответа модели (structured outputs). Только то, что написано в документе. */
-const DRAFT_SCHEMA = {
+export const DRAFT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: [
@@ -58,34 +70,34 @@ const DRAFT_SCHEMA = {
   ],
   properties: {
     docType: { type: "string", enum: Object.keys(DOC_TYPES) },
-    number: nullable("string"),
-    date: nullable("string"),
-    currency: { type: ["string", "null"], enum: [...CURRENCIES, null] },
-    amount: nullable("number"),
+    number: STR,
+    date: STR,
+    currency: optEnum(CURRENCIES),
+    amount: NUM,
     counterparty: {
       type: "object",
       additionalProperties: false,
       required: ["name", "fullName", "inn", "regNumber", "country", "address"],
       properties: {
-        name: nullable("string"),
-        fullName: nullable("string"),
-        inn: nullable("string"),
-        regNumber: nullable("string"),
-        country: nullable("string"),
-        address: nullable("string"),
+        name: STR,
+        fullName: STR,
+        inn: STR,
+        regNumber: STR,
+        country: STR,
+        address: STR,
       },
     },
-    contractorType: { type: ["string", "null"], enum: [...Object.keys(CONTRACTOR_TYPES), null] },
-    clientName: nullable("string"),
-    contractNumber: nullable("string"),
+    contractorType: optEnum(Object.keys(CONTRACTOR_TYPES)),
+    clientName: STR,
+    contractNumber: STR,
     relatedNumbers: { type: "array", items: { type: "string" } },
-    cargoTitle: nullable("string"),
-    containerNo: nullable("string"),
-    weightKg: nullable("number"),
-    incoterms: nullable("string"),
-    paymentTerms: nullable("string"),
-    validUntil: nullable("string"),
-    costCategory: { type: ["string", "null"], enum: [...Object.keys(COST_CATEGORIES), null] },
+    cargoTitle: STR,
+    containerNo: STR,
+    weightKg: NUM,
+    incoterms: STR,
+    paymentTerms: STR,
+    validUntil: STR,
+    costCategory: optEnum(Object.keys(COST_CATEGORIES)),
     items: {
       type: "array",
       items: {
@@ -94,21 +106,21 @@ const DRAFT_SCHEMA = {
         required: ["name", "hsCode", "hsGuess", "quantity", "unit", "price", "amount", "packages", "packageType", "netKg", "grossKg", "volumeM3"],
         properties: {
           name: { type: "string" },
-          hsCode: nullable("string"),
-          hsGuess: nullable("string"),
-          quantity: nullable("number"),
-          unit: nullable("string"),
-          price: nullable("number"),
-          amount: nullable("number"),
-          packages: nullable("number"),
-          packageType: nullable("string"),
-          netKg: nullable("number"),
-          grossKg: nullable("number"),
-          volumeM3: nullable("number"),
+          hsCode: STR,
+          hsGuess: STR,
+          quantity: NUM,
+          unit: STR,
+          price: NUM,
+          amount: NUM,
+          packages: NUM,
+          packageType: STR,
+          netKg: NUM,
+          grossKg: NUM,
+          volumeM3: NUM,
         },
       },
     },
-    volumeM3: nullable("number"),
+    volumeM3: NUM,
     summary: { type: "string" },
   },
 } as const;
@@ -156,17 +168,17 @@ docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k
 Правила:
 - counterparty — вторая сторона: продавец, перевозчик, экспедитор, брокер. name — короткое название как в документе. inn — только российский ИНН (10/12 цифр); иностранный рег. номер — regNumber. country — по-русски.
 - contractorType — для подрядчиков: carrier_cn (перевозчик/экспедитор в Китае), carrier_ru, broker, warehouse (СВХ), agent, other.
-- clientName — наш клиент, если явно назван (грузополучатель, маркировка), иначе null.
+- clientName — наш клиент, если явно назван (грузополучатель, маркировка), иначе "".
 - contractNumber — номер договора / контракта, на который ссылается документ. relatedNumbers — другие номера из документа: заказ, заявка, B/L, накладная, инвойс, на который ссылаются.
-- items — для инвойсов поставщика, спецификаций, сертификатов: каждая строка отдельно. name коротко: товар + артикул + размер («Искусственная трава 20 мм, 2×25 м (52 рул.)»), общие характеристики не повторяй; число рулонов/мест — в скобках. quantity — в единице цены (м², кг, шт); unit по-русски (м², м, шт, кг, рул.); price — цена за единицу, amount — сумма строки. Если цена за м² написана один раз на несколько строк — она общая для них; м² = ширина × длина рулона × число рулонов (проверь: quantity × price = amount). Доп. расходы (упаковка) — отдельной строкой (hsGuess null). hsCode — код, если он напечатан в документе; hsGuess — твой код ТН ВЭД ЕАЭС для товара, как можно точнее (минимум 4 цифры, например 5703, 391810). Для счетов подрядчиков items пустой.
+- items — для инвойсов поставщика, спецификаций, сертификатов: каждая строка отдельно. name коротко: товар + артикул + размер («Искусственная трава 20 мм, 2×25 м (52 рул.)»), общие характеристики не повторяй; число рулонов/мест — в скобках. quantity — в единице цены (м², кг, шт); unit по-русски (м², м, шт, кг, рул.); price — цена за единицу, amount — сумма строки. Если цена за м² написана один раз на несколько строк — она общая для них; м² = ширина × длина рулона × число рулонов (проверь: quantity × price = amount). Доп. расходы (упаковка) — отдельной строкой (hsGuess ""). hsCode — код, если он напечатан в документе; hsGuess — твой код ТН ВЭД ЕАЭС для товара, как можно точнее (минимум 4 цифры, например 5703, 391810). Для счетов подрядчиков items пустой.
 - Числа: «37 456,95», «7503,30», «59.700,00» — десятичная запятая (точка там — разделитель тысяч); «59,700.00» — десятичная точка. ￥, RMB, 元 — CNY. Даты — YYYY-MM-DD; «15/10/2026» — день/месяц/год.
 - amount — итог документа (для ДТ — таможенные платежи в рублях). containerNo — 4 буквы + 7 цифр. weightKg — только если в документе прямо написан общий вес брутто (не считай сам).
-- Упаковочный лист (packing_list): items — его строки: name, quantity и unit (как в документе: м², шт…), строки не объединяй и не дели (позиции как в документе — по ним заполняется спецификация перевозчику), packages — число мест, packageType — вид мест по-русски («рул.», «кор.», «палл.»), netKg, grossKg, volumeM3 — по строке; итоговые weightKg (брутто) и volumeM3 — из строки «итого». У других документов эти поля строк — null.
+- Упаковочный лист (packing_list): items — его строки: name, quantity и unit (как в документе: м², шт…), строки не объединяй и не дели (позиции как в документе — по ним заполняется спецификация перевозчику), packages — число мест, packageType — вид мест по-русски («рул.», «кор.», «палл.»), netKg, grossKg, volumeM3 — по строке; итоговые weightKg (брутто) и volumeM3 — из строки «итого». У других документов эти поля строк пустые (null / "").
 - Документ об оплате (payment_order: платёжное поручение, SWIFT MT103, заявление на перевод, выписка с платежом): counterparty — получатель платежа, amount и currency — сумма платежа, date — дата платежа, number — номер платёжки, relatedNumbers — номера инвойсов / счетов / договоров из назначения платежа. В SWIFT: :32A: — дата ГГММДД, валюта и сумма («261009CNY59700,00» → 2026-10-09, CNY, 59700), :59: — получатель, :70: — назначение платежа, :20: — номер. Наш банк и мы (плательщик, :50:) — не counterparty.
 - incoterms кратко («EXW Xinle»); paymentTerms кратко по-русски («30% депозит, 70% до погрузки»). validUntil — срок действия. costCategory — для счетов подрядчиков (transport, broker, terminal…).
 - cargoTitle — короткое название груза по-русски («Искусственная трава 20 и 35 мм»).
 - summary — одно короткое предложение по-русски (до 25 слов): что за документ, от кого, на что, сумма.
-- Номера переписывай символ в символ. Нет значения — null. Ничего не придумывай.`;
+- Номера переписывай символ в символ. Нет значения — пустая строка "" (у чисел — null). Ничего не придумывай.`;
 
 /** Содержимое для модели: текст, если его можно достать кодом; иначе — сам файл. */
 async function fileContent(buffer: Buffer, filename: string, mime: string): Promise<Anthropic.Beta.BetaContentBlockParam[]> {
@@ -218,7 +230,7 @@ async function askModel(buffer: Buffer, filename: string, mime: string): Promise
   if (response.stop_reason === "max_tokens") throw new HttpError(502, "Документ слишком большой для разбора — заполните вручную");
   const text = response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
   try {
-    return { raw: JSON.parse(text) as ModelDraft, usage: usageOf(response) };
+    return { raw: emptyToNull(JSON.parse(text)) as ModelDraft, usage: usageOf(response) };
   } catch {
     throw new HttpError(502, "ИИ вернул неразборчивый ответ — попробуйте ещё раз");
   }
@@ -495,11 +507,11 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
 
 // ── Код ТН ВЭД для новых товаров ───────────────────────────────────────────
 
-const HS_SCHEMA = {
+export const HS_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["codes"],
-  properties: { codes: { type: "array", items: { type: "object", additionalProperties: false, required: ["n", "code"], properties: { n: { type: "integer" }, code: nullable("string") } } } },
+  properties: { codes: { type: "array", items: { type: "object", additionalProperties: false, required: ["n", "code"], properties: { n: { type: "integer" }, code: STR } } } },
 } as const;
 
 /**
