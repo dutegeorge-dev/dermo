@@ -45,7 +45,7 @@ export function useTariff(code: string | null | undefined) {
 }
 
 /** Код ТН ВЭД позиции: поле + ставка под ним; «ИИ» — код подобран автоматически, проверьте. */
-function HsCell({ item, onChange }: { item: DocItem; onChange: (hsCode: string | null) => void }) {
+function HsCell({ item, productHs, onChange }: { item: DocItem; productHs: string | null; onChange: (hsCode: string | null) => void }) {
   const tariff = useTariff(item.hsCode);
   return (
     <div>
@@ -60,6 +60,11 @@ function HsCell({ item, onChange }: { item: DocItem; onChange: (hsCode: string |
         {item.hsAuto && <span className="mr-1 text-amber-700 dark:text-amber-400">ИИ, проверьте ·</span>}
         {tariff === null ? (item.hsCode ? "нужно 10 цифр" : "") : tariff === undefined ? "…" : tariff.tariff || <span className="text-amber-700 dark:text-amber-400">нет в справочнике</span>}
       </div>
+      {productHs && productHs !== item.hsCode && (
+        <button type="button" className="mt-0.5 block text-left text-[10px] leading-tight text-amber-700 hover:underline dark:text-amber-400" onClick={() => onChange(productHs)}>
+          у товара {productHs} — взять
+        </button>
+      )}
     </div>
   );
 }
@@ -148,7 +153,11 @@ export function ItemsEditor({
                       item={it}
                       productName={it.productId ? (data?.products.find((p) => p.id === it.productId)?.name ?? it.productName ?? null) : null}
                       supplierProducts={supplierProducts}
-                      onPick={(p) => update(i, p ? { productId: p.id, productGuess: false } : { productId: null, productGuess: false })}
+                      onPick={(p) => {
+                        // Выбрали товар — код ТН ВЭД как у товара (если он у товара есть), а не подобранный ИИ.
+                        const hs = p ? data?.products.find((x) => x.id === p.id)?.hsCode : null;
+                        update(i, p ? { productId: p.id, productGuess: false, ...(hs ? { hsCode: hs, hsAuto: false } : {}) } : { productId: null, productGuess: false });
+                      }}
                     />
                   )}
                 </td>
@@ -159,7 +168,11 @@ export function ItemsEditor({
                 )}
                 {showHs && (
                   <td className="py-0.5 pr-1">
-                    <HsCell item={it} onChange={(hsCode) => update(i, { hsCode, hsAuto: false })} />
+                    <HsCell
+                      item={it}
+                      productHs={it.productId ? (data?.products.find((p) => p.id === it.productId)?.hsCode ?? null) : null}
+                      onChange={(hsCode) => update(i, { hsCode, hsAuto: false })}
+                    />
                   </td>
                 )}
                 <td className="py-0.5 pr-1"><NumCell label="Количество" value={it.quantity} onChange={(v) => update(i, { quantity: v })} /></td>
