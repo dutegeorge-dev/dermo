@@ -15,7 +15,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { config } from "../config.ts";
 import { db, type DbOrTx } from "../db/client.ts";
 import { FACTORY_FILE_LABELS } from "../../shared/factories.ts";
-import { attachments, deals, documents, factories, kbPages, shipments } from "../db/schema.ts";
+import { attachments, deals, documents, factories, kbPages, payments, shipments } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { addEvent, documentLabel, parseDealKey } from "../lib/deals.ts";
 import { getFactory } from "../lib/factories.ts";
@@ -175,6 +175,15 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
     const label = raw in FACTORY_FILE_LABELS ? raw : null;
     const attachment = await saveUpload(request, "factory", factory.id, `к фабрике «${factory.name}»`, label);
     await db.update(factories).set({ updatedAt: new Date() }).where(eq(factories.id, factory.id));
+    return { attachment };
+  });
+
+  /** Файл оплаты на несколько счетов (платёжка, SWIFT) — виден у каждого оплаченного ею счёта. */
+  app.post("/payments/:id/files", async (request) => {
+    const id = intParam((request.params as { id: string }).id);
+    const [payment] = await db.select({ id: payments.id, number: payments.number }).from(payments).where(eq(payments.id, id));
+    if (!payment) throw new HttpError(404, "Оплата не найдена");
+    const attachment = await saveUpload(request, "payment", id, `к оплате${payment.number ? ` № ${payment.number}` : ""}`, "payment");
     return { attachment };
   });
 

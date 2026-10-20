@@ -10,10 +10,11 @@ import JSZip from "jszip";
 import { DEFAULT_SPEC_PARAMS, type SpecParams } from "../../shared/cargo.ts";
 import { DOC_TYPES } from "../../shared/documents.ts";
 import { db, type DbOrTx } from "../db/client.ts";
-import { attachments, counterparties, documentItems, documents, shipments } from "../db/schema.ts";
+import { attachments, counterparties, documentItems, documents, paymentAllocations, shipments } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { DEFAULT_MAPPING, defaultTemplate, mapTemplate, renderSpec, specData } from "../lib/carrier-spec.ts";
 import { body, currentUser, HttpError } from "../lib/http.ts";
+import { paymentExplanation, shipmentPayments } from "../lib/payments.ts";
 import { addShipmentEvent, parseShipmentNumber } from "../lib/shipments.ts";
 import { readStored, storeBuffer } from "./files.ts";
 
@@ -91,6 +92,16 @@ async function customsPack(tx: DbOrTx, sh: typeof shipments.$inferSelect) {
         .where(and(eq(attachments.ownerType, "document"), inArray(attachments.ownerId, all.map((d) => d.id))))
         .orderBy(asc(attachments.createdAt))
     : [];
+  // Платёжки оплат на несколько счетов — к каждому оплаченному ими счёту.
+  if (all.length) {
+    const shared = await tx
+      .select({ ownerId: paymentAllocations.documentId, filename: attachments.filename, key: attachments.storageKey, label: attachments.label })
+      .from(paymentAllocations)
+      .innerJoin(attachments, and(eq(attachments.ownerType, "payment"), eq(attachments.ownerId, paymentAllocations.paymentId)))
+      .where(inArray(paymentAllocations.documentId, all.map((d) => d.id)))
+      .orderBy(asc(attachments.createdAt));
+    files.push(...shared.map((f) => ({ ...f, label: "payment" })));
+  }
 
   const isCarrier = (d: (typeof all)[number]) => d.type === "contractor_invoice" && (d.counterpartyId === sh.carrierId || (d.contractorType ?? "").startsWith("carrier"));
   const folders: [string, (d: (typeof all)[number]) => boolean][] = [
@@ -120,7 +131,8 @@ async function customsPack(tx: DbOrTx, sh: typeof shipments.$inferSelect) {
     }
     if (!list.length) missing.push(folder === "6 Транспортные документы" ? "СМГС (ж/д накладная) или другая транспортная накладная: нет" : `${folder.slice(2)}: нет`);
   }
-  return { files: out, present, missing };
+  const explanation = paymentExplanation(await shipmentPayments(tx, sh.id), sh.id);
+  return { files: out, present, missing, explanation };
 }
 
 export async function cargoRoutes(app: FastifyInstance): Promise<void> {
@@ -176,13 +188,13 @@ export async function cargoRoutes(app: FastifyInstance): Promise<void> {
   // ── Пакет документов для таможни ──
   app.get("/shipments/:number/customs-pack", async (request) => {
     const sh = await shipmentByNumber(db, (request.params as { number: string }).number);
-    const { files, present, missing } = await customsPack(db, sh);
-    return { files: files.length, present, missing };
+    const { files, present, missing, explanation } = await customsPack(db, sh);
+    return { files: files.length, present, missing, explanation };
   });
 
   app.get("/shipments/:number/customs-pack.zip", async (request, reply) => {
     const sh = await shipmentByNumber(db, (request.params as { number: string }).number);
-    const { files, present, missing } = await customsPack(db, sh);
+    const { files, present, missing, explanation } = await customsPack(db, sh);
     if (!files.length) throw new HttpError(400, "В сделке ещё нет файлов документов");
     const zip = new JSZip();
     const used = new Set<string>();
@@ -202,8 +214,18 @@ export async function cargoRoutes(app: FastifyInstance): Promise<void> {
       "",
       ...present.map((p) => `${p.folder.slice(2)}: ${p.label} — файлов ${p.files}${p.payments ? `, оплат ${p.payments}` : ""}`),
       ...(missing.length ? ["", "Не хватает:", ...missing.map((m) => `- ${m}`)] : []),
+      ...(explanation.length ? ["", "Оплата частями / одной платёжкой за несколько поставок — см. «Пояснение по оплатам.txt»"] : []),
     ];
     zip.file("Опись.txt", `﻿${lines.join("\r\n")}`);
+    if (explanation.length) {
+      const text = [
+        `Пояснение по оплатам — сделка № ${sh.number}${sh.containerNo ? `, контейнер ${sh.containerNo}` : ""}`,
+        "",
+        "Оплата товара этой поставки произведена следующими платежами:",
+        ...explanation,
+      ];
+      zip.file("Пояснение по оплатам.txt", `﻿${text.join("\r\n")}`);
+    }
     const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
     const filename = `Таможня ${safeName(sh.title)}${sh.containerNo ? ` ${sh.containerNo}` : ""}.zip`;
     return reply.header("content-type", "application/zip").header("content-disposition", disposition(filename, `customs-${sh.number}.zip`)).send(buffer);

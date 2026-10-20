@@ -25,6 +25,7 @@ import { dealRoutes } from "./routes/deals.ts";
 import { documentRoutes } from "./routes/documents.ts";
 import { orderRoutes } from "./routes/orders.ts";
 import { productRoutes } from "./routes/products.ts";
+import { paymentRoutes } from "./routes/payments.ts";
 import { quoteRoutes } from "./routes/quotes.ts";
 import { settingsRoutes } from "./routes/settings.ts";
 import { shipmentRoutes } from "./routes/shipments.ts";
@@ -140,6 +141,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
       await api.register(productRoutes);
       await api.register(factoryRoutes);
       await api.register(quoteRoutes);
+      await api.register(paymentRoutes);
       await api.register(settingsRoutes);
       await api.register(shipmentRoutes);
       await api.register(calcRoutes);

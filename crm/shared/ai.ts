@@ -20,6 +20,8 @@ export type DocumentDraft = {
   contractNumber: string | null;
   shipment: { id: number; number: number; title: string; containerNo: string | null; weightKg: number | null } | null;
   shipmentReason: string | null;
+  /** Подходят несколько сделок — какие (выбрать одну). */
+  shipmentOptions?: { id: number; number: number; title: string }[];
   cargoTitle: string | null;
   containerNo: string | null;
   weightKg: number | null;

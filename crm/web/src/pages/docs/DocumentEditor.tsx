@@ -35,6 +35,7 @@ import { PackingEditor } from "../../components/docs/PackingEditor.tsx";
 import { emptyItem, itemAmount, ItemsEditor } from "../../components/docs/ItemsEditor.tsx";
 import { detectCurrency, parseNumber } from "../../components/docs/paste.ts";
 import { IconSparkles } from "../../components/Icons.tsx";
+import { autoAllocate, type Allocation, PaymentAllocator, savePayment, unpaidOf } from "../../components/payments/PaymentSplit.tsx";
 import { ErrorBox, Spinner } from "../../components/ui.tsx";
 import { useAiEnabled } from "../../lib/ai.ts";
 import { api, errorMessage, fileUrl } from "../../lib/api.ts";
@@ -171,6 +172,10 @@ function EditorForm({ initial }: { initial: Initial }) {
   const [payTarget, setPayTarget] = useState<number | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payMark, setPayMark] = useState(true);
+  // Одна платёжка на несколько счетов (обычно не нужно — тогда как раньше, один счёт).
+  const [paySplit, setPaySplit] = useState(false);
+  const [payAllocs, setPayAllocs] = useState<Allocation[]>([]);
+  const [payNote, setPayNote] = useState("");
   const payables = useQuery({
     queryKey: ["documents", "payables"],
     queryFn: () => api<{ documents: DocumentRow[] }>("/documents?type=supplier_invoice,contractor_invoice,client_invoice,customs_declaration&limit=300"),
@@ -226,7 +231,8 @@ function EditorForm({ initial }: { initial: Initial }) {
         setNewDeal(false);
       } else {
         setDeal(null);
-        setNewDeal(d.type === "supplier_invoice");
+        // Подходят несколько сделок поставщика — скорее ещё один инвойс в одну из них, а не новая сделка.
+        setNewDeal(d.type === "supplier_invoice" && !d.shipmentOptions?.length);
       }
     }
     if (d.cargoTitle) setNewTitle(d.cargoTitle);
@@ -277,6 +283,16 @@ function EditorForm({ initial }: { initial: Initial }) {
 
   /** Документ об оплате — прикрепить к оплаченному счёту и отметить оплату. */
   const attachPayment = async () => {
+    if (paySplit) {
+      const total = parseNumber(payAmount);
+      if (!total) throw new Error("Укажите сумму платежа");
+      await savePayment({ shipment: deal?.number ?? null, number, date, amount: total, currency, note: payNote, allocations: payAllocs }, file);
+      await queryClient.invalidateQueries();
+      const first = payables.data?.documents.find((d) => d.id === payAllocs.find((a) => a.documentId)?.documentId);
+      const sn = deal?.number ?? first?.shipmentNumber;
+      navigate(sn ? `/shipments/${sn}` : first ? `/documents/${first.id}` : "/documents");
+      return;
+    }
     const target = payables.data?.documents.find((d) => d.id === payTarget);
     if (!file) throw new Error("Загрузите файл документа об оплате");
     if (!target) throw new Error("Выберите, какой инвойс / счёт оплачен");
@@ -430,7 +446,24 @@ function EditorForm({ initial }: { initial: Initial }) {
               </p>
               {draft.summary && <p>{draft.summary}</p>}
               {draft.shipment && !initial.deal && <p>Сделка: <b>№ {draft.shipment.number} «{draft.shipment.title}»</b>{draft.shipmentReason ? ` — ${draft.shipmentReason}` : ""}</p>}
-              {!draft.shipment && !spec.contract && draft.shipmentReason && <p className="muted">Сделка: {draft.shipmentReason}</p>}
+              {!draft.shipment && !spec.contract && draft.shipmentReason && !initial.deal && (
+                <p className="muted">
+                  Сделка: {draft.shipmentReason}
+                  {draft.shipmentOptions?.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      className={`ml-2 rounded border px-1.5 text-xs ${deal?.id === o.id ? "border-blue-500 text-blue-700 dark:text-blue-300" : "border-slate-300 dark:border-neutral-700"}`}
+                      onClick={() => {
+                        setDeal({ id: o.id, number: o.number, title: o.title });
+                        setNewDeal(false);
+                      }}
+                    >
+                      № {o.number} «{o.title}»
+                    </button>
+                  ))}
+                </p>
+              )}
               {initial.deal && draft.shipment && draft.shipment.id !== initial.deal.id && (
                 <p className="text-amber-800 dark:text-amber-400">ИИ считает, что документ относится к сделке № {draft.shipment.number} «{draft.shipment.title}», а не к № {initial.deal.number}.</p>
               )}
@@ -569,6 +602,19 @@ function EditorForm({ initial }: { initial: Initial }) {
           {type === "payment_order" && (
             <section className="space-y-3 rounded-md bg-slate-50 p-3 text-sm dark:bg-neutral-800/40">
               <p>Файл прикрепится к оплаченному инвойсу / счёту (в пакет для таможни попадёт вместе с ним). Отдельным документом не сохраняется.</p>
+              {paySplit ? (
+                <PaymentAllocator
+                  amount={parseNumber(payAmount)}
+                  currency={currency}
+                  payables={payables.data?.documents ?? []}
+                  value={payAllocs}
+                  onChange={setPayAllocs}
+                  payeeId={payables.data?.documents.find((d) => d.id === payTarget)?.counterpartyId ?? null}
+                  shipmentNumber={deal?.number ?? null}
+                  note={payNote}
+                  onNote={setPayNote}
+                />
+              ) : (
               <Field label="Что оплачено" wide>
                 <select className="input" value={payTarget ?? ""} onChange={(e) => setPayTarget(e.target.value ? Number(e.target.value) : null)}>
                   <option value="">— выберите инвойс / счёт —</option>
@@ -583,14 +629,49 @@ function EditorForm({ initial }: { initial: Initial }) {
                   ))}
                 </select>
               </Field>
+              )}
+              {!paySplit && payTarget !== null && (() => {
+                const target = payables.data?.documents.find((d) => d.id === payTarget);
+                const total = parseNumber(payAmount);
+                const over = target && total !== null && target.amount !== null && total > unpaidOf(target) + 0.5;
+                return over ? (
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    Платёж больше, чем осталось оплатить по счёту ({formatMoney(unpaidOf(target), target.currency)}).{" "}
+                    <button
+                      type="button"
+                      className="link"
+                      onClick={() => {
+                        setPaySplit(true);
+                        setPayAllocs(autoAllocate(total, currency, payables.data?.documents ?? [], { payeeId: target.counterpartyId, shipmentNumber: target.shipmentNumber }));
+                      }}
+                    >
+                      Разнести на несколько счетов
+                    </button>
+                  </p>
+                ) : null;
+              })()}
+              <button type="button" className="link text-xs" onClick={() => setPaySplit(!paySplit)}>
+                {paySplit ? "← одна платёжка — один счёт" : "Одна платёжка на несколько счетов…"}
+              </button>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Сумма платежа"><input className="input tabular-nums" inputMode="decimal" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} /></Field>
                 <Field label="Дата платежа"><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
               </div>
+              {paySplit && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Валюта платежа">
+                    <select className="input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                      {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+                    </select>
+                  </Field>
+                </div>
+              )}
+              {!paySplit && (
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={payMark} onChange={(e) => setPayMark(e.target.checked)} />
                 Отметить счёт оплаченным (если сумма меньше счёта — «частично»)
               </label>
+              )}
             </section>
           )}
 

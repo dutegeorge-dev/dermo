@@ -12,6 +12,8 @@ import { IconFile, IconPlus } from "../Icons.tsx";
 import { ErrorBox } from "../ui.tsx";
 import { useShipmentActions } from "./common.tsx";
 import { CounterpartyPicker, ensureCounterparty, type Picked } from "../crm/CounterpartyPicker.tsx";
+import { PaymentDialog, PaymentsSection } from "../payments/PaymentSplit.tsx";
+import { shipmentLabel } from "../../../../shared/shipments.ts";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 type Save = (patch: Record<string, unknown>) => Promise<void>;
@@ -103,6 +105,7 @@ export function ShipmentDocs({ data, save }: { data: ShipmentResponse; save: Sav
   const order = data.documents.find((d) => d.id === data.finance.orderId);
   const { refresh } = useShipmentActions();
   const [proofError, setProofError] = useState<unknown>(null);
+  const [paying, setPaying] = useState(false);
   const uploadProof = async (documentId: number, file: File) => {
     setProofError(null);
     try {
@@ -121,6 +124,11 @@ export function ShipmentDocs({ data, save }: { data: ShipmentResponse; save: Sav
         <h2 className="text-sm font-semibold">Документы</h2>
         {!order && sh.scheme === "commission" && <span className="text-xs muted">поручение — в «Расчёте для клиента» внизу</span>}
         <span className="flex-1" />
+        {data.documents.some((d) => d.paymentStatus !== null) && (
+          <button type="button" className="btn btn-sm" title="Одна платёжка на несколько инвойсов / часть инвойса другой сделки" onClick={() => setPaying(true)}>
+            Оплата на несколько счетов
+          </button>
+        )}
         <Link
           to={`/documents/new?shipment=${sh.number}`}
           className="btn btn-primary btn-sm"
@@ -152,7 +160,8 @@ export function ShipmentDocs({ data, save }: { data: ShipmentResponse; save: Sav
             ))}
         </div>
       )}
-
+      <PaymentsSection data={data} />
+      {paying && <PaymentDialog data={data} onClose={() => setPaying(false)} />}
     </section>
   );
 }
@@ -343,6 +352,14 @@ function DocCard({ doc: d, onProof }: { doc: DealDocument; onProof: (f: File) =>
             <span className="truncate muted">{f.filename}</span>
           </a>
         ))}
+        {d.allocations
+          .filter((a) => a.shared)
+          .map((a) => (
+            <span key={a.paymentId} className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-950 dark:text-amber-300" title="Платёжка оплачивает и другие счета — см. «Оплаты на несколько счетов»">
+              {formatMoney(a.amount, a.currency)} из платёжки {a.number ? `№ ${a.number}` : "б/н"} от {formatDay(a.date)} на {formatMoney(a.total, a.currency)}
+              {a.shipmentNumber && a.shipmentId !== d.shipmentId ? ` (сделка ${shipmentLabel(a.shipmentNumber)})` : ""}
+            </span>
+          ))}
         {payable && (
           <label className="cursor-pointer rounded border border-dashed border-slate-300 px-1.5 py-0.5 link dark:border-neutral-700" title="Платёжка / SWIFT: депозит, остаток, доплата — можно несколько">
             + платёжка

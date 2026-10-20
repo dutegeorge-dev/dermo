@@ -378,6 +378,7 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
   // Сделка: контейнер → номера документов сделки → договор → контрагент (если у него одна сделка в работе).
   let shipment: DocumentDraft["shipment"] = null;
   let shipmentReason: string | null = null;
+  let shipmentOptions: DocumentDraft["shipmentOptions"] = [];
   if (!spec.contract) {
     const active = await listShipments(tx, sql`s.status = 'active'`);
     const ids = active.map((s) => s.id);
@@ -407,7 +408,8 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
       shipment = { id: s.id, number: s.number, title: s.title, containerNo: s.containerNo, weightKg: s.weightKg };
       shipmentReason = why;
     } else if (best.length > 1) {
-      shipmentReason = `подходят несколько сделок: ${best.slice(0, 5).map((x) => `№ ${x.s.number} «${x.s.title}»`).join(", ")} — выберите`;
+      shipmentReason = "подходят несколько сделок — выберите";
+      shipmentOptions = best.slice(0, 5).map((x) => ({ id: x.s.id, number: x.s.number, title: x.s.title }));
     } else {
       shipmentReason = "сделку не нашли: ни контейнер, ни номера документов, ни контрагент не совпали со сделками в работе";
     }
@@ -563,6 +565,7 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
     contractNumber,
     shipment,
     shipmentReason,
+    shipmentOptions,
     cargoTitle: text(raw.cargoTitle, 300),
     containerNo: container,
     weightKg: packing?.totals.grossKg ?? num(raw.weightKg),

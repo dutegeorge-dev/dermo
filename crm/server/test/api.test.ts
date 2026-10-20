@@ -1068,6 +1068,72 @@ describe("Упаковочный лист, спецификация для пе�
     assert.deepEqual([(await doc(dt.id)).paymentStatus, (await doc(dt.id)).paidAt], ["paid", "2026-10-10"]);
     assert.equal((await flags()).customs_payment, "2026-10-10");
   });
+
+  test("одна платёжка на несколько инвойсов, остаток инвойса в следующей сделке, пояснение для таможни", async () => {
+    const s = await adminSession();
+    const supplier = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Split Factory" })).json().counterparty;
+    const a = await call(s, "POST", "/documents", {
+      type: "supplier_invoice", number: "DSPL-1", date: "2026-10-01", counterpartyId: supplier.id, currency: "USD", amount: 25000,
+      newShipment: { title: "Разнесение демо 1", weightKg: 1, volumeM3: 1 },
+    });
+    assert.equal(a.statusCode, 200, a.body);
+    const no1 = a.json().shipment.number as number;
+    const sh1 = (await call(s, "GET", `/shipments/${no1}`)).json().shipment.id as number;
+    const b = (await call(s, "POST", "/documents", { type: "supplier_invoice", number: "DSPL-2", date: "2026-10-02", counterpartyId: supplier.id, shipmentId: sh1, currency: "USD", amount: 25000 })).json().document;
+    const doc = async (id: number) => (await call(s, "GET", `/documents/${id}`)).json().document;
+
+    // Обычная сделка без оплат на несколько счетов — блока нет, пояснения нет.
+    let deal = (await call(s, "GET", `/shipments/${no1}`)).json();
+    assert.deepEqual([deal.payments, deal.paymentNotes], [[], []]);
+
+    // Больше суммы платежа разнести нельзя, в другой валюте — тоже.
+    let res = await call(s, "POST", "/payments", { date: "2026-10-05", amount: 40000, currency: "USD", allocations: [{ documentId: a.json().document.id, amount: 25000 }, { documentId: b.id, amount: 25000 }] });
+    assert.equal(res.statusCode, 400);
+    res = await call(s, "POST", "/payments", { date: "2026-10-05", amount: 50000, currency: "CNY", allocations: [{ documentId: b.id, amount: 100 }] });
+    assert.equal(res.statusCode, 400);
+
+    // Два инвойса по 25 000 — одна платёжка 50 000: оба оплачены, галочка «Остаток поставщику» стоит.
+    res = await call(s, "POST", "/payments", { number: "77", date: "2026-10-05", amount: 50000, currency: "USD", allocations: [{ documentId: a.json().document.id, amount: 25000 }, { documentId: b.id, amount: 25000 }] });
+    assert.equal(res.statusCode, 200, res.body);
+    const p1 = res.json().payment.id as number;
+    assert.equal((await upload(s, `/payments/${p1}/files`, "mt103-split.pdf", "%PDF-1.4 split")).statusCode, 200);
+    assert.deepEqual([(await doc(b.id)).paymentStatus, (await doc(b.id)).paidAt], ["paid", "2026-10-05"]);
+    deal = (await call(s, "GET", `/shipments/${no1}`)).json();
+    assert.equal(deal.shipment.flags.balance, "2026-10-05");
+    assert.equal(deal.payments.length, 1);
+    // Платёжка видна у каждого инвойса.
+    for (const d of deal.documents.filter((x: { type: string }) => x.type === "supplier_invoice")) {
+      assert.equal(d.paymentFileCount, 1);
+      assert.equal(d.allocations[0].shared, true);
+    }
+    assert.deepEqual(deal.paymentNotes, [], "всё в этой сделке — пояснение таможне не нужно");
+
+    // Оплатили 100 рулонов, в контейнер вошли 98: инвойс на 2 рулона — в следующей сделке, оплачен той же платёжкой.
+    const c = await call(s, "POST", "/documents", {
+      type: "supplier_invoice", number: "DSPL-3", date: "2026-10-20", counterpartyId: supplier.id, currency: "USD", amount: 10000,
+      newShipment: { title: "Разнесение демо 2", weightKg: 1, volumeM3: 1 },
+    });
+    const no2 = c.json().shipment.number as number;
+    const rest = (await call(s, "POST", "/documents", { type: "supplier_invoice", number: "DSPL-1/2", date: "2026-10-20", counterpartyId: supplier.id, shipmentId: (await call(s, "GET", `/shipments/${no2}`)).json().shipment.id, currency: "USD", amount: 500 })).json().document;
+    res = await call(s, "POST", "/payments", { shipment: no1, number: "78", date: "2026-10-06", amount: 1200, currency: "USD", note: "аванс за следующую поставку", allocations: [{ documentId: rest.id, amount: 500 }] });
+    assert.equal(res.statusCode, 200, res.body);
+    const p2 = res.json().payment.id as number;
+    assert.equal((await doc(rest.id)).paymentStatus, "paid");
+    const deal2 = (await call(s, "GET", `/shipments/${no2}`)).json();
+    assert.equal(deal2.payments.length, 1);
+    assert.equal(deal2.payments[0].unallocated, 700);
+    assert.ok(deal2.paymentNotes.some((l: string) => /№ 78/.test(l)));
+    assert.ok(deal2.paymentNotes.some((l: string) => /не отнесено к инвойсам: 700,00 USD — аванс/.test(l)));
+    assert.ok(deal2.documents.find((d: { id: number }) => d.id === rest.id).allocations[0].shared, "платёжка из другой сделки");
+    assert.ok((await call(s, "GET", `/shipments/${no2}/customs-pack`)).json().explanation.length > 0);
+
+    // Удалили оплату — счета снова не оплачены, галочка снята.
+    assert.equal((await call(s, "DELETE", `/payments/${p1}`)).statusCode, 200);
+    assert.equal((await doc(b.id)).paymentStatus, "unpaid");
+    assert.equal((await call(s, "GET", `/shipments/${no1}`)).json().shipment.flags.balance, undefined);
+    assert.equal((await call(s, "DELETE", `/payments/${p2}`)).statusCode, 200);
+    assert.equal((await doc(rest.id)).paymentStatus, "unpaid");
+  });
 });
 
 describe("Товары: варианты, объединение; ставки доставки; расчёт цены для клиента", () => {

@@ -756,3 +756,42 @@ export const shipmentEvents = pgTable(
   },
   (t) => [index("shipment_events_idx").on(t.shipmentId, t.createdAt)],
 );
+
+/**
+ * Оплата на несколько счетов (lib/payments.ts): одна платёжка, разнесённая на инвойсы / счета — в том числе
+ * частично и на инвойс другой сделки (оплаченный остаток, уехавший следующим контейнером). Обычная оплата одного
+ * счёта сюда не пишется — это статус оплаты самого документа. Не разнесённое — на сделке, с пометкой (note).
+ */
+export const payments = pgTable(
+  "payments",
+  {
+    id: serial("id").primaryKey(),
+    shipmentId: integer("shipment_id").references(() => shipments.id, { onDelete: "set null" }),
+    counterpartyId: integer("counterparty_id").references(() => counterparties.id, { onDelete: "set null" }),
+    number: text("number"),
+    date: date("date").notNull(),
+    amount: numeric("amount", { precision: 16, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    note: text("note").notNull().default(""),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("payments_shipment_idx").on(t.shipmentId)],
+);
+
+export const paymentAllocations = pgTable(
+  "payment_allocations",
+  {
+    id: serial("id").primaryKey(),
+    paymentId: integer("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "cascade" }),
+    documentId: integer("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 16, scale: 2 }).notNull(),
+  },
+  (t) => [index("payment_allocations_payment_idx").on(t.paymentId), index("payment_allocations_document_idx").on(t.documentId)],
+);
+

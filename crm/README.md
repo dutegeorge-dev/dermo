@@ -311,6 +311,8 @@ sudo systemctl start bars-crm
 | `factories` | База фабрик: `name` (как в WeChat), `name_ru`, `wechat_id`, `contact_name`, `phone`, `email`, `website`, `location` (место производства), `categories` text[], `status` (`new`/`contacted`/`samples`/`approved`/`rejected`), `profile` jsonb (анкета — `shared/factories.ts`), `notes`, `found_by` (кто нашёл — видит кандидата), `counterparty_id` (поставщик после договора; тогда фабрику видят все) |
 | `product_offers` | Цены фабрик: `factory_id`, `product_id` (товар справочника — по названию без размера рулона и цвета), `name` (позиция с характеристиками), `price`, `currency`, `unit`, `moq`, `per_container` (единиц в 40HQ), `kg_per_unit`, `m3_per_unit`, `conditions`, `quoted_at` |
 | `freight_rates` | Ставки доставки: `transport` (rail/truck/sea/multimodal), `mode` (`container` / `cbm`), `container`, `origin`, `destination`, `rate`, `currency`, `kg_per_cbm`, `min_cbm`, `fee` + `fee_currency` (за отправку), `transit_days`, `etd`, `valid_until`, `quoted_at`, `carrier_name`, `notes` |
+| `payments` | Оплата на несколько счетов (одна платёжка → несколько инвойсов, в т. ч. другой сделки): `shipment_id`, `counterparty_id` (получатель), `number`, `date`, `amount`, `currency`, `note` (что за не разнесённый остаток). Файл — `attachments` с `owner_type='payment'`. Обычная оплата одного счёта сюда не пишется |
+| `payment_allocations` | Разнесение оплаты: `payment_id`, `document_id`, `amount`. Статус оплаты таких документов считается из разнесения |
 | `product_quotes` | Расчёты цены товара для клиента: `product_id`, `offer_id`, `client_name`, `params` / `result` / `freight` / `rates` (jsonb, `shared/quote.ts`), `rates_date` |
 | `products` | Справочник товаров: `name`, `name_ru`, `hs_code`, `unit`, `vat10` (НДС при ввозе 10 % вместо 22 %). Пополняется сам из позиций и цен фабрик: товар — название без варианта (размер рулона «2×25 м», цвет, число мест в скобках — `server/lib/product-match.ts`), сама позиция хранит полное название; код ТН ВЭД из позиции записывается товару, если у него не было |
 | `tnved` | Справочник ТН ВЭД ЕАЭС: `code` (10 цифр), `name`, `tariff` (ставка текстом: «6.5%, но не менее 0.096 EUR за 1 кг»; разбор — `parseTariff` в `shared/customs.ts`). Заполняется `npm run crm:tnved` |
@@ -372,6 +374,7 @@ sudo systemctl start bars-crm
 | `GET /shipments?status=active\|closed\|cancelled\|all&stage=&assignee=me&clientId=&q=`, `POST /shipments` | Сделки (доска и список) |
 | `GET/PATCH/DELETE /shipments/:number` | Карточка: поля, документы, план/факт, товары, сертификаты на товары, подрядчики, история |
 | `PUT /shipments/:number/milestones/:key` `{plan?, fact?, shift?}`, `PUT /shipments/:number/flags/:key` `{done, date?}` | Ключевые даты (со сдвигом следующих) и флажки (галочки оплат меняют оплату документов, `date` — дата оплаты) |
+| `POST /payments` `{shipment?, counterpartyId?, number?, date, amount, currency, note?, allocations: [{documentId, amount}]}`, `DELETE /payments/:id`, `POST /payments/:id/files` | Оплата на несколько счетов: статусы оплаты счетов и галочки сделок — из разнесения. В карточке сделки — `payments`, `paymentNotes` (пояснение для таможни) |
 | `POST /shipments/:number/flags/:key/proof` (multipart `file`) | Платёжка к галочке оплаты — файл `payment` к последнему инвойсу / счёту / ДТ этой оплаты |
 | `POST /shipments/:number/stage` `{stage}`, `POST /shipments/:number/status` `{status}` | Перенос на доске; закрыть / отменить / вернуть |
 | `POST/DELETE /shipments/:number/parties[/:id]`, `POST /shipments/:number/comments` | Подрядчики, комментарии |
@@ -549,7 +552,12 @@ Word по шаблону; «Скачать DOCX» у договора — зан
   «Оплачен». Миграция 0009 согласовала старые данные.
 - **Пакет для таможни** (этап «На таможне» → «Сформировать документы для таможни (ZIP)»): контракт, инвойсы поставщика,
   упаковочные листы, спецификация, счета перевозчика, транспортные накладные, сертификаты на товары сделки — по папкам,
-  с документами об оплате и `Опись.txt` (чего не хватает).
+  с документами об оплате и `Опись.txt` (чего не хватает); если платёжка оплачивает и счета другой сделки или
+  часть её не разнесена — ещё `Пояснение по оплатам.txt`.
+- **Оплата на несколько счетов** (`payments`, `payment_allocations`): одна платёжка на два инвойса, или инвойс на
+  остаток, уехавший следующим контейнером. «Оплата на несколько счетов» в блоке «Документы» сделки или «Одна
+  платёжка на несколько счетов…» в форме платёжки; «Разнести автоматически» — по неоплаченным счетам получателя
+  (сначала этой сделки, по дате). Обычная оплата одного счёта — как раньше.
 
 ### ИИ: разбор документов и чат
 

@@ -25,7 +25,7 @@ import { conformityIdsForProducts } from "../lib/product-match.ts";
 import { audit } from "../lib/audit.ts";
 import { shipmentDocuments, shipmentFinance } from "../lib/finance.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
-import { markFlagDocuments, PAYMENT_FLAGS, type PaymentFlag } from "../lib/payments.ts";
+import { markFlagDocuments, PAYMENT_FLAGS, type PaymentFlag, paymentExplanation, shipmentPayments } from "../lib/payments.ts";
 import { getShipmentDto, listShipments, type ShipmentDto } from "../lib/shipment-query.ts";
 import {
   addShipmentEvent,
@@ -210,7 +210,7 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
   /** Карточка: вся информация по сделке. */
   app.get("/shipments/:number", async (request) => {
     const row = await findShipment(db, (request.params as { number: string }).number);
-    const [events, parties, docs, items] = await Promise.all([
+    const [events, parties, docs, items, pays] = await Promise.all([
       db
         .select({
           id: shipmentEvents.id,
@@ -234,6 +234,7 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
         .orderBy(asc(counterparties.name)),
       shipmentDocuments(db, row.id),
       shipmentItems(row.id),
+      shipmentPayments(db, row.id),
     ]);
     const productIds = [...new Set(items.map((i) => i.productId).filter((x): x is number => !!x))];
     return {
@@ -244,6 +245,9 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
       finance: shipmentFinance(docs, row.calc ?? null),
       items,
       certificates: await shipmentCertificates(row.id, productIds),
+      // Оплаты на несколько счетов и пояснение для таможни — только если они есть.
+      payments: pays,
+      paymentNotes: paymentExplanation(pays, row.id),
     };
   });
 

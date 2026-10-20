@@ -85,6 +85,13 @@
       "when": 1792404724019,
       "tag": "0011_freight_quotes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792486843714,
+      "tag": "0012_payments",
+      "breakpoints": true
     }
   ]
 }

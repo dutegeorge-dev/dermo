@@ -200,6 +200,20 @@
     завелось 46 лишних товаров — владелец ругался. Модели без товара — строками декларации; товар, появившийся позже,
     подхватывает её по артикулу (`conformityIdsForProducts` — для карточки товара и сделки). На странице «Товары»
     у админа — «Удалить пустые товары» (без закупок, продаж, цен фабрик, расчётов).
+21. **Несколько инвойсов и оплата на несколько счетов (октябрь 2026).** В сделке может быть несколько инвойсов —
+    товары, расчёт, поручение, спецификация собираются со всех (так и было; причина жалобы — второй инвойс ИИ
+    отправлял в «Новую сделку», когда у поставщика несколько сделок в работе: теперь предлагает выбрать из них,
+    `shipmentOptions`). Одна платёжка может оплачивать несколько счетов (два инвойса по 25 000 — одна оплата
+    50 000) или остаток инвойса в другой сделке: таблицы `payments` + `payment_allocations`, кнопка «Оплата на
+    несколько счетов» в блоке «Документы» и «Одна платёжка на несколько счетов…» в форме платёжки (с «Разнести
+    автоматически»). Статус оплаты разнесённых счетов — из разнесения; не разнесённое — с пометкой, что это (аванс).
+    **Обычных сделок это не меняет** — владелец так просил: «одна платёжка — один счёт» работает по-старому, блок
+    «Оплаты на несколько счетов», пометки на карточках и «Пояснение по оплатам.txt» в пакете для таможни
+    появляются, только когда такая оплата есть (и пояснение — только если платёжка задевает другую сделку или
+    часть не разнесена).
+    **Разделение инвойса** (оплатили 100 рулонов, вошли 98 → инвойсы на 98 и на 2, два рулона едут со следующим
+    контейнером) — бывает, но редко, стараются избегать. Владелец: «запомни, но не реализовывай». Сейчас: оба
+    инвойса загружают как обычно (второй — в следующую сделку), платёжку разносят на оба.
 14. **Сайт не трогать** без надобности: `/crm/` — отдельный пакет, деплоится
     отдельно (`deploy/deploy-crm.sh`), сайт байт-в-байт тот же (кроме robots.txt).
 
@@ -286,7 +300,8 @@ crm/
                         renderContractDocx, nextContractNumber, contractMissing
       ai-rates.ts       ставки доставки из переписки / скриншота (recognizeRates)
       ai-factory.ts     карточка фабрики по скриншотам / фото / прайсам (recognizeFactory; сканы PDF не отправляем)
-      payments.ts       галочки оплат ↔ оплата документов: flagDocuments, markFlagDocuments, paymentForNewDocument, syncPaymentFlags
+      payments.ts       галочки оплат ↔ оплата документов: flagDocuments, markFlagDocuments, paymentForNewDocument, syncPaymentFlags;
+                        оплата на несколько счетов: applyAllocations (статусы из разнесения), shipmentPayments, paymentExplanation
       carrier-spec.ts   спецификация для перевозчика: specData (упаковочный лист + инвойс → строки по позициям),
                         разметка чужого шаблона ИИ (mapTemplate, кэш settings spec_template:<sha1>), renderSpec
       xlsx-fill.ts      запись значений в ячейки .xlsx (inlineStr, стили и объединения сохраняются), readGrid, листы по rels
@@ -304,6 +319,7 @@ crm/
                         products (+ GET /products/duplicates, POST /products/merge)
                         calc (GET/POST /shipments/:n/calc, kp.docx, GET /tnved)
                         cargo (GET/PUT /shipments/:n/spec, spec.xlsx, customs-pack[.zip])
+                        payments (POST /payments, DELETE /payments/:id — оплата на несколько счетов; файл — files.ts POST /payments/:id/files)
     cli/tnved.ts        npm run tnved:update [--if-empty] [--file]
                         (shipments.ts — список/карточка/правка/даты/флажки/этап/статус/подрядчики/комментарии + GET /calendar)
     cli/                migrate.ts, create-admin.ts, seed.ts (реквизиты, пространства БЗ, справочник, --demo/--remove-demo), demo.ts
@@ -317,6 +333,8 @@ crm/
                         factories/FactoriesPage (карточки с фото, фильтры анкеты), factories/FactoryPage (новая и карточка:
                         файлы → ИИ, дубли, анкета, цены; components/factories/common — OffersEditor, статус),
                         factories/FreightRatesPage (/freight-rates: ставки, «вставить из переписки»),
+                        components/payments/PaymentSplit — разнесение платёжки по счетам (PaymentAllocator, autoAllocate),
+                        окно «Оплата на несколько счетов» в сделке, блок «Оплаты на несколько счетов»,
                         crm/ProductsPage (список + DuplicatesBanner «объединить варианты»; карточка: расчёт, цены фабрик
                         с фото, варианты), components/products/QuoteCalculator (расчёт в браузере, сохранение, КП)
     components/
@@ -356,8 +374,11 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
 - **Документы:** `documents` (type, number, date, counterparty_id, client_id, **shipment_id**, parent_id (договор),
   seq_no, currency, amount, status, payment_status, paid_amount, paid_at, valid_until, data jsonb, notes),
   `document_items` (product_id, name, batch_no, hs_code, qty, unit, price, amount), `products`, `settings` (company).
+- **Оплаты на несколько счетов:** `payments` (shipment_id, counterparty_id — получатель, number, date, amount,
+  currency, note — что за не разнесённый остаток; файл — attachments owner_type `payment`), `payment_allocations`
+  (payment_id, document_id, amount). Обычная оплата одного счёта сюда не пишется.
 
-**Миграции:** … **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).

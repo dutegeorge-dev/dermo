@@ -42,11 +42,20 @@ export async function shipmentDocuments(db: DbOrTx, shipmentId: number) {
       validUntil: documents.validUntil,
       data: documents.data,
       fileCount: sql<number>`(select count(*)::int from attachments a where a.owner_type = 'document' and a.owner_id = ${documents.id} and a.label is distinct from 'payment')`,
-      paymentFileCount: sql<number>`(select count(*)::int from attachments a where a.owner_type = 'document' and a.owner_id = ${documents.id} and a.label = 'payment')`,
+      paymentFileCount: sql<number>`(select count(*)::int from attachments a where (a.owner_type = 'document' and a.owner_id = ${documents.id} and a.label = 'payment')
+        or (a.owner_type = 'payment' and a.owner_id in (select pa.payment_id from payment_allocations pa where pa.document_id = ${documents.id})))`,
       // Файлы документа — чтобы в сделке было видно каждый: оригинал, подписанный скан, каждую платёжку.
       files: sql<{ id: string; filename: string; label: string | null; createdAt: string }[]>`coalesce((select json_agg(json_build_object(
         'id', a.id, 'filename', a.filename, 'label', a.label, 'createdAt', a.created_at) order by a.created_at)
-        from attachments a where a.owner_type = 'document' and a.owner_id = ${documents.id}), '[]'::json)`,
+        from attachments a where (a.owner_type = 'document' and a.owner_id = ${documents.id})
+          or (a.owner_type = 'payment' and a.owner_id in (select pa.payment_id from payment_allocations pa where pa.document_id = ${documents.id}))), '[]'::json)`,
+      // Оплаты на несколько счетов, которыми оплачен документ: какой платёжкой, из какой сделки, сколько.
+      allocations: sql<{ paymentId: number; number: string | null; date: string; amount: number; total: number; currency: string; shipmentId: number | null; shipmentNumber: number | null; shared: boolean }[]>`coalesce((select json_agg(json_build_object(
+        'paymentId', p.id, 'number', p.number, 'date', p.date, 'amount', pa.amount::float8, 'total', p.amount::float8, 'currency', p.currency,
+        'shipmentId', p.shipment_id, 'shipmentNumber', s.number,
+        'shared', p.shipment_id is distinct from ${documents.shipmentId} or exists (select 1 from payment_allocations o where o.payment_id = p.id and o.document_id <> ${documents.id}))
+        order by p.date) from payment_allocations pa join payments p on p.id = pa.payment_id left join shipments s on s.id = p.shipment_id
+        where pa.document_id = ${documents.id}), '[]'::json)`,
     })
     .from(documents)
     .leftJoin(counterparties, eq(counterparties.id, documents.counterpartyId))

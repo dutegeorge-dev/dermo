@@ -145,6 +145,25 @@ export type DealDocument = {
   /** Документов об оплате (платёжки, SWIFT), прикреплённых к документу. */
   paymentFileCount: number;
   files: { id: string; filename: string; label: string | null; createdAt: string }[];
+  /** Оплаты на несколько счетов, которыми оплачен документ; shared — платёжка и за другие счета / из другой сделки. */
+  allocations: { paymentId: number; number: string | null; date: string; amount: number; total: number; currency: string; shipmentId: number | null; shipmentNumber: number | null; shared: boolean }[];
+};
+
+/** Оплата на несколько счетов (одна платёжка → разнесение по инвойсам). */
+export type ShipmentPayment = {
+  id: number;
+  number: string | null;
+  date: string;
+  amount: number;
+  currency: string;
+  note: string;
+  shipmentId: number | null;
+  shipmentNumber: number | null;
+  counterpartyId: number | null;
+  counterpartyName: string | null;
+  files: { id: string; filename: string }[];
+  allocations: { documentId: number; amount: number; type: string; number: string | null; date: string | null; docAmount: number | null; shipmentId: number | null; shipmentNumber: number | null }[];
+  unallocated: number;
 };
 
 export type DealResponse = {
@@ -396,6 +415,9 @@ export type ShipmentResponse = {
   finance: { orderId: number | null; planSource: "calc" | "order" | null; lastMile: number | null; rows: FinanceRow[]; clientInvoices: Money[] };
   items: ShipmentItem[];
   certificates: ShipmentCertificate[];
+  payments: ShipmentPayment[];
+  /** Пояснение по оплатам для таможни — если оплата не «счёт — платёжка» в этой же сделке. */
+  paymentNotes: string[];
 };
 
 export type ShipmentEvent = {
