@@ -794,7 +794,7 @@ describe("Расчёт: пошлина по ТН ВЭД, КП, поручени�
     const plan = (c: string) => fin.rows.find((r: { category: string }) => r.category === c)?.plan;
     assert.deepEqual(plan("customs"), { amount: Math.round((36750 + calc2.customs.vat) * 100) / 100, currency: "RUB" });
     assert.deepEqual(plan("transport"), { amount: 2000, currency: "USD" });
-    assert.deepEqual(plan("fx"), { amount: 15200, currency: "RUB" });
+    assert.deepEqual(plan("fx"), { amount: 8550, currency: "RUB" });
     assert.deepEqual(plan("commission"), { amount: 50000, currency: "RUB" });
     assert.equal(fin.lastMile, 10000);
 
@@ -806,8 +806,8 @@ describe("Расчёт: пошлина по ТН ВЭД, КП, поручени�
     assert.match(text, /Сиань, Китай → Москва/);
     assert.match(text, /1\s000 кг \/ 10 куб\. м/);
     assert.match(text, /Таможенная пошлина\t36 750 руб\./);
-    // Комиссия за перевод: 4 % от (товар 220 000 + перевозка 160 000) = 15 200 ₽.
-    assert.match(text, /Комиссия за валютный перевод 4%\t15 200 руб\./);
+    // Комиссия за перевод: 2,25 % от (товар 220 000 + перевозка 160 000) = 8 550 ₽.
+    assert.match(text, /Комиссия за валютный перевод 2,25%\t8 550 руб\./);
     assert.doesNotMatch(text, /\{\{/);
 
     // Поручение: таможенные платежи, перевозка, брокер и вознаграждение — из расчёта.

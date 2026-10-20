@@ -55,7 +55,7 @@ export const DEFAULT_CALC_PARAMS: CalcParams = {
   transportLabel: "",
   transportAmount: null,
   transportCurrency: "RUB",
-  fxPercent: 4,
+  fxPercent: 2.25,
   broker: 20000,
   terminal: null,
   commission: null,
@@ -204,7 +204,7 @@ export function kpLines(calc: ShipmentCalc): { lines: { name: string; amount: nu
   let n = 0;
   lines.push({ name: `${++n}. Стоимость товара`, amount: goodsRub });
   lines.push({ name: `${++n}. ${calc.transportLabel || "Перевозка"}`, amount: transport });
-  if (fx) lines.push({ name: `${++n}. Комиссия за валютный перевод ${calc.fxPercent}%`, amount: fx });
+  if (fx) lines.push({ name: `${++n}. Комиссия за валютный перевод ${(calc.fxPercent ?? 0).toLocaleString("ru-RU")}%`, amount: fx });
   const c = ++n;
   lines.push({ name: `${c}. *Таможенные платежи, в т. ч.`, amount: null });
   lines.push({ name: `${c}.1. Таможенная пошлина${dutyRates.length === 1 ? ` ${dutyRates[0]}` : ""}`, amount: calc.customs.duty, indent: true });

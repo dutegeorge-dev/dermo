@@ -243,7 +243,7 @@ export function QuoteCalculator({ product, offers }: { product: { id: number; na
                     [
                       ["Товар", result.goodsRub, `${formatMoney(result.goods, p.currency)}`],
                       ["Доставка", result.transportRub, result.transportLabel],
-                      [`Комиссия ${p.fxPercent ?? 0}%`, result.fxRub],
+                      [`Комиссия ${(p.fxPercent ?? 0).toLocaleString("ru-RU")}%`, result.fxRub],
                       ["Пошлина", result.customs.duty, result.customs.lines[0]?.tariff ?? undefined],
                       [`НДС ${result.customs.lines[0]?.vatRate ?? 22}%`, result.customs.vat],
                       ["Брокер", result.broker],

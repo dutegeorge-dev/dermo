@@ -96,7 +96,7 @@ export const DEFAULT_QUOTE: QuoteParams = {
   transportAmount: null,
   transportCurrency: "USD",
   transportLabel: "",
-  fxPercent: 4,
+  fxPercent: 2.25,
   broker: 20000,
   terminal: null,
   lastMile: null,
@@ -243,7 +243,7 @@ export function quoteKpLines(p: QuoteParams, q: QuoteResult): { name: string; am
   const qty = (p.quantity ?? 0).toLocaleString("ru-RU");
   lines.push({ name: `${++n}. Стоимость товара, ${qty} ${p.unit}`, amount: r2(q.goodsRub + (p.marginInKp === "goods" ? q.margin : 0)) });
   lines.push({ name: `${++n}. ${q.transportLabel}`, amount: q.transportRub });
-  if (q.fxRub) lines.push({ name: `${++n}. Комиссия за валютный перевод ${p.fxPercent}%`, amount: q.fxRub });
+  if (q.fxRub) lines.push({ name: `${++n}. Комиссия за валютный перевод ${(p.fxPercent ?? 0).toLocaleString("ru-RU")}%`, amount: q.fxRub });
   const c = ++n;
   lines.push({ name: `${c}. Таможенные платежи`, amount: r2(q.customs.duty + q.customs.vat) });
   lines.push({ name: `${c}.1. Таможенная пошлина${q.customs.lines[0]?.tariff ? ` ${q.customs.lines[0].tariff}` : ""}`, amount: q.customs.duty, indent: true });
