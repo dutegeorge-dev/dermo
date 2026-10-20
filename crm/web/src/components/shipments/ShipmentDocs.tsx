@@ -5,9 +5,9 @@ import { useState } from "react";
 import { Link } from "react-router";
 
 import { CLIENT_CONTRACT_BY_SCHEME, CONTRACTOR_TYPES, DOC_GROUPS, type DocGroup, docSpec, formatMoney } from "../../../../shared/documents.ts";
-import { api, BASE } from "../../lib/api.ts";
-import type { DocumentRow, Money, ShipmentResponse } from "../../lib/types.ts";
-import { docTitle, formatDay, PaymentChip, StatusChip } from "../docs/common.tsx";
+import { api, BASE, fileUrl } from "../../lib/api.ts";
+import type { DealDocument, DocumentRow, FinanceRow, Money, ShipmentResponse } from "../../lib/types.ts";
+import { docTitle, docTypeLabel, formatDay, PaymentChip, StatusChip } from "../docs/common.tsx";
 import { IconFile, IconPlus } from "../Icons.tsx";
 import { ErrorBox } from "../ui.tsx";
 import { useShipmentActions } from "./common.tsx";
@@ -117,18 +117,9 @@ export function ShipmentDocs({ data, save }: { data: ShipmentResponse; save: Sav
 
   return (
     <section className="panel space-y-4 p-4">
-      <h2 className="text-sm font-semibold">Документы</h2>
-      <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-neutral-800">
-        {order ? (
-          <>
-            <Link to={`/documents/${order.id}`} className="link text-sm font-medium">Поручение № {order.number}</Link>
-            <StatusChip status={order.status} />
-            <a className="btn btn-sm" href={`${BASE}/api/documents/${order.id}/docx`}><IconFile size={12} /> DOCX</a>
-            <Link className="btn btn-sm" to={`/documents/${order.id}/edit`}>Смета</Link>
-          </>
-        ) : (
-          <span className="text-xs muted">{sh.scheme === "commission" ? "Поручение — в «Расчёте для клиента» внизу" : ""}</span>
-        )}
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-semibold">Документы</h2>
+        {!order && sh.scheme === "commission" && <span className="text-xs muted">поручение — в «Расчёте для клиента» внизу</span>}
         <span className="flex-1" />
         <Link
           to={`/documents/new?shipment=${sh.number}`}
@@ -152,33 +143,9 @@ export function ShipmentDocs({ data, save }: { data: ShipmentResponse; save: Sav
             .map((g) => (
               <div key={g}>
                 <p className="mb-1 text-[11px] font-medium uppercase tracking-wide muted">{DOC_GROUPS[g]}</p>
-                <ul className="divide-line text-sm">
+                <ul className="space-y-2 text-sm">
                   {byGroup.get(g)!.map((d) => (
-                    <li key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5">
-                      <Link to={`/documents/${d.id}`} className="hover:underline">{docTitle(d)}</Link>
-                      {d.counterpartyName && <span className="text-xs muted">{d.counterpartyName}</span>}
-                      <span className="flex-1" />
-                      {d.amount !== null && <span className="tabular-nums">{formatMoney(d.amount, d.currency)}</span>}
-                      <PaymentChip status={d.paymentStatus} paid={d.paidAmount} amount={d.amount} currency={d.currency} />
-                      <StatusChip status={d.status === "draft" ? null : d.status} />
-                      {d.paymentStatus === "paid" && (d.paymentFileCount > 0 ? (
-                        <span className="text-[11px] text-sky-700 dark:text-sky-400" title="Платёжка приложена">платёжка ✓</span>
-                      ) : (
-                        <label className="cursor-pointer text-[11px] link" title="Приложить платёжку / SWIFT (необязательно)">
-                          + платёжка
-                          <input
-                            type="file"
-                            className="hidden"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              e.target.value = "";
-                              if (f) void uploadProof(d.id, f);
-                            }}
-                          />
-                        </label>
-                      ))}
-                      {d.fileCount === 0 && <span className="text-[11px] text-amber-700 dark:text-amber-400">без файла</span>}
-                    </li>
+                    <DocCard key={d.id} doc={d} onProof={(f) => void uploadProof(d.id, f)} />
                   ))}
                 </ul>
               </div>
@@ -232,7 +199,7 @@ export function FinanceBlock({ data }: { data: ShipmentResponse }) {
         {tile("Таможенные платежи", rows.customs?.fact, rows.customs?.plan, "по ДТ")}
         {tile("Брокер, СВХ и прочее", otherSum, null, "счета подрядчиков")}
       </div>
-      <Totals parts={{ goods: rows.goods, transport: rows.transport, customs: rows.customs }} other={otherSum} />
+      <Totals rows={data.finance.rows} lastMile={data.finance.lastMile} />
       {(data.finance.rows.length > 0 || data.finance.clientInvoices.length > 0) && (
         <div className="border-t border-slate-200 pt-3 dark:border-neutral-800">
           <p className="mb-1 text-[11px] font-medium uppercase tracking-wide muted">План / факт по статьям</p>
@@ -241,7 +208,7 @@ export function FinanceBlock({ data }: { data: ShipmentResponse }) {
               <thead>
                 <tr className="text-left text-xs muted">
                   <th className="py-1 pr-2 font-medium">Статья</th>
-                  <th className="py-1 pr-2 text-right font-medium">План (поручение)</th>
+                  <th className="py-1 pr-2 text-right font-medium">План ({data.finance.planSource === "calc" ? "расчёт" : "поручение"})</th>
                   <th className="py-1 text-right font-medium">Факт (счета, ДТ)</th>
                 </tr>
               </thead>
@@ -279,7 +246,7 @@ export function FinanceBlock({ data }: { data: ShipmentResponse }) {
 
 type Part = { fact: Money[]; plan: { amount: number | null; currency: string } | null } | undefined;
 
-/** Сумма статьи: факт (счета, ДТ), иначе план из поручения — в рублях по курсу ЦБ. */
+/** Сумма статьи: факт (счета, ДТ), иначе план (расчёт / поручение) — в рублях по курсу ЦБ. */
 function partRub(p: Part, rates: Record<string, number>): number | null {
   if (!p) return null;
   const list = p.fact.length ? p.fact.map((m) => ({ amount: m.amount, currency: m.currency })) : p.plan?.amount != null ? [{ amount: p.plan.amount, currency: p.plan.currency }] : [];
@@ -287,41 +254,117 @@ function partRub(p: Part, rates: Record<string, number>): number | null {
   return list.reduce((s, m) => s + m.amount * (m.currency === "RUB" ? 1 : (rates[m.currency] ?? 0)), 0);
 }
 
-/** Итоги сделки в долларах и рублях: доставка, товар с доставкой, всё вместе. */
-function Totals({ parts, other }: { parts: { goods: Part; transport: Part; customs: Part }; other: Money[] }) {
+/**
+ * Итоги сделки в долларах и рублях — как в КП: товар; доставка и таможня (перевозка, комиссия за перевод,
+ * таможенные платежи, брокер, СВХ, вознаграждение, доставка до склада); товар вместе с доставкой и таможней.
+ */
+function Totals({ rows, lastMile }: { rows: FinanceRow[]; lastMile: number | null }) {
   const { data } = useQuery({ queryKey: ["cbr-rates"], queryFn: () => api<{ date: string; rates: Record<string, number> }>("/cbr-rates"), staleTime: 60 * 60_000 });
   if (!data) return null;
   const r: Record<string, number> = { RUB: 1, ...data.rates };
-  const goods = partRub(parts.goods, r);
-  const transport = partRub(parts.transport, r);
-  const customs = partRub(parts.customs, r);
-  const rest = other.reduce((s, m) => s + m.amount * (m.currency === "RUB" ? 1 : (r[m.currency] ?? 0)), 0);
-  if (goods === null && transport === null) return null;
-  const both = (rub: number) => (
+  const goods = partRub(rows.find((x) => x.category === "goods"), r);
+  const services = rows.filter((x) => x.category !== "goods").map((x) => partRub(x, r));
+  const delivery = services.some((v) => v !== null) || lastMile ? services.reduce<number>((s, v) => s + (v ?? 0), 0) + (lastMile ?? 0) : null;
+  if (goods === null && delivery === null) return null;
+  const both = (rub: number, strong = false) => (
     <span className="tabular-nums">
-      <span className="font-semibold">{formatMoney(rub / (r.USD || 1), "USD")}</span>
+      <span className={strong ? "font-semibold" : ""}>{formatMoney(rub / (r.USD || 1), "USD")}</span>
       <span className="muted"> · {formatMoney(rub, "RUB")}</span>
     </span>
   );
-  const rows: [string, number | null][] = [
-    ["Доставка", transport],
-    ["Товар с доставкой", goods !== null || transport !== null ? (goods ?? 0) + (transport ?? 0) : null],
-    ["Всего: товар, доставка, таможня, брокер, СВХ", (goods ?? 0) + (transport ?? 0) + (customs ?? 0) + rest],
+  const lines: [string, number | null, boolean][] = [
+    ["Товар", goods, false],
+    ["Доставка и таможня (всё, кроме товара)", delivery, false],
+    ["Товар + доставка и таможня", goods !== null || delivery !== null ? (goods ?? 0) + (delivery ?? 0) : null, true],
   ];
   return (
     <div className="rounded-md bg-slate-50 px-3 py-2 text-sm dark:bg-neutral-800/40">
-      {rows
+      {lines
         .filter(([, v]) => v !== null)
-        .map(([label, v]) => (
-          <div key={label} className="flex flex-wrap items-baseline justify-between gap-x-3 py-0.5">
+        .map(([label, v, strong]) => (
+          <div key={label} className={`flex flex-wrap items-baseline justify-between gap-x-3 py-0.5 ${strong ? "mt-1 border-t border-slate-200 pt-1.5 font-medium dark:border-neutral-700" : ""}`}>
             <span>{label}</span>
-            {both(v!)}
+            {both(v!, strong)}
           </div>
         ))}
       <div className="mt-1 text-[11px] muted">
         по курсу ЦБ на {formatDay(data.date)}: 1 USD = {r.USD?.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽
-        {r.CNY ? `, 1 CNY = ${r.CNY.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽` : ""}; где нет счетов — по плану из поручения
+        {r.CNY ? `, 1 CNY = ${r.CNY.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽` : ""}; оплаченное и выставленное — по счетам и ДТ, остальное — по плану
       </div>
     </div>
+  );
+}
+
+const FILE_LABELS: Record<string, string> = { original: "файл", signed: "подписанный", generated: "сформирован", payment: "платёжка" };
+
+/**
+ * Документ сделки карточкой: что за документ и от кого, сумма и оплата, и каждый файл отдельно — оригинал,
+ * подписанный скан, каждая платёжка (депозит, остаток, мелкие доплаты) со своей датой.
+ */
+function DocCard({ doc: d, onProof }: { doc: DealDocument; onProof: (f: File) => void }) {
+  const payable = d.paymentStatus !== null;
+  const own = d.files.filter((f) => f.label !== "payment");
+  const payments = d.files.filter((f) => f.label === "payment");
+  return (
+    <li className="rounded-md border border-slate-200 p-3 dark:border-neutral-800">
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+        <div className="min-w-0 flex-1">
+          <Link to={`/documents/${d.id}`} className="font-medium hover:underline">
+            {docTypeLabel(d.type)} № {d.number ?? "б/н"}
+          </Link>
+          {d.date && <span className="muted"> от {formatDay(d.date)}</span>}
+          {d.counterpartyName && <div className="truncate text-xs muted">{d.counterpartyName}</div>}
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {d.type === "commission_order" && (
+            <>
+              <a className="btn btn-sm" href={`${BASE}/api/documents/${d.id}/docx`}>
+                <IconFile size={12} /> DOCX
+              </a>
+              <Link className="btn btn-sm" to={`/documents/${d.id}/edit`}>
+                Смета
+              </Link>
+            </>
+          )}
+          {d.amount !== null && <span className="font-semibold tabular-nums">{formatMoney(d.amount, d.currency)}</span>}
+          <PaymentChip status={d.paymentStatus} paid={d.paidAmount} amount={d.amount} currency={d.currency} />
+          <StatusChip status={d.status === "draft" ? null : d.status} />
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+        {own.map((f) => (
+          <a key={f.id} href={fileUrl(f.id)} target="_blank" rel="noreferrer" className="inline-flex max-w-[260px] items-center gap-1 rounded border border-slate-200 px-1.5 py-0.5 hover:border-blue-400 dark:border-neutral-700" title={f.filename}>
+            <IconFile size={12} />
+            <span className="muted">{FILE_LABELS[f.label ?? "original"] ?? "файл"}:</span>
+            <span className="truncate">{f.filename}</span>
+          </a>
+        ))}
+        {own.length === 0 && (
+          <Link to={`/documents/${d.id}`} className="rounded border border-amber-300 px-1.5 py-0.5 text-amber-800 dark:border-amber-800 dark:text-amber-300">
+            без файла — загрузить
+          </Link>
+        )}
+        {payments.map((f, i) => (
+          <a key={f.id} href={fileUrl(f.id)} target="_blank" rel="noreferrer" className="inline-flex max-w-[260px] items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-sky-900 hover:border-sky-400 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300" title={f.filename}>
+            💳 платёжка{payments.length > 1 ? ` ${i + 1}` : ""} · {formatDay(f.createdAt.slice(0, 10))}
+            <span className="truncate muted">{f.filename}</span>
+          </a>
+        ))}
+        {payable && (
+          <label className="cursor-pointer rounded border border-dashed border-slate-300 px-1.5 py-0.5 link dark:border-neutral-700" title="Платёжка / SWIFT: депозит, остаток, доплата — можно несколько">
+            + платёжка
+            <input
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) onProof(f);
+              }}
+            />
+          </label>
+        )}
+      </div>
+    </li>
   );
 }

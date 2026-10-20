@@ -144,6 +144,7 @@ export type DealDocument = {
   fileCount: number;
   /** Документов об оплате (платёжки, SWIFT), прикреплённых к документу. */
   paymentFileCount: number;
+  files: { id: string; filename: string; label: string | null; createdAt: string }[];
 };
 
 export type DealResponse = {
@@ -392,7 +393,7 @@ export type ShipmentResponse = {
   events: ShipmentEvent[];
   parties: DealParty[];
   documents: DealDocument[];
-  finance: { orderId: number | null; rows: FinanceRow[]; clientInvoices: Money[] };
+  finance: { orderId: number | null; planSource: "calc" | "order" | null; lastMile: number | null; rows: FinanceRow[]; clientInvoices: Money[] };
   items: ShipmentItem[];
   certificates: ShipmentCertificate[];
 };

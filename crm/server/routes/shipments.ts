@@ -241,7 +241,7 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
       events,
       parties,
       documents: docs,
-      finance: shipmentFinance(docs),
+      finance: shipmentFinance(docs, row.calc ?? null),
       items,
       certificates: await shipmentCertificates(row.id, productIds),
     };

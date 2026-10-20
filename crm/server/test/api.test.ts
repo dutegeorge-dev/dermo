@@ -788,6 +788,16 @@ describe("Расчёт: пошлина по ТН ВЭД, КП, поручени�
     assert.equal(calc2.customs.vat, Math.round((177000 * 0.22 + 159750 * 0.1) * 100) / 100);
     assert.equal(calc2.commission, 50000, "параметры прошлого расчёта сохраняются");
 
+    // «Деньги» сделки: план — из сохранённого расчёта (даже без сметы в поручении).
+    const fin = (await call(s, "GET", `/shipments/${no}`)).json().finance;
+    assert.equal(fin.planSource, "calc");
+    const plan = (c: string) => fin.rows.find((r: { category: string }) => r.category === c)?.plan;
+    assert.deepEqual(plan("customs"), { amount: Math.round((36750 + calc2.customs.vat) * 100) / 100, currency: "RUB" });
+    assert.deepEqual(plan("transport"), { amount: 2000, currency: "USD" });
+    assert.deepEqual(plan("fx"), { amount: 15200, currency: "RUB" });
+    assert.deepEqual(plan("commission"), { amount: 50000, currency: "RUB" });
+    assert.equal(fin.lastMile, 10000);
+
     // КП в Word.
     const kp = await app.inject({ method: "GET", url: `${API}/shipments/${no}/kp.docx`, headers: { cookie: s.cookie } });
     assert.equal(kp.statusCode, 200);
@@ -1256,6 +1266,28 @@ describe("ИИ-разбор: стороны и тип счёта", () => {
     assert.equal(d.items[0].productGuess, true);
     assert.equal(d.items[0].hsCode, "5904100000", "код — как у товара");
     assert.equal(d.items[1].productId, null);
+  });
+
+  test("поручение из файла: смета «Порядок возмещаемых платежей» попадает в форму", async () => {
+    const { resolveDraft } = await import("../lib/ai-parse.ts");
+    const d = await resolveDraft(db, {
+      ...base,
+      docType: "commission_order",
+      counterparty: { name: "ООО «Демо-Смета»" },
+      items: [],
+      costs: [
+        { category: "transport", amount: 60050, currency: "CNY" },
+        { category: "customs", amount: 644679.12, currency: "RUB" },
+        { category: "broker", amount: 20000, currency: "RUB" },
+        { category: "fx", amount: null, currency: null },
+      ],
+    } as never);
+    const line = (c: string) => d.costs?.find((l) => l.category === c);
+    assert.deepEqual([line("transport")?.amount, line("transport")?.currency], [60050, "CNY"]);
+    assert.equal(line("customs")?.amount, 644679.12);
+    assert.equal(line("broker")?.amount, 20000);
+    assert.equal(line("fx")?.amount, null, "подтверждаемый расход — без суммы");
+    assert.equal(d.costs?.length, 9, "все строки сметы шаблона");
   });
 
   test("стороной записали нас — сторона сбрасывается, тип не «счёт клиенту»", async () => {

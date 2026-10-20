@@ -14,7 +14,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { DocumentDraft } from "../../shared/ai.ts";
 import { type PackingData, type PackingLine, packingTotals } from "../../shared/cargo.ts";
-import { CONTRACTOR_TYPES, COST_CATEGORIES, CURRENCIES, DOC_TYPES, docSpec, type DocType } from "../../shared/documents.ts";
+import { CONTRACTOR_TYPES, COST_CATEGORIES, type CostLine, CURRENCIES, defaultCostLines, DOC_TYPES, docSpec, type DocType } from "../../shared/documents.ts";
 import type { DbOrTx } from "../db/client.ts";
 import { counterparties, documents, shipmentParties } from "../db/schema.ts";
 import { addUsage, type AiUsage, aiBase, aiClient, aiError, usageOf } from "./ai.ts";
@@ -67,7 +67,7 @@ export const DRAFT_SCHEMA = {
   required: [
     "docType", "number", "date", "currency", "amount", "counterparty", "contractorType", "clientName", "contractNumber",
     "relatedNumbers", "cargoTitle", "containerNo", "weightKg", "volumeM3", "incoterms", "paymentTerms", "validUntil", "costCategory",
-    "items", "summary",
+    "items", "costs", "summary",
   ],
   properties: {
     docType: { type: "string", enum: Object.keys(DOC_TYPES) },
@@ -110,6 +110,15 @@ export const DRAFT_SCHEMA = {
       },
     },
     volumeM3: NUM,
+    costs: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["category", "amount", "currency"],
+        properties: { category: { type: "string", enum: Object.keys(COST_CATEGORIES) }, amount: NUM, currency: optEnum(CURRENCIES) },
+      },
+    },
     summary: { type: "string" },
   },
 } as const;
@@ -147,6 +156,7 @@ export type ModelDraft = {
     grossKg?: number | null;
     volumeM3?: number | null;
   }[];
+  costs?: { category: string; amount: number | null; currency: string | null }[];
   summary: string;
 };
 
@@ -164,6 +174,7 @@ docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k
 - items — для инвойсов поставщика, спецификаций, сертификатов: каждая строка отдельно. name коротко: товар + артикул + размер («Искусственная трава 20 мм, 2×25 м (52 рул.)»), общие характеристики не повторяй; число рулонов/мест — в скобках. quantity — в единице цены (м², кг, шт); unit по-русски (м², м, шт, кг, рул.); price — цена за единицу, amount — сумма строки. Если цена за м² написана один раз на несколько строк — она общая для них; м² = ширина × длина рулона × число рулонов (проверь: quantity × price = amount). Доп. расходы (упаковка) — отдельной строкой (hsGuess ""). hsCode — код, если он напечатан в документе; hsGuess — твой код ТН ВЭД ЕАЭС для товара, как можно точнее (минимум 4 цифры, например 5703, 391810). Для счетов подрядчиков items пустой.
 - Числа: «37 456,95», «7503,30», «59.700,00» — десятичная запятая (точка там — разделитель тысяч); «59,700.00» — десятичная точка. ￥, RMB, 元 — CNY. Даты — YYYY-MM-DD; «15/10/2026» — день/месяц/год.
 - amount — итог документа (для ДТ — таможенные платежи в рублях). containerNo — 4 буквы + 7 цифр. weightKg — только если в документе прямо написан общий вес брутто (не считай сам).
+- Поручение (commission_order): costs — строки сметы «Порядок возмещаемых платежей»: category — goods (стоимость товаров), transport (транспорт), broker (брокер, таможенное оформление), terminal (СВХ, терминал, досмотры), customs (таможенные платежи: пошлина + НДС), fx (курсовая разница, комиссия банка за перевод), currency_control (валютный контроль), eco (экосбор), commission (вознаграждение комиссионера); amount — сумма (если «подтверждаемый» / «по факту» — null); currency — валюта суммы. У других документов costs пустой.
 - Упаковочный лист (packing_list): items — его строки: name, quantity и unit (как в документе: м², шт…), строки не объединяй и не дели (позиции как в документе — по ним заполняется спецификация перевозчику), packages — число мест, packageType — вид мест по-русски («рул.», «кор.», «палл.»), netKg, grossKg, volumeM3 — по строке; итоговые weightKg (брутто) и volumeM3 — из строки «итого». У других документов эти поля строк пустые (null / "").
 - Документ об оплате (payment_order: платёжное поручение, SWIFT MT103, заявление на перевод, выписка с платежом): counterparty — получатель платежа, amount и currency — сумма платежа, date — дата платежа, number — номер платёжки, relatedNumbers — номера инвойсов / счетов / договоров из назначения платежа. В SWIFT: :32A: — дата ГГММДД, валюта и сумма («261009CNY59700,00» → 2026-10-09, CNY, 59700), :59: — получатель, :70: — назначение платежа, :20: — номер. Наш банк и мы (плательщик, :50:) — не counterparty.
 - incoterms кратко («EXW Xinle»); paymentTerms кратко по-русски («30% депозит, 70% до погрузки»). validUntil — срок действия. costCategory — для счетов подрядчиков (transport, broker, terminal…).
@@ -273,6 +284,18 @@ function matchCounterparty(rows: CpRow[], role: string | null, c: { name?: strin
     [normName(r.name), normName(r.fullName)].some((n) => n.length >= 6 && names.some((m) => m.length >= 6 && (n.includes(m) || m.includes(n)))),
   );
   return partial.length === 1 ? partial[0] : null;
+}
+
+/** Смета поручения из ответа модели — поверх стандартных строк (названия и сроки — как в нашем шаблоне). */
+function orderCosts(raw: { category: string; amount: number | null; currency: string | null }[], goodsCurrency: string): CostLine[] {
+  const lines = defaultCostLines(goodsCurrency);
+  for (const r of raw) {
+    const line = lines.find((l) => l.category === r.category);
+    if (!line) continue;
+    if (r.amount !== null && r.amount > 0) line.amount = Math.round(((line.amount ?? 0) + r.amount) * 100) / 100;
+    if (r.currency && (CURRENCIES as readonly string[]).includes(r.currency)) line.currency = r.currency;
+  }
+  return lines;
 }
 
 /** Наша компания (ТЛК БАРС / BARS TRADING) — никогда не контрагент документа. */
@@ -526,6 +549,7 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
     weightKg: packing?.totals.grossKg ?? num(raw.weightKg),
     volumeM3: packing?.totals.volumeM3 ?? num(raw.volumeM3),
     packing,
+    costs: type === "commission_order" && raw.costs?.length ? orderCosts(raw.costs, raw.currency && (CURRENCIES as readonly string[]).includes(raw.currency) ? raw.currency : "CNY") : null,
     payFor,
     incoterms: text(raw.incoterms, 200),
     paymentTerms: text(raw.paymentTerms, 300),

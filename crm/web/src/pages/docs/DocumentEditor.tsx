@@ -217,6 +217,7 @@ function EditorForm({ initial }: { initial: Initial }) {
     if (d.paymentTerms) setPaymentTerms(d.paymentTerms);
     if (d.validUntil) setValidUntil(d.validUntil);
     if (d.costCategory) setCostCategory(d.costCategory);
+    if (d.costs) setCosts(d.costs);
     if (dSpec.items) setItems(d.items.length ? d.items : [emptyItem()]);
     // Сделка: пришли из карточки сделки — остаёмся в ней; иначе — что нашёл ИИ, или новая (для инвойса поставщика).
     if (!initial.deal) {

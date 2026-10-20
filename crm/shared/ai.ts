@@ -1,7 +1,7 @@
 /** ИИ-разбор документа: черновик формы (сервер: server/lib/ai-parse.ts, интерфейс: DocumentEditor). */
 
 import type { PackingData } from "./cargo.ts";
-import type { DocType } from "./documents.ts";
+import type { CostLine, DocType } from "./documents.ts";
 
 /** Черновик для формы документа (web: DocumentEditor). */
 export type DocumentDraft = {
@@ -26,6 +26,8 @@ export type DocumentDraft = {
   volumeM3: number | null;
   /** Упаковочный лист: строки и итоги. */
   packing: PackingData | null;
+  /** Поручение: смета («Порядок возмещаемых платежей») из файла. */
+  costs: CostLine[] | null;
   /** Документ об оплате: к какому инвойсу / счёту прикрепить. */
   payFor: { id: number; label: string; amount: number | null; currency: string | null; paymentStatus: string | null } | null;
   incoterms: string | null;
