@@ -20,7 +20,7 @@ import { counterparties, documents, shipmentParties } from "../db/schema.ts";
 import { addUsage, type AiUsage, aiBase, aiClient, aiError, usageOf } from "./ai.ts";
 import { docxText, pdfText, xlsxText } from "./file-text.ts";
 import { HttpError } from "./http.ts";
-import { loadProducts, matchProduct } from "./product-match.ts";
+import { articleCodes, loadProducts, matchProduct, supplierProducts } from "./product-match.ts";
 import { REQUISITE_KEYS, REQUISITES_RULES, REQUISITES_SCHEMA, requisitesValues } from "./requisites.ts";
 import { listShipments } from "./shipment-query.ts";
 import { searchTnved, tnvedByCodes, tnvedCount } from "./tnved.ts";
@@ -432,6 +432,21 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
       if (p) {
         it.productId = p.id;
         if (p.hsCode) it.hsCode = p.hsCode;
+      }
+    }
+    // Известный поставщик: не нашли товар по названию — ищем среди его товаров по артикулу (M103-4 и т.п.),
+    // названия у поставщика бывают то по-английски, то по-русски.
+    if (counterparty?.id && items.some((i) => !i.productId)) {
+      const known = await supplierProducts(tx, counterparty.id);
+      for (const it of items.filter((i) => !i.productId)) {
+        const codes = articleCodes(it.name);
+        if (!codes.length) continue;
+        const hits = known.filter((p) => [p.name, ...p.names].some((n) => articleCodes(n).some((c) => codes.includes(c))));
+        if (hits.length === 1) {
+          Object.assign(it, { productId: hits[0].id, productGuess: true });
+          // Код ТН ВЭД — как у товара (у вариантов он общий), а не догадка ИИ.
+          if (hits[0].hsCode) Object.assign(it, { hsCode: hits[0].hsCode, hsGuess: null });
+        }
       }
     }
   }

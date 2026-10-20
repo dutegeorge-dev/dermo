@@ -54,6 +54,9 @@ export type QuoteParams = {
   quantity: number | null;
   kgPerUnit: number | null;
   m3PerUnit: number | null;
+  /** Вес и объём всей партии — задаёт пользователь; пусто — из «на единицу» × объём. */
+  weightKg?: number | null;
+  volumeM3?: number | null;
   /** Единиц в 40HQ (от фабрики) — для числа контейнеров. */
   perContainer: number | null;
   transportMode: "rate" | "manual";
@@ -84,6 +87,8 @@ export const DEFAULT_QUOTE: QuoteParams = {
   quantity: null,
   kgPerUnit: null,
   m3PerUnit: null,
+  weightKg: null,
+  volumeM3: null,
   perContainer: null,
   transportMode: "rate",
   freightRateId: null,
@@ -158,8 +163,8 @@ export function computeQuote(
   const qty = p.quantity ?? 0;
   if (!qty) warnings.push("Укажите объём партии");
   if (p.price === null) warnings.push("Нет цены фабрики");
-  const weightKg = p.kgPerUnit && qty ? r3(qty * p.kgPerUnit) : null;
-  const volumeM3 = p.m3PerUnit && qty ? r3(qty * p.m3PerUnit) : null;
+  const weightKg = p.weightKg || (p.kgPerUnit && qty ? r3(qty * p.kgPerUnit) : null);
+  const volumeM3 = p.volumeM3 || (p.m3PerUnit && qty ? r3(qty * p.m3PerUnit) : null);
   const goods = r2((p.price ?? 0) * qty);
   const goodsRub = r2(rub(goods, p.currency));
 

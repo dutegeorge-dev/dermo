@@ -158,8 +158,12 @@ export function QuoteCalculator({ product, offers }: { product: { id: number; na
             </select>,
           )}
           {field("Единица", <input className="input" value={p.unit} onChange={(e) => set({ unit: e.target.value })} />)}
-          {field("Вес ед., кг", <NumInput value={p.kgPerUnit} onChange={(v) => set({ kgPerUnit: v })} placeholder="0.4" />)}
-          {field("Объём ед., м³", <NumInput value={p.m3PerUnit} onChange={(v) => set({ m3PerUnit: v })} placeholder="0.004" />)}
+          {field(
+            "Вес партии, кг",
+            <NumInput value={p.weightKg ?? null} onChange={(v) => set({ weightKg: v })} placeholder={p.kgPerUnit && p.quantity ? String(Math.round(p.kgPerUnit * p.quantity)) : "21000"} />,
+            p.kgPerUnit && !p.weightKg ? `по фабрике: ${p.kgPerUnit} кг/${p.unit}` : undefined,
+          )}
+          {field("Объём партии, м³", <NumInput value={p.volumeM3 ?? null} onChange={(v) => set({ volumeM3: v })} placeholder={p.m3PerUnit && p.quantity ? String(Math.round(p.m3PerUnit * p.quantity * 10) / 10) : "68"} />)}
           {field("Единиц в 40HQ", <NumInput value={p.perContainer} onChange={(v) => set({ perContainer: v })} placeholder="15000" />)}
           {field("Срок доставки (в КП)", <input className="input" value={p.deliveryTerm} onChange={(e) => set({ deliveryTerm: e.target.value })} placeholder="35–40 дней" />)}
         </div>

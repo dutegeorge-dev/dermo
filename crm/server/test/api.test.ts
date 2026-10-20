@@ -1128,13 +1128,16 @@ describe("Товары: варианты, объединение; ставки �
     const fq = (await call(s, "POST", `/products/${product.id}/quotes`, { params: { ...params, freightRateId: fcl.id, perContainer: 15000 } })).json().result;
     assert.equal(fq.containers, 1);
     assert.equal(fq.transportRub, 605000);
+    // Вес и объём всей партии заданы вручную — важнее «на единицу»: платный объём max(60 м³, 10 000 / 500).
+    const tq = (await call(s, "POST", `/products/${product.id}/quotes`, { params: { ...params, weightKg: 10000, volumeM3: 60 } })).json().result;
+    assert.deepEqual([tq.weightKg, tq.volumeM3, tq.chargeableCbm], [10000, 60, 60]);
     // Вручную.
     const mq = (await call(s, "POST", `/products/${product.id}/quotes`, { params: { ...params, transportMode: "manual", transportAmount: 5000, transportCurrency: "USD" } })).json().result;
     assert.equal(mq.transportRub, 400000);
 
     const list = (await call(s, "GET", `/products/${product.id}/quotes`)).json().quotes;
-    assert.equal(list.length, 3);
-    const kp = await app.inject({ method: "GET", url: `${API}/quotes/${list[2].id}/kp.docx`, headers: { cookie: s.cookie } });
+    assert.equal(list.length, 4);
+    const kp = await app.inject({ method: "GET", url: `${API}/quotes/${list[3].id}/kp.docx`, headers: { cookie: s.cookie } });
     assert.equal(kp.statusCode, 200);
     const text = await docxText(kp.rawPayload);
     assert.match(text, /Коммерческое предложение: Demo quote LVT 4 мм/);
@@ -1229,6 +1232,32 @@ describe("ИИ-разбор: стороны и тип счёта", () => {
     assert.equal(d.type, "contractor_invoice");
     assert.equal(d.counterparty?.name, "Demo Freight Forwarding Co., Ltd.");
   });
+  test("известный поставщик: позиция находит его товар по артикулу, даже если название на другом языке", async () => {
+    const { resolveDraft } = await import("../lib/ai-parse.ts");
+    const s = await adminSession();
+    const sup = (await call(s, "POST", "/counterparties", { role: "supplier", name: "Demo Vast Plastic Co., Ltd" })).json().counterparty;
+    const inv = await call(s, "POST", "/documents", {
+      type: "supplier_invoice", number: "DVP-1", counterpartyId: sup.id, currency: "CNY",
+      items: [{ name: "Демо ПВХ покрытие M777-4", hsCode: "5904100000", quantity: 100, unit: "м²", price: 4, amount: 400 }],
+    });
+    assert.equal(inv.statusCode, 200, inv.body);
+    const productId = (await call(s, "GET", `/documents/${inv.json().document.id}`)).json().items[0].productId as number;
+    const d = await resolveDraft(db, {
+      ...base,
+      docType: "supplier_invoice",
+      counterparty: { name: "Demo Vast Plastic Co., Ltd" },
+      items: [
+        { name: "PVC flooring M777-4, 3m×30m", hsCode: null, hsGuess: "3918", quantity: 90, unit: "рул.", price: null, amount: 900 },
+        { name: "PVC flooring X1, 2m", hsCode: null, hsGuess: null, quantity: 1, unit: "рул.", price: null, amount: 1 },
+      ],
+    } as never);
+    assert.equal(d.counterparty?.id, sup.id);
+    assert.equal(d.items[0].productId, productId, "товар поставщика по артикулу M777-4");
+    assert.equal(d.items[0].productGuess, true);
+    assert.equal(d.items[0].hsCode, "5904100000", "код — как у товара");
+    assert.equal(d.items[1].productId, null);
+  });
+
   test("стороной записали нас — сторона сбрасывается, тип не «счёт клиенту»", async () => {
     const { resolveDraft, isOurCompany } = await import("../lib/ai-parse.ts");
     assert.ok(isOurCompany({ name: "LIMITEDTRADE DEVELOPMENT BARS TRADING CO." }));

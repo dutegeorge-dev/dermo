@@ -39,6 +39,8 @@ export type DocumentDraft = {
     batchNo: null;
     hsCode: string | null;
     hsAuto: boolean;
+    /** Товар подобран среди товаров поставщика по артикулу — проверить. */
+    productGuess?: boolean;
     tariff?: string | null;
     quantity: number | null;
     unit: string | null;

@@ -157,6 +157,13 @@ function EditorForm({ initial }: { initial: Initial }) {
   const [ai, setAi] = useState<{ status: "idle" | "busy" | "done" | "error"; draft?: DocumentDraft; error?: string }>({ status: "idle" });
   // Реквизиты нового контрагента, которые ИИ прочитал из документа (имя → поля).
   const [aiCounterparty, setAiCounterparty] = useState<{ name: string; extra: Record<string, string> } | null>(null);
+  // Товары известного поставщика — для выбора вместо «новый товар».
+  const partyCard = useQuery({
+    queryKey: ["counterparty", party?.id],
+    queryFn: () => api<{ products: { productId: number | null; productName: string }[] }>(`/counterparties/${party!.id}`),
+    enabled: !!party?.id && spec.party === "supplier",
+  });
+  const supplierProducts = [...new Map((partyCard.data?.products ?? []).filter((p) => p.productId).map((p) => [p.productId!, { id: p.productId!, name: p.productName }])).values()];
   const [aiFill, setAiFill] = useState<{ id: number; values: Record<string, string> } | null>(null);
   const [applyToDeal, setApplyToDeal] = useState(true);
   const [packingLines, setPackingLines] = useState<PackingLine[]>(((data0.packing as PackingData | undefined)?.lines ?? []).length ? (data0.packing as PackingData).lines : [emptyPackingLine()]);
@@ -594,6 +601,7 @@ function EditorForm({ initial }: { initial: Initial }) {
                 onChange={setItems}
                 currency={currency}
                 showHs={type === "supplier_invoice" || type === "specification"}
+                supplierProducts={supplierProducts}
                 onPasteInfo={(text) => {
                   const c = detectCurrency(text);
                   if (c) setCurrency(c);

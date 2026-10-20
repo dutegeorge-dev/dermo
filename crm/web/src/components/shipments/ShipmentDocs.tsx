@@ -2,13 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 
 import { CLIENT_CONTRACT_BY_SCHEME, CONTRACTOR_TYPES, DOC_GROUPS, type DocGroup, docSpec, formatMoney } from "../../../../shared/documents.ts";
 import { api, BASE } from "../../lib/api.ts";
 import type { DocumentRow, Money, ShipmentResponse } from "../../lib/types.ts";
-import { docTitle, PaymentChip, StatusChip } from "../docs/common.tsx";
-import { IconFile, IconPlus, IconX } from "../Icons.tsx";
+import { docTitle, formatDay, PaymentChip, StatusChip } from "../docs/common.tsx";
+import { IconFile, IconPlus } from "../Icons.tsx";
 import { ErrorBox } from "../ui.tsx";
 import { useShipmentActions } from "./common.tsx";
 import { CounterpartyPicker, ensureCounterparty, type Picked } from "../crm/CounterpartyPicker.tsx";
@@ -46,31 +46,24 @@ function ContractSelect({ label, value, type, counterpartyId, save, field }: { l
   );
 }
 
-export function ContractsBlock({ data, save }: { data: ShipmentResponse; save: Save }) {
-  const sh = data.shipment;
-  return (
-    <div className="space-y-2">
-      <ContractSelect label="Договор с клиентом" value={sh.clientContractId} type={CLIENT_CONTRACT_BY_SCHEME[sh.scheme]} counterpartyId={sh.clientId} save={save} field="clientContractId" />
-      <ContractSelect label="Контракт с поставщиком" value={sh.supplierContractId} type="supplier_contract" counterpartyId={sh.supplierId} save={save} field="supplierContractId" />
-    </div>
-  );
-}
-
 export function PartiesBlock({ data, run }: { data: ShipmentResponse; run: Run }) {
   const sh = data.shipment;
   const [adding, setAdding] = useState(false);
   const [party, setParty] = useState<Picked | null>(null);
+  // Перевозчик уже показан отдельной строкой — здесь брокер, СВХ, агенты и прочие подрядчики.
+  const others = data.parties.filter((p) => p.id !== sh.carrierId);
   return (
-    <div className="text-sm">
-      {data.parties.length === 0 && !adding && <p className="mb-1 text-xs muted">Перевозчики, брокер, СВХ — добавляются сами из их счетов.</p>}
-      {data.parties.map((p) => (
-        <span key={p.id} className="mb-1 mr-1 inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 dark:bg-neutral-800">
-          <Link to={`/contractors/${p.id}`} className="hover:underline">{p.name}</Link>
-          <span className="text-xs muted">{CONTRACTOR_TYPES[p.contractorType as keyof typeof CONTRACTOR_TYPES] ?? ""}</span>
-          <button type="button" aria-label={`Убрать ${p.name}`} className="text-slate-400 hover:text-red-600" onClick={() => void run(() => api(`/shipments/${sh.number}/parties/${p.id}`, { method: "DELETE" }))}>
-            <IconX size={10} />
-          </button>
-        </span>
+    <div className="space-y-3 text-sm">
+      {others.map((p) => (
+        <div key={p.id} className="block">
+          <span className="label">{CONTRACTOR_TYPES[p.contractorType as keyof typeof CONTRACTOR_TYPES] ?? "Подрядчик"}</span>
+          <div className="flex items-center gap-2">
+            <Link to={`/contractors/${p.id}`} className="link min-w-0 truncate">{p.name}</Link>
+            <button type="button" className="ml-auto shrink-0 text-xs link" onClick={() => void run(() => api(`/shipments/${sh.number}/parties/${p.id}`, { method: "DELETE" }))}>
+              убрать
+            </button>
+          </div>
+        </div>
       ))}
       {adding ? (
         <span className="mt-1 flex gap-2">
@@ -89,16 +82,16 @@ export function PartiesBlock({ data, run }: { data: ShipmentResponse; run: Run }
           </button>
         </span>
       ) : (
-        <button type="button" className="text-xs link" onClick={() => setAdding(true)}>+ подрядчик</button>
+        <button type="button" className="text-xs link" onClick={() => setAdding(true)} title="Брокер, СВХ, агент — добавляются и сами из их счетов">
+          + участник (брокер, СВХ…)
+        </button>
       )}
     </div>
   );
 }
 
-export function ShipmentDocs({ data }: { data: ShipmentResponse }) {
-  const navigate = useNavigate();
+export function ShipmentDocs({ data, save }: { data: ShipmentResponse; save: Save }) {
   const sh = data.shipment;
-  const [orderError, setOrderError] = useState<unknown>(null);
 
   const contractIds = new Set([sh.clientContractId, sh.supplierContractId]);
   const docs = data.documents.filter((d) => !contractIds.has(d.id));
@@ -134,23 +127,7 @@ export function ShipmentDocs({ data }: { data: ShipmentResponse }) {
             <Link className="btn btn-sm" to={`/documents/${order.id}/edit`}>Смета</Link>
           </>
         ) : (
-          sh.scheme === "commission" && (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={async () => {
-                setOrderError(null);
-                try {
-                  const res = await api<{ document: { id: number } }>(`/shipments/${sh.number}/order`, { method: "POST" });
-                  navigate(`/documents/${res.document.id}/edit`);
-                } catch (e) {
-                  setOrderError(e);
-                }
-              }}
-            >
-              Сформировать поручение
-            </button>
-          )
+          <span className="text-xs muted">{sh.scheme === "commission" ? "Поручение — в «Расчёте для клиента» внизу" : ""}</span>
         )}
         <span className="flex-1" />
         <Link
@@ -161,7 +138,10 @@ export function ShipmentDocs({ data }: { data: ShipmentResponse }) {
           <IconPlus size={12} /> Загрузить документ
         </Link>
       </div>
-      {orderError != null && <ErrorBox error={orderError} />}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ContractSelect label="Договор с клиентом" value={sh.clientContractId} type={CLIENT_CONTRACT_BY_SCHEME[sh.scheme]} counterpartyId={sh.clientId} save={save} field="clientContractId" />
+        <ContractSelect label="Контракт с поставщиком" value={sh.supplierContractId} type="supplier_contract" counterpartyId={sh.supplierId} save={save} field="supplierContractId" />
+      </div>
       {proofError != null && <ErrorBox error={proofError} />}
 
       {docs.length === 0 && <p className="text-sm muted">Документов пока нет. Загрузите инвойс поставщика — он сам привяжется к договору, товары попадут в справочник.</p>}
@@ -252,6 +232,7 @@ export function FinanceBlock({ data }: { data: ShipmentResponse }) {
         {tile("Таможенные платежи", rows.customs?.fact, rows.customs?.plan, "по ДТ")}
         {tile("Брокер, СВХ и прочее", otherSum, null, "счета подрядчиков")}
       </div>
+      <Totals parts={{ goods: rows.goods, transport: rows.transport, customs: rows.customs }} other={otherSum} />
       {(data.finance.rows.length > 0 || data.finance.clientInvoices.length > 0) && (
         <div className="border-t border-slate-200 pt-3 dark:border-neutral-800">
           <p className="mb-1 text-[11px] font-medium uppercase tracking-wide muted">План / факт по статьям</p>
@@ -293,5 +274,54 @@ export function FinanceBlock({ data }: { data: ShipmentResponse }) {
         </div>
       )}
     </section>
+  );
+}
+
+type Part = { fact: Money[]; plan: { amount: number | null; currency: string } | null } | undefined;
+
+/** Сумма статьи: факт (счета, ДТ), иначе план из поручения — в рублях по курсу ЦБ. */
+function partRub(p: Part, rates: Record<string, number>): number | null {
+  if (!p) return null;
+  const list = p.fact.length ? p.fact.map((m) => ({ amount: m.amount, currency: m.currency })) : p.plan?.amount != null ? [{ amount: p.plan.amount, currency: p.plan.currency }] : [];
+  if (!list.length) return null;
+  return list.reduce((s, m) => s + m.amount * (m.currency === "RUB" ? 1 : (rates[m.currency] ?? 0)), 0);
+}
+
+/** Итоги сделки в долларах и рублях: доставка, товар с доставкой, всё вместе. */
+function Totals({ parts, other }: { parts: { goods: Part; transport: Part; customs: Part }; other: Money[] }) {
+  const { data } = useQuery({ queryKey: ["cbr-rates"], queryFn: () => api<{ date: string; rates: Record<string, number> }>("/cbr-rates"), staleTime: 60 * 60_000 });
+  if (!data) return null;
+  const r: Record<string, number> = { RUB: 1, ...data.rates };
+  const goods = partRub(parts.goods, r);
+  const transport = partRub(parts.transport, r);
+  const customs = partRub(parts.customs, r);
+  const rest = other.reduce((s, m) => s + m.amount * (m.currency === "RUB" ? 1 : (r[m.currency] ?? 0)), 0);
+  if (goods === null && transport === null) return null;
+  const both = (rub: number) => (
+    <span className="tabular-nums">
+      <span className="font-semibold">{formatMoney(rub / (r.USD || 1), "USD")}</span>
+      <span className="muted"> · {formatMoney(rub, "RUB")}</span>
+    </span>
+  );
+  const rows: [string, number | null][] = [
+    ["Доставка", transport],
+    ["Товар с доставкой", goods !== null || transport !== null ? (goods ?? 0) + (transport ?? 0) : null],
+    ["Всего: товар, доставка, таможня, брокер, СВХ", (goods ?? 0) + (transport ?? 0) + (customs ?? 0) + rest],
+  ];
+  return (
+    <div className="rounded-md bg-slate-50 px-3 py-2 text-sm dark:bg-neutral-800/40">
+      {rows
+        .filter(([, v]) => v !== null)
+        .map(([label, v]) => (
+          <div key={label} className="flex flex-wrap items-baseline justify-between gap-x-3 py-0.5">
+            <span>{label}</span>
+            {both(v!)}
+          </div>
+        ))}
+      <div className="mt-1 text-[11px] muted">
+        по курсу ЦБ на {formatDay(data.date)}: 1 USD = {r.USD?.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽
+        {r.CNY ? `, 1 CNY = ${r.CNY.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽` : ""}; где нет счетов — по плану из поручения
+      </div>
+    </div>
   );
 }

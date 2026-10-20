@@ -178,7 +178,6 @@ export function ShipmentPage() {
             <span className="muted">{s.label}</span>
             {s.containerNo ? <span className="font-mono">{s.containerNo}</span> : <span className="text-amber-700 dark:text-amber-400">контейнер не указан</span>}
             {s.client && <Link to={`/clients/${s.client.id}`} className="link">{s.client.name}</Link>}
-            {s.hsCode && <span className="text-xs muted">ТН ВЭД <span className="font-mono">{s.hsCode}</span></span>}
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -210,11 +209,11 @@ export function ShipmentPage() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
           <StageTimeline data={data} saveField={save} />
-          <ShipmentDocs data={data} />
+          <ShipmentDocs data={data} save={save} />
           <FinanceBlock data={data} />
           <GoodsBlock data={data} />
           <History shipment={s} events={data.events} />
-          <CalcBlock data={data} />
+          <CalcBlock data={data} save={save} />
           <SpecBlock data={data} />
         </div>
         <div className="min-w-0">

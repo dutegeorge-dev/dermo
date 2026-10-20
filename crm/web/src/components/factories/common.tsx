@@ -71,7 +71,7 @@ export function OffersEditor({ offers, onChange }: { offers: Offer[]; onChange: 
               <input className="input" value={o.name} placeholder="400 г/м², ширина 2 и 4 м" onChange={(e) => set(i, { name: e.target.value })} />
             </label>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
             {field(i, "price", "Цена")}
             <label className="block">
               <span className="label">Валюта</span>
@@ -86,7 +86,6 @@ export function OffersEditor({ offers, onChange }: { offers: Offer[]; onChange: 
             {field(i, "moq", "Мин. заказ")}
             {field(i, "perContainer", "В 40HQ", "15000")}
             {field(i, "kgPerUnit", "Вес ед., кг", "0.4")}
-            {field(i, "m3PerUnit", "Объём ед., м³")}
             <label className="block">
               <span className="label">Дата цены</span>
               <input type="date" className="input" value={o.quotedAt ?? ""} onChange={(e) => set(i, { quotedAt: e.target.value || null })} />

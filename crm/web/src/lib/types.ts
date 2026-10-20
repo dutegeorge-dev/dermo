@@ -235,6 +235,8 @@ export type DocItem = {
   hsCode: string | null;
   /** Код ТН ВЭД подобран ИИ — проверить. */
   hsAuto?: boolean;
+  /** Товар подобран среди товаров поставщика по артикулу — проверить. */
+  productGuess?: boolean;
   quantity: number | null;
   unit: string | null;
   price: number | null;

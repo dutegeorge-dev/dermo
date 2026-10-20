@@ -4,7 +4,9 @@
  * «трава 20мм 2x25м» — один товар.
  */
 
-import { products } from "../db/schema.ts";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
+
+import { documentItems, documents, factories, productOffers, products } from "../db/schema.ts";
 import type { DbOrTx } from "../db/client.ts";
 
 export function productKey(name: string | null | undefined): string {
@@ -64,4 +66,43 @@ export function matchProduct(list: ProductRef[], name: string): ProductRef | nul
   if (!key) return null;
   const base = productBaseKey(name);
   return list.find((p) => productKey(p.name) === key) ?? list.find((p) => productBaseKey(p.name) === base) ?? null;
+}
+
+/**
+ * Артикулы в названии: «PVC flooring M103-4, 3m×30m» → ["m103-4"]. Буквы с цифрами (или 4+ цифр), без размеров
+ * и единиц («20 мм», «3m», «400г»). По ним позиция находит товар поставщика, даже если названия на разных языках.
+ */
+export function articleCodes(name: string): string[] {
+  const tokens = productBaseName(name).toLowerCase().match(/[\p{L}\d][\p{L}\d.\-/]*/gu) ?? [];
+  return [
+    ...new Set(
+      tokens
+        .map((t) => t.replace(/[.\-/]+$/, ""))
+        .filter((t) => t.length >= 3 && /\d/.test(t) && (/\p{L}/u.test(t) || /^\d{4,}$/.test(t)))
+        .filter((t) => !/^\d+([.,]\d+)?(мм|mm|см|cm|м|m|г|g|гр|кг|kg|шт|pcs|м2|m2|мкм)$/.test(t)),
+    ),
+  ];
+}
+
+/** Товары, которые уже брали у поставщика (его инвойсы, цены его фабрики), с названиями вариантов. */
+export async function supplierProducts(tx: DbOrTx, counterpartyId: number): Promise<{ id: number; name: string; hsCode: string | null; names: string[] }[]> {
+  const fromDocs = await tx
+    .select({ id: products.id, name: products.name, hsCode: products.hsCode, item: documentItems.name })
+    .from(documentItems)
+    .innerJoin(documents, eq(documents.id, documentItems.documentId))
+    .innerJoin(products, eq(products.id, documentItems.productId))
+    .where(and(eq(documents.counterpartyId, counterpartyId), inArray(documents.type, ["supplier_invoice", "packing_list", "supplier_contract", "specification"])));
+  const fromOffers = await tx
+    .select({ id: products.id, name: products.name, hsCode: products.hsCode, item: productOffers.name })
+    .from(productOffers)
+    .innerJoin(factories, eq(factories.id, productOffers.factoryId))
+    .innerJoin(products, eq(products.id, productOffers.productId))
+    .where(and(eq(factories.counterpartyId, counterpartyId), isNotNull(productOffers.productId)));
+  const map = new Map<number, { id: number; name: string; hsCode: string | null; names: string[] }>();
+  for (const r of [...fromDocs, ...fromOffers]) {
+    const p = map.get(r.id) ?? { id: r.id, name: r.name, hsCode: r.hsCode, names: [] };
+    if (!p.names.includes(r.item)) p.names.push(r.item);
+    map.set(r.id, p);
+  }
+  return [...map.values()];
 }

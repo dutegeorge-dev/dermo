@@ -71,6 +71,7 @@ export function ItemsEditor({
   showBatch = false,
   showHs = false,
   onPasteInfo,
+  supplierProducts = [],
 }: {
   items: DocItem[];
   onChange: (items: DocItem[]) => void;
@@ -79,6 +80,8 @@ export function ItemsEditor({
   /** Колонка «ТН ВЭД» со ставкой пошлины (инвойс поставщика, поручение). */
   showHs?: boolean;
   onPasteInfo?: (text: string) => void;
+  /** Товары, которые уже брали у этого поставщика — предлагаем вместо «новый товар». */
+  supplierProducts?: { id: number; name: string }[];
 }) {
   const listId = useId();
   const { data } = useQuery({
@@ -140,7 +143,14 @@ export function ItemsEditor({
                     }}
                     onPaste={onPaste(i)}
                   />
-                  {it.productId ? <div className="mt-0.5 text-[10px] text-green-700 dark:text-green-400">в справочнике товаров</div> : it.name.trim() && showHs ? <div className="mt-0.5 text-[10px] muted">новый товар</div> : null}
+                  {it.name.trim() && showHs && (
+                    <ProductLink
+                      item={it}
+                      productName={it.productId ? (data?.products.find((p) => p.id === it.productId)?.name ?? it.productName ?? null) : null}
+                      supplierProducts={supplierProducts}
+                      onPick={(p) => update(i, p ? { productId: p.id, productGuess: false } : { productId: null, productGuess: false })}
+                    />
+                  )}
                 </td>
                 {showBatch && (
                   <td className="py-0.5 pr-1">
@@ -186,6 +196,46 @@ export function ItemsEditor({
           Итого: <b className="tabular-nums">{formatMoney(total, currency)}</b>
         </span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Чей это товар: позиция (с размером, цветом) остаётся как в документе, а товар справочника выбирается отдельно —
+ * у известного поставщика из его товаров, иначе — новый товар.
+ */
+function ProductLink({
+  item,
+  productName,
+  supplierProducts,
+  onPick,
+}: {
+  item: DocItem;
+  productName: string | null;
+  supplierProducts: { id: number; name: string }[];
+  onPick: (p: { id: number } | null) => void;
+}) {
+  const options = productName && item.productId && !supplierProducts.some((p) => p.id === item.productId) ? [{ id: item.productId, name: productName }, ...supplierProducts] : supplierProducts;
+  const tone = item.productGuess ? "text-amber-700 dark:text-amber-400" : item.productId ? "text-green-700 dark:text-green-400" : "muted";
+  if (!options.length) {
+    return <div className={`mt-0.5 text-[10px] ${tone}`}>{item.productId ? `товар: ${productName ?? "в справочнике"}` : "новый товар"}</div>;
+  }
+  return (
+    <div className={`mt-0.5 flex items-center gap-1 text-[10px] ${tone}`}>
+      <span className="shrink-0">{item.productGuess ? "товар поставщика по артикулу, проверьте:" : "товар:"}</span>
+      <select
+        className="min-w-0 max-w-full truncate rounded border border-transparent bg-transparent py-0 text-[10px] hover:border-slate-300 dark:hover:border-neutral-700"
+        value={item.productId ?? ""}
+        aria-label="Товар справочника"
+        onChange={(e) => onPick(e.target.value ? { id: Number(e.target.value) } : null)}
+      >
+        <option value="">новый товар</option>
+        {options.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

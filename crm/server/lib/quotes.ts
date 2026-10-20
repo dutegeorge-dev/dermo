@@ -92,6 +92,8 @@ export function quoteParams(input: unknown): QuoteParams {
     quantity: num(p.quantity),
     kgPerUnit: num(p.kgPerUnit),
     m3PerUnit: num(p.m3PerUnit),
+    weightKg: num(p.weightKg),
+    volumeM3: num(p.volumeM3),
     perContainer: num(p.perContainer),
     transportMode: p.transportMode === "manual" ? "manual" : "rate",
     freightRateId: typeof p.freightRateId === "number" && p.freightRateId > 0 ? p.freightRateId : null,

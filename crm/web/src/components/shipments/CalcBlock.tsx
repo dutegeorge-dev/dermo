@@ -11,6 +11,7 @@ import { useNavigate } from "react-router";
 import { type CalcParams, kpLines, type ShipmentCalc } from "../../../../shared/customs.ts";
 import { CURRENCIES, formatMoney } from "../../../../shared/documents.ts";
 import { api, BASE, errorMessage } from "../../lib/api.ts";
+import { FieldInput, type Save } from "./ShipmentFields.tsx";
 import { IconChevronDown, IconChevronRight } from "../Icons.tsx";
 import type { ShipmentResponse } from "../../lib/types.ts";
 
@@ -57,7 +58,7 @@ const OPEN_KEY = "crm-calc-open";
 /** Событие «раскрыть расчёт» — из «Хода сделки». */
 export const OPEN_CALC_EVENT = "crm:open-calc";
 
-export function CalcBlock({ data }: { data: ShipmentResponse }) {
+export function CalcBlock({ data, save: saveShipment }: { data: ShipmentResponse; save: Save }) {
   const sh = data.shipment;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -194,7 +195,7 @@ export function CalcBlock({ data }: { data: ShipmentResponse }) {
         <p className="text-sm muted">Сначала загрузите инвойс поставщика — товары и суммы берутся из него.</p>
       ) : (
         <>
-          {noCargo && <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">Укажите в сделке вес и объём груза (справа, блок «Груз») — без них не посчитать пошлину «за кг» и КП.</p>}
+          {noCargo && <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">Укажите в сделке вес и объём груза (справа, блок «Сделка») — без них не посчитать пошлину «за кг» и КП.</p>}
           {form && (
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="block sm:col-span-3">
@@ -215,6 +216,19 @@ export function CalcBlock({ data }: { data: ShipmentResponse }) {
               <label className="block">
                 <span className="label">Срок доставки (в КП)</span>
                 <input className="input" value={form.deliveryTerm} onChange={(e) => set("deliveryTerm", e.target.value)} placeholder="20–25 дней, поезда каждую пятницу" />
+              </label>
+              {/* Маршрут — только для КП («Тип доставки», «Маршрут»); сохраняется в сделке сразу. */}
+              <label className="block">
+                <span className="label">Тип доставки (в КП)</span>
+                <FieldInput field="transport" value={data.shipment.transport} save={saveShipment} />
+              </label>
+              <label className="block">
+                <span className="label">Откуда (в КП)</span>
+                <FieldInput field="pickupLocation" value={data.shipment.pickupLocation} save={saveShipment} />
+              </label>
+              <label className="block">
+                <span className="label">Куда (в КП)</span>
+                <FieldInput field="deliveryLocation" value={data.shipment.deliveryLocation} save={saveShipment} />
               </label>
             </div>
           )}

@@ -5,16 +5,14 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { MESSENGERS } from "../../../../shared/deal-fields.ts";
-import { formatMoney } from "../../../../shared/documents.ts";
-import { SHIPMENT_FIELD_GROUPS, SHIPMENT_FIELDS, type ShipmentField, type ShipmentFieldSpec } from "../../../../shared/shipments.ts";
+import { SHIPMENT_FIELDS, type ShipmentField, type ShipmentFieldSpec } from "../../../../shared/shipments.ts";
 import { api } from "../../lib/api.ts";
 import type { Contact, CounterpartyRole, ShipmentResponse } from "../../lib/types.ts";
 import { useDirectory } from "../crm/common.tsx";
 import { CounterpartyPicker, ensureCounterparty, type Picked } from "../crm/CounterpartyPicker.tsx";
 import { DealPicker } from "../crm/DealPicker.tsx";
-import { counterpartyPath, formatDay, PaymentChip } from "../docs/common.tsx";
-import { ContractsBlock, PartiesBlock } from "./ShipmentDocs.tsx";
-import { CarrierInvoiceSelect } from "./ShipmentForm.tsx";
+import { counterpartyPath } from "../docs/common.tsx";
+import { PartiesBlock } from "./ShipmentDocs.tsx";
 
 export type Save = (patch: Record<string, unknown>) => Promise<void>;
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
@@ -214,50 +212,35 @@ export function ShipmentFields({ data, save, run }: { data: ShipmentResponse; sa
   return (
     <div className="space-y-5">
       <section className="panel space-y-3 p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide muted">Участники сделки</h3>
         <PartyField label="Клиент" role="client" value={sh.client} onSave={(id) => save({ clientId: id })} />
         <ContactLine data={data} save={save} />
-        <Row label="Менеджер">
-          <FieldInput field="assigneeId" value={sh.assigneeId} save={save} />
-        </Row>
-        <Row label="Схема">
-          <FieldInput field="scheme" value={sh.scheme} save={save} />
-        </Row>
-      </section>
-
-      <section className="panel space-y-3 p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide muted">Поставщик и перевозка</h3>
         <PartyField label="Поставщик" role="supplier" value={sh.supplier} onSave={(id) => save({ supplierId: id })} extra={{ kind: "foreign" }} />
         <PartyField label="Перевозчик" role="contractor" value={sh.carrier} onSave={(id) => save({ carrierId: id })} extra={{ contractorType: "carrier_cn" }} />
-        <Row label="Инвойс перевозчика">
-          <CarrierInvoiceSelect carrierId={sh.carrierId} value={sh.carrierInvoiceId} onChange={(id) => void save({ carrierInvoiceId: id })} />
-          {sh.carrierInvoice && (
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-              <Link to={`/documents/${sh.carrierInvoice.id}`} className="link">
-                открыть{sh.carrierInvoice.date ? ` · от ${formatDay(sh.carrierInvoice.date)}` : ""}
-              </Link>
-              {sh.carrierInvoice.amount !== null && <span>{formatMoney(sh.carrierInvoice.amount, sh.carrierInvoice.currency)}</span>}
-              <PaymentChip status={sh.carrierInvoice.paymentStatus} />
-            </div>
-          )}
-        </Row>
-        <Row label="Подрядчики">
-          <PartiesBlock data={data} run={run} />
-        </Row>
-        <ContractsBlock data={data} save={save} />
+        <PartiesBlock data={data} run={run} />
       </section>
 
-      {SHIPMENT_FIELD_GROUPS.map((g) => (
-        <section key={g.title} className="panel space-y-3 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide muted">{g.title}</h3>
-          {g.fields.map((f) => (
-            <Row key={f} label={SHIPMENT_FIELDS[f].label}>
-              <FieldInput field={f} value={(sh as Record<string, unknown>)[f]} save={save} />
-            </Row>
-          ))}
-        </section>
-      ))}
-
       <section className="panel space-y-3 p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide muted">Сделка</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <Row label="Менеджер">
+            <FieldInput field="assigneeId" value={sh.assigneeId} save={save} />
+          </Row>
+          <Row label="Схема">
+            <FieldInput field="scheme" value={sh.scheme} save={save} />
+          </Row>
+        </div>
+        <Row label={SHIPMENT_FIELDS.containerNo.label}>
+          <FieldInput field="containerNo" value={sh.containerNo} save={save} />
+        </Row>
+        <div className="grid grid-cols-2 gap-3">
+          <Row label={SHIPMENT_FIELDS.weightKg.label}>
+            <FieldInput field="weightKg" value={sh.weightKg} save={save} />
+          </Row>
+          <Row label={SHIPMENT_FIELDS.volumeM3.label}>
+            <FieldInput field="volumeM3" value={sh.volumeM3} save={save} />
+          </Row>
+        </div>
         <Row label="Лид из воронки продаж">
           {dealEdit ? (
             <DealPicker
