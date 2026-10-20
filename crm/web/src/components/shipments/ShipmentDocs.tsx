@@ -167,7 +167,7 @@ export function FinanceBlock({ data }: { data: ShipmentResponse }) {
         {list && list.length ? (
           list.map((m) => <span key={m.currency} className="block">{formatMoney(m.amount, m.currency)}</span>)
         ) : plan?.amount != null ? (
-          <span className="muted" title="Плановая сумма из поручения">≈ {formatMoney(plan.amount, plan.currency)}</span>
+          <span className="muted" title="Плановая сумма — из расчёта или поручения">≈ {formatMoney(plan.amount, plan.currency)}</span>
         ) : (
           <span className="muted">—</span>
         )}
@@ -181,15 +181,8 @@ export function FinanceBlock({ data }: { data: ShipmentResponse }) {
       {hint && !list?.length && <div className="text-[11px] muted">{hint}</div>}
     </div>
   );
-  const other = data.finance.rows.filter((r) => !["goods", "transport", "customs"].includes(r.category)).flatMap((r) => r.fact);
-  const otherSum: Money[] = [];
-  for (const m of other) {
-    const x = otherSum.find((o) => o.currency === m.currency);
-    if (x) {
-      x.amount += m.amount;
-      x.paid += m.paid;
-    } else otherSum.push({ ...m });
-  }
+  // Комиссия компании: выставленный клиенту счёт на вознаграждение (схема «комиссия»), иначе — по плану.
+  const commissionFact = data.shipment.scheme === "commission" && data.finance.clientInvoices.length ? data.finance.clientInvoices : rows.commission?.fact;
   return (
     <section className="panel space-y-3 p-4">
       <h2 className="text-sm font-semibold">Деньги</h2>
@@ -197,7 +190,7 @@ export function FinanceBlock({ data }: { data: ShipmentResponse }) {
         {tile("Стоимость партии", rows.goods?.fact, rows.goods?.plan, "по инвойсу поставщика")}
         {tile("Перевозка", rows.transport?.fact, rows.transport?.plan, "по счетам перевозчиков")}
         {tile("Таможенные платежи", rows.customs?.fact, rows.customs?.plan, "по ДТ")}
-        {tile("Брокер, СВХ и прочее", otherSum, null, "счета подрядчиков")}
+        {tile("Комиссия компании", commissionFact, rows.commission?.plan, "вознаграждение по расчёту")}
       </div>
       <Totals rows={data.finance.rows} lastMile={data.finance.lastMile} />
       {(data.finance.rows.length > 0 || data.finance.clientInvoices.length > 0) && (
