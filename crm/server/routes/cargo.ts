@@ -118,7 +118,7 @@ async function customsPack(tx: DbOrTx, sh: typeof shipments.$inferSelect) {
       if (!main.length) missing.push(`${label}: нет файла`);
       if ((d.type === "supplier_invoice" || isCarrier(d)) && !pays.length) missing.push(`${label}: нет документа об оплате`);
     }
-    if (!list.length && folder !== "6 Транспортные документы") missing.push(`${folder.slice(2)}: нет`);
+    if (!list.length) missing.push(folder === "6 Транспортные документы" ? "СМГС (ж/д накладная) или другая транспортная накладная: нет" : `${folder.slice(2)}: нет`);
   }
   return { files: out, present, missing };
 }

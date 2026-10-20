@@ -133,7 +133,11 @@ export function StageTimeline({ data, saveField }: { data: ShipmentResponse; sav
                         <div className="text-xs font-semibold muted">Что нужно сделать</div>
                         {st.flags.map((k) =>
                           // Перед оплатой фрахта — инвойс перевозчика: к нему прикрепится платёжка.
-                          k === "freight" ? [<CarrierInvoiceItem key="carrier-invoice" data={data} />, flagItem(k)] : flagItem(k),
+                          k === "freight"
+                            ? [<CarrierInvoiceItem key="carrier-invoice" data={data} />, flagItem(k)]
+                            : k === "customs_docs"
+                              ? [<WaybillItem key="waybill" data={data} />, flagItem(k)]
+                              : flagItem(k),
                         )}
                         {st.no === 3 && <ContainerItem containerNo={shipment.containerNo} disabled={!active} onSave={(v) => void saveField({ containerNo: v })} />}
                       </div>
@@ -605,6 +609,35 @@ function AfterLoading({ data }: { data: ShipmentResponse }) {
 }
 
 /** На таможне: пакет документов (ZIP) и чего в нём не хватает. */
+const WAYBILLS = ["railway_bill", "cmr", "bill_of_lading", "air_waybill"];
+
+/** На таможне нужна СМГС (ж/д накладная) — загрузить, если её ещё нет в сделке. */
+function WaybillItem({ data }: { data: ShipmentResponse }) {
+  const docs = data.documents.filter((d) => WAYBILLS.includes(d.type));
+  if (docs.length) {
+    return (
+      <Check done>
+        <span className="muted line-through">Загрузить СМГС (ж/д накладную)</span>
+        {docs.map((d) => (
+          <Link key={d.id} to={`/documents/${d.id}`} className="text-xs link">
+            № {d.number ?? "б/н"}
+            {d.date ? ` от ${formatDay(d.date)}` : ""}
+          </Link>
+        ))}
+      </Check>
+    );
+  }
+  return (
+    <Check done={false}>
+      <span>Загрузить СМГС (ж/д накладную)</span>
+      <Link to={`/documents/new?shipment=${data.shipment.number}&type=railway_bill`} className="btn btn-sm">
+        Загрузить
+      </Link>
+      <span className="text-xs muted">— нужна таможне, попадёт в пакет документов</span>
+    </Check>
+  );
+}
+
 function CustomsPack({ number }: { number: number }) {
   const q = useQuery({ queryKey: ["customs-pack", number], queryFn: () => api<{ files: number; missing: string[] }>(`/shipments/${number}/customs-pack`) });
   const [busy, setBusy] = useState(false);
