@@ -1290,6 +1290,37 @@ describe("ИИ-разбор: стороны и тип счёта", () => {
     assert.equal(d.costs?.length, 9, "все строки сметы шаблона");
   });
 
+  test("декларация: изготовитель — сторона, товары — по артикулам из декларации, видна в карточке товара", async () => {
+    const { resolveDraft } = await import("../lib/ai-parse.ts");
+    const s = await adminSession();
+    const sup = (await call(s, "POST", "/counterparties", { role: "supplier", name: "DEMO DECL PLASTIC CO., LTD." })).json().counterparty;
+    await call(s, "POST", "/documents", {
+      type: "supplier_invoice", number: "DDP-1", counterpartyId: sup.id, currency: "CNY",
+      items: [
+        { name: "Демо линолеум K777-1, 2×30 м", quantity: 100, unit: "м²", price: 4, amount: 400 },
+        { name: "Демо линолеум 888-12, 3 м", quantity: 100, unit: "м²", price: 4, amount: 400 },
+        { name: "Демо клей", quantity: 1, unit: "шт", price: 4, amount: 4 },
+      ],
+    });
+    const d = await resolveDraft(db, {
+      ...base,
+      docType: "conformity", number: "RU-DEMO.01/26", amount: null, currency: null, validUntil: "2031-04-30",
+      counterparty: { name: "DEMO DECL PLASTIC CO., LTD." },
+      items: [{ name: "Покрытие напольное ПВХ", hsCode: "5904100000", hsGuess: null, quantity: null, unit: null, price: null, amount: null }],
+      models: ["PVC K777-1", "K777-1", "888-12", "PVC Z999"],
+    } as never);
+    assert.equal(d.counterparty?.id, sup.id, "сторона — изготовитель");
+    assert.deepEqual(d.items.map((i) => i.name).sort(), ["Демо линолеум 888-12, 3 м", "Демо линолеум K777-1"]);
+    assert.ok(d.items.every((i) => i.productId && i.hsCode === "5904100000"));
+    // Сохранили — видна в карточке товара и у поставщика.
+    const saved = await call(s, "POST", "/documents", { type: "conformity", number: d.number, validUntil: d.validUntil, counterpartyId: sup.id, items: d.items });
+    assert.equal(saved.statusCode, 200, saved.body);
+    const card = (await call(s, "GET", `/products/${d.items[0].productId}`)).json();
+    assert.equal(card.certificates[0].number, "RU-DEMO.01/26");
+    assert.equal(card.certificates[0].counterpartyName, "DEMO DECL PLASTIC CO., LTD.");
+    assert.ok((await call(s, "GET", `/counterparties/${sup.id}`)).json().documents.some((x: { type: string }) => x.type === "conformity"));
+  });
+
   test("стороной записали нас — сторона сбрасывается, тип не «счёт клиенту»", async () => {
     const { resolveDraft, isOurCompany } = await import("../lib/ai-parse.ts");
     assert.ok(isOurCompany({ name: "LIMITEDTRADE DEVELOPMENT BARS TRADING CO." }));

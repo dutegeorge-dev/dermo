@@ -134,7 +134,23 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       tnved: tn ? { name: tn.name, tariff: tn.tariff } : null,
       purchases: lines.filter((l) => l.type === "supplier_invoice"),
       sales: lines.filter((l) => l.type === "commission_order" || l.type === "specification"),
-      certificates: lines.filter((l) => l.type === "conformity"),
+      // Декларации и сертификаты на товар: срок действия, изготовитель, файл.
+      certificates: await db
+        .selectDistinct({
+          id: documents.id,
+          number: documents.number,
+          date: documents.date,
+          validUntil: documents.validUntil,
+          status: documents.status,
+          counterpartyId: documents.counterpartyId,
+          counterpartyName: counterparties.name,
+          fileId: sql<string | null>`(select a.id from attachments a where a.owner_type = 'document' and a.owner_id = ${documents.id} and a.label is distinct from 'payment' order by a.created_at limit 1)`,
+        })
+        .from(documentItems)
+        .innerJoin(documents, eq(documents.id, documentItems.documentId))
+        .leftJoin(counterparties, eq(counterparties.id, documents.counterpartyId))
+        .where(and(eq(documentItems.productId, id), eq(documents.type, "conformity")))
+        .orderBy(desc(documents.validUntil)),
     };
   });
 

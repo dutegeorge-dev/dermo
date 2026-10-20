@@ -285,6 +285,20 @@ export function CounterpartyPage({ role }: { role: CounterpartyRole }) {
           ))}
         </p>
       )}
+      {data.documents.some((d) => d.type === "conformity") && (
+        <p className="-mt-2 mb-4 text-sm">
+          <span className="muted">Декларации и сертификаты: </span>
+          {data.documents
+            .filter((d) => d.type === "conformity")
+            .map((d, i) => (
+              <span key={d.id}>
+                {i > 0 && " · "}
+                <Link to={`/documents/${d.id}`} className="link">№ {d.number ?? "—"}</Link>
+                {d.validUntil && <span className="muted"> до {formatDay(d.validUntil)}</span>}
+              </span>
+            ))}
+        </p>
+      )}
 
       <div className="mb-4 flex gap-4 overflow-x-auto border-b border-slate-200 text-sm dark:border-neutral-800">
         {TABS.map(([key, label]) => (

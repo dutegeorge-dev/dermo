@@ -601,7 +601,7 @@ function EditorForm({ initial }: { initial: Initial }) {
                 items={items}
                 onChange={setItems}
                 currency={currency}
-                showHs={type === "supplier_invoice" || type === "specification"}
+                showHs={type === "supplier_invoice" || type === "specification" || type === "conformity"}
                 supplierProducts={supplierProducts}
                 onPasteInfo={(text) => {
                   const c = detectCurrency(text);

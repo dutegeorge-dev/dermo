@@ -78,7 +78,7 @@ export function articleCodes(name: string): string[] {
     ...new Set(
       tokens
         .map((t) => t.replace(/[.\-/]+$/, ""))
-        .filter((t) => t.length >= 3 && /\d/.test(t) && (/\p{L}/u.test(t) || /^\d{4,}$/.test(t)))
+        .filter((t) => t.length >= 3 && /\d/.test(t) && (/\p{L}/u.test(t) || /^\d{4,}$/.test(t) || /^\d{2,}-\d+$/.test(t)))
         .filter((t) => !/^\d+([.,]\d+)?(мм|mm|см|cm|м|m|г|g|гр|кг|kg|шт|pcs|м2|m2|мкм)$/.test(t)),
     ),
   ];
@@ -105,4 +105,23 @@ export async function supplierProducts(tx: DbOrTx, counterpartyId: number): Prom
     map.set(r.id, p);
   }
   return [...map.values()];
+}
+
+/** Товары справочника с этими артикулами — в названии товара, его позициях в документах или ценах фабрик. */
+export async function productsByArticles(tx: DbOrTx, codes: Set<string>): Promise<{ id: number; name: string; hsCode: string | null }[]> {
+  if (!codes.size) return [];
+  const rows = [
+    ...(await tx.select({ id: products.id, name: products.name, hsCode: products.hsCode, alias: products.name }).from(products)),
+    ...(await tx
+      .selectDistinct({ id: products.id, name: products.name, hsCode: products.hsCode, alias: documentItems.name })
+      .from(documentItems)
+      .innerJoin(products, eq(products.id, documentItems.productId))),
+    ...(await tx
+      .selectDistinct({ id: products.id, name: products.name, hsCode: products.hsCode, alias: productOffers.name })
+      .from(productOffers)
+      .innerJoin(products, eq(products.id, productOffers.productId))),
+  ];
+  const hits = new Map<number, { id: number; name: string; hsCode: string | null }>();
+  for (const r of rows) if (!hits.has(r.id) && articleCodes(r.alias).some((c) => codes.has(c))) hits.set(r.id, { id: r.id, name: r.name, hsCode: r.hsCode });
+  return [...hits.values()];
 }

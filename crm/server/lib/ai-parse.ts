@@ -20,7 +20,7 @@ import { counterparties, documents, shipmentParties } from "../db/schema.ts";
 import { addUsage, type AiUsage, aiBase, aiClient, aiError, usageOf } from "./ai.ts";
 import { docxText, pdfText, xlsxText } from "./file-text.ts";
 import { HttpError } from "./http.ts";
-import { articleCodes, loadProducts, matchProduct, supplierProducts } from "./product-match.ts";
+import { articleCodes, loadProducts, matchProduct, productsByArticles, supplierProducts } from "./product-match.ts";
 import { REQUISITE_KEYS, REQUISITES_RULES, REQUISITES_SCHEMA, requisitesValues } from "./requisites.ts";
 import { listShipments } from "./shipment-query.ts";
 import { searchTnved, tnvedByCodes, tnvedCount } from "./tnved.ts";
@@ -67,7 +67,7 @@ export const DRAFT_SCHEMA = {
   required: [
     "docType", "number", "date", "currency", "amount", "counterparty", "contractorType", "clientName", "contractNumber",
     "relatedNumbers", "cargoTitle", "containerNo", "weightKg", "volumeM3", "incoterms", "paymentTerms", "validUntil", "costCategory",
-    "items", "costs", "summary",
+    "items", "costs", "models", "summary",
   ],
   properties: {
     docType: { type: "string", enum: Object.keys(DOC_TYPES) },
@@ -110,6 +110,7 @@ export const DRAFT_SCHEMA = {
       },
     },
     volumeM3: NUM,
+    models: { type: "array", items: { type: "string" } },
     costs: {
       type: "array",
       items: {
@@ -157,6 +158,7 @@ export type ModelDraft = {
     volumeM3?: number | null;
   }[];
   costs?: { category: string; amount: number | null; currency: string | null }[];
+  models?: string[];
   summary: string;
 };
 
@@ -174,6 +176,7 @@ docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k
 - items — для инвойсов поставщика, спецификаций, сертификатов: каждая строка отдельно. name коротко: товар + артикул + размер («Искусственная трава 20 мм, 2×25 м (52 рул.)»), общие характеристики не повторяй; число рулонов/мест — в скобках. quantity — в единице цены (м², кг, шт); unit по-русски (м², м, шт, кг, рул.); price — цена за единицу, amount — сумма строки. Если цена за м² написана один раз на несколько строк — она общая для них; м² = ширина × длина рулона × число рулонов (проверь: quantity × price = amount). Доп. расходы (упаковка) — отдельной строкой (hsGuess ""). hsCode — код, если он напечатан в документе; hsGuess — твой код ТН ВЭД ЕАЭС для товара, как можно точнее (минимум 4 цифры, например 5703, 391810). Для счетов подрядчиков items пустой.
 - Числа: «37 456,95», «7503,30», «59.700,00» — десятичная запятая (точка там — разделитель тысяч); «59,700.00» — десятичная точка. ￥, RMB, 元 — CNY. Даты — YYYY-MM-DD; «15/10/2026» — день/месяц/год.
 - amount — итог документа (для ДТ — таможенные платежи в рублях). containerNo — 4 буквы + 7 цифр. weightKg — только если в документе прямо написан общий вес брутто (не считай сам).
+- Декларация / сертификат соответствия (conformity): counterparty — изготовитель (Изготовитель / Manufacturer), не заявитель (заявитель — это мы); number — регистрационный номер («ЕАЭС N RU Д-CN.РА01.В.12345/26», «RU -CN.PA01.B.01297/26»); date — дата регистрации; validUntil — «по …» (день «00» или не указан — последний день месяца); items — продукция одной строкой на вид (name — что за продукция коротко, hsCode — «код ТН ВЭД ЕАЭС»); models — все модели / артикулы из декларации по одному, как написаны («PVC M103-4», «K105»). У других документов models пустой.
 - Поручение (commission_order): costs — строки сметы «Порядок возмещаемых платежей»: category — goods (стоимость товаров), transport (транспорт), broker (брокер, таможенное оформление), terminal (СВХ, терминал, досмотры), customs (таможенные платежи: пошлина + НДС), fx (курсовая разница, комиссия банка за перевод), currency_control (валютный контроль), eco (экосбор), commission (вознаграждение комиссионера); amount — сумма (если «подтверждаемый» / «по факту» — null); currency — валюта суммы. У других документов costs пустой.
 - Упаковочный лист (packing_list): items — его строки: name, quantity и unit (как в документе: м², шт…), строки не объединяй и не дели (позиции как в документе — по ним заполняется спецификация перевозчику), packages — число мест, packageType — вид мест по-русски («рул.», «кор.», «палл.»), netKg, grossKg, volumeM3 — по строке; итоговые weightKg (брутто) и volumeM3 — из строки «итого». У других документов эти поля строк пустые (null / "").
 - Документ об оплате (payment_order: платёжное поручение, SWIFT MT103, заявление на перевод, выписка с платежом): counterparty — получатель платежа, amount и currency — сумма платежа, date — дата платежа, number — номер платёжки, relatedNumbers — номера инвойсов / счетов / договоров из назначения платежа. В SWIFT: :32A: — дата ГГММДД, валюта и сумма («261009CNY59700,00» → 2026-10-09, CNY, 59700), :59: — получатель, :70: — назначение платежа, :20: — номер. Наш банк и мы (плательщик, :50:) — не counterparty.
@@ -471,6 +474,17 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
           if (hits[0].hsCode) Object.assign(it, { hsCode: hits[0].hsCode, hsGuess: null });
         }
       }
+    }
+  }
+
+  // Декларация / сертификат: привязываем ко всем товарам справочника с артикулами из декларации (M103-4…),
+  // код ТН ВЭД — из декларации. Не нашли — остаются строки из документа (виды продукции).
+  if (type === "conformity") {
+    const declared = new Set([...(raw.models ?? []), ...items.map((i) => i.name)].flatMap((m) => articleCodes(m)));
+    const hits = await productsByArticles(tx, declared);
+    if (hits.length) {
+      const hs = items.find((i) => i.hsCode)?.hsCode ?? null;
+      items.splice(0, items.length, ...hits.map((p) => ({ productId: p.id, name: p.name, batchNo: null, hsCode: hs ?? p.hsCode, hsGuess: null, hsAuto: false, quantity: null, unit: null, price: null, amount: null })));
     }
   }
 

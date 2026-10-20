@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { formatMoney } from "../../../../shared/documents.ts";
-import { docTypeLabel, formatDay } from "../../components/docs/common.tsx";
+import { docTypeLabel, formatDay, ValidityChip } from "../../components/docs/common.tsx";
 import { useTariff } from "../../components/docs/ItemsEditor.tsx";
 import { IconChevronDown, IconChevronRight, IconSearch } from "../../components/Icons.tsx";
 import { type ProductOffer, QuoteCalculator } from "../../components/products/QuoteCalculator.tsx";
@@ -145,7 +145,7 @@ export function ProductPage() {
         tnved: { name: string; tariff: string } | null;
         purchases: ProductLine[];
         sales: ProductLine[];
-        certificates: ProductLine[];
+        certificates: { id: number; number: string | null; date: string | null; validUntil: string | null; status: string | null; counterpartyId: number | null; counterpartyName: string | null; fileId: string | null }[];
       }>(`/products/${pid}`),
   });
   const offers = useQuery({
@@ -251,6 +251,34 @@ export function ProductPage() {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-2 flex items-center gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide muted">Декларации и сертификаты</h2>
+          <Link to="/documents/new?type=conformity" className="ml-auto text-xs link">+ загрузить</Link>
+        </div>
+        {data.certificates.length === 0 ? (
+          <p className="text-sm muted">Нет. Загрузите декларацию — она сама привяжется ко всем товарам с артикулами из неё и к поставщику-изготовителю.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {data.certificates.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-slate-200 px-3 py-2 dark:border-neutral-800">
+                <Link to={`/documents/${c.id}`} className="font-medium hover:underline">№ {c.number ?? "б/н"}</Link>
+                {c.date && <span className="text-xs muted">от {formatDay(c.date)}</span>}
+                {c.counterpartyId && <Link to={`/suppliers/${c.counterpartyId}`} className="text-xs link">{c.counterpartyName}</Link>}
+                <span className="flex-1" />
+                <ValidityChip validUntil={c.validUntil} />
+                {c.validUntil && <span className="text-xs muted">до {formatDay(c.validUntil)}</span>}
+                {c.fileId ? (
+                  <a href={fileUrl(c.fileId)} target="_blank" rel="noreferrer" className="text-xs link">файл</a>
+                ) : (
+                  <span className="text-xs text-amber-700 dark:text-amber-400">без файла</span>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
