@@ -482,9 +482,14 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
   if (type === "conformity") {
     const declared = new Set([...(raw.models ?? []), ...items.map((i) => i.name)].flatMap((m) => articleCodes(m)));
     const hits = await productsByArticles(tx, declared);
-    if (hits.length) {
-      const hs = items.find((i) => i.hsCode)?.hsCode ?? null;
-      items.splice(0, items.length, ...hits.map((p) => ({ productId: p.id, name: p.name, batchNo: null, hsCode: hs ?? p.hsCode, hsGuess: null, hsAuto: false, quantity: null, unit: null, price: null, amount: null })));
+    const hs = items.find((i) => i.hsCode)?.hsCode ?? null;
+    const row = (productId: number | null, name: string, code: string | null) => ({ productId, name, batchNo: null, hsCode: code, hsGuess: null, hsAuto: false, quantity: null, unit: null, price: null, amount: null });
+    // Модели без товара — строками (товары не заводим): декларация подхватит товар, когда он появится.
+    const matched = new Set(hits.flatMap((h) => h.codes));
+    const rest = (raw.models ?? []).filter((m) => { const c = articleCodes(m); return c.length && !c.some((x) => matched.has(x)); });
+    const restUnique = [...new Map(rest.map((m) => [articleCodes(m).join(","), m])).values()];
+    if (hits.length || restUnique.length) {
+      items.splice(0, items.length, ...hits.map((p) => row(p.id, p.name, hs ?? p.hsCode)), ...restUnique.slice(0, 150).map((m) => row(null, m, hs)));
     }
   }
 

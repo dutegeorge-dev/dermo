@@ -399,6 +399,7 @@ sudo systemctl start bars-crm
 | `GET/PATCH/DELETE /factories/:id` | Карточка (анкета, цены, файлы) / правка (offers — заменить целиком) / удаление (кандидата — нашедший или админ, поставщика — админ) |
 | `POST /factories/:id/files?label=photo\|catalog\|screenshot`, `POST /factories/:id/supplier` | Файл фабрики; «сделать поставщиком» |
 | `GET /products/:id/offers` | Цены фабрик на товар (с учётом доступа) и их фото |
+| `GET /products/unused`, `POST /products/unused/delete` (админ) | Пустые товары (без закупок, продаж, цен фабрик, расчётов): список / удалить |
 | `GET /products/duplicates`, `POST /products/merge` `{ids, name}` | Группы похожих товаров (одно название без варианта); объединить в первый (позиции и цены фабрик переходят) |
 | `GET/POST /freight-rates`, `PATCH/DELETE /freight-rates/:id` | Ставки доставки |
 | `POST /ai/recognize-rates` (multipart: `text` и/или файлы) | ИИ: ставки из переписки с перевозчиком → черновики |

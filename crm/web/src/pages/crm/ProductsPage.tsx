@@ -10,12 +10,14 @@ import { useTariff } from "../../components/docs/ItemsEditor.tsx";
 import { IconChevronDown, IconChevronRight, IconSearch } from "../../components/Icons.tsx";
 import { type ProductOffer, QuoteCalculator } from "../../components/products/QuoteCalculator.tsx";
 import { Content } from "../../components/Layout.tsx";
-import { EmptyState, ErrorBox, Modal, PageHeader, Spinner } from "../../components/ui.tsx";
+import { ConfirmDialog, EmptyState, ErrorBox, Modal, PageHeader, Spinner } from "../../components/ui.tsx";
+import { useAuth } from "../../lib/auth.tsx";
 import { api, fileUrl } from "../../lib/api.ts";
 import type { ProductLine, ProductRow } from "../../lib/types.ts";
 
 export function ProductsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [q, setQ] = useState("");
   const { data, isLoading, error } = useQuery({
     queryKey: ["products", "list", q.trim()],
@@ -28,9 +30,12 @@ export function ProductsPage() {
         title="Товары"
         meta="Пополняется сам из инвойсов и цен фабрик. Размер рулона и цвет — варианты товара, а не новые товары."
         actions={
-          <Link to="/freight-rates" className="btn">
-            Ставки доставки
-          </Link>
+          <>
+            {user?.role === "admin" && <UnusedProductsButton />}
+            <Link to="/freight-rates" className="btn">
+              Ставки доставки
+            </Link>
+          </>
         }
       />
       <DuplicatesBanner />
@@ -446,6 +451,58 @@ function DuplicatesBanner() {
           </ul>
           <ErrorBox error={error} />
         </Modal>
+      )}
+    </>
+  );
+}
+
+/** «Удалить пустые товары» (админ): без закупок, продаж, цен фабрик и расчётов — например, лишние из декларации. */
+function UnusedProductsButton() {
+  const queryClient = useQueryClient();
+  const [preview, setPreview] = useState<{ count: number; names: string[] } | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  return (
+    <>
+      <button
+        type="button"
+        className="btn"
+        onClick={async () => {
+          setError(null);
+          try {
+            setPreview(await api<{ count: number; names: string[] }>("/products/unused"));
+          } catch (e) {
+            setError(e);
+          }
+        }}
+      >
+        Удалить пустые товары
+      </button>
+      {error != null && <ErrorBox error={error} />}
+      {preview && (
+        <ConfirmDialog
+          title={preview.count ? `Удалить пустые товары (${preview.count})?` : "Пустых товаров нет"}
+          confirmLabel={preview.count ? "Удалить" : "Закрыть"}
+          danger={preview.count > 0}
+          message={
+            preview.count ? (
+              <>
+                <p className="mb-2">Без закупок, продаж, цен фабрик и расчётов. Декларации останутся — товары подхватятся по артикулу, когда появятся в инвойсах.</p>
+                <ul className="max-h-60 list-disc overflow-y-auto pl-5 text-xs">
+                  {preview.names.map((n) => <li key={n}>{n}</li>)}
+                  {preview.count > preview.names.length && <li>… и ещё {preview.count - preview.names.length}</li>}
+                </ul>
+              </>
+            ) : (
+              "Все товары где-то используются."
+            )
+          }
+          onClose={() => setPreview(null)}
+          onConfirm={async () => {
+            if (!preview.count) return;
+            await api("/products/unused/delete", { method: "POST" });
+            await queryClient.invalidateQueries({ queryKey: ["products"] });
+          }}
+        />
       )}
     </>
   );

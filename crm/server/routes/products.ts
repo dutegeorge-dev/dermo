@@ -7,7 +7,7 @@ import { db } from "../db/client.ts";
 import { counterparties, documentItems, documents, productOffers, products, shipments, tnved } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
-import { productBaseKey, productBaseName } from "../lib/product-match.ts";
+import { conformityIdsForProducts, productBaseKey, productBaseName } from "../lib/product-match.ts";
 
 const s = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) || null : null);
 
@@ -122,6 +122,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       .where(eq(documentItems.productId, id))
       .orderBy(desc(documents.date), desc(documents.id))
       .limit(500);
+    const certIds = await conformityIdsForProducts(db, [id]);
     // Варианты: как товар называется в документах и у фабрик (размер рулона, цвет, плотность).
     const variants = await db.execute<{ name: string; documents: number; offers: number }>(sql`
       select min(name) as name, sum(d)::int as documents, sum(o)::int as offers from (
@@ -135,8 +136,8 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       purchases: lines.filter((l) => l.type === "supplier_invoice"),
       sales: lines.filter((l) => l.type === "commission_order" || l.type === "specification"),
       // Декларации и сертификаты на товар: срок действия, изготовитель, файл.
-      certificates: await db
-        .selectDistinct({
+      certificates: !certIds.length ? [] : await db
+        .select({
           id: documents.id,
           number: documents.number,
           date: documents.date,
@@ -146,10 +147,9 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
           counterpartyName: counterparties.name,
           fileId: sql<string | null>`(select a.id from attachments a where a.owner_type = 'document' and a.owner_id = ${documents.id} and a.label is distinct from 'payment' order by a.created_at limit 1)`,
         })
-        .from(documentItems)
-        .innerJoin(documents, eq(documents.id, documentItems.documentId))
+        .from(documents)
         .leftJoin(counterparties, eq(counterparties.id, documents.counterpartyId))
-        .where(and(eq(documentItems.productId, id), eq(documents.type, "conformity")))
+        .where(inArray(documents.id, certIds))
         .orderBy(desc(documents.validUntil)),
     };
   });
@@ -191,6 +191,30 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       groups.set(key, g);
     }
     return { groups: [...groups.values()].filter((g) => g.products.length > 1) };
+  });
+
+  /**
+   * Пустые товары: ни в инвойсах, поручениях, спецификациях, упаковочных листах, ни в ценах фабрик — только
+   * в декларациях или нигде (например, лишние, заведённые из декларации). Удаляются; строки деклараций остаются.
+   */
+  const unused = sql`not exists (select 1 from document_items i join documents d on d.id = i.document_id
+      where i.product_id = "products"."id" and d.type <> 'conformity')
+    and not exists (select 1 from product_offers o where o.product_id = "products"."id")
+    and not exists (select 1 from product_quotes q where q.product_id = "products"."id")`;
+
+  app.get("/products/unused", async (request) => {
+    requireAdmin(request);
+    const rows = await db.select({ id: products.id, name: products.name }).from(products).where(unused).orderBy(asc(products.name));
+    return { count: rows.length, names: rows.slice(0, 30).map((r) => r.name) };
+  });
+
+  app.post("/products/unused/delete", async (request) => {
+    const admin = requireAdmin(request);
+    const removed = await db.delete(products).where(unused).returning({ id: products.id, name: products.name });
+    if (removed.length) {
+      await audit(db, { userId: admin.id, action: "delete", entityType: "product", summary: `Удалил пустые товары (${removed.length})`, data: removed, ip: request.ip });
+    }
+    return { removed: removed.length };
   });
 
   /** Объединить товары ids в первый: позиции документов и цены фабрик переходят к нему, остальные удаляются. */

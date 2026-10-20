@@ -157,7 +157,8 @@ async function resolveProduct(
   userId: number | null,
   item: { productId: number | null; name: string; hsCode: string | null; unit: string | null },
   catalog: () => Promise<ProductRef[]>,
-) {
+  create = true,
+): Promise<{ id: number | null; hsCode: string | null }> {
   const pick = { id: products.id, hsCode: products.hsCode };
   const [byId] = item.productId ? await tx.select(pick).from(products).where(eq(products.id, item.productId)) : [];
   const found = byId ?? (await tx.select(pick).from(products).where(sql`lower(${products.name}) = lower(${item.name})`).limit(1))[0] ?? matchProduct(await catalog(), item.name);
@@ -165,6 +166,8 @@ async function resolveProduct(
     if (!found.hsCode && item.hsCode) await tx.update(products).set({ hsCode: item.hsCode, updatedAt: new Date() }).where(eq(products.id, found.id));
     return { id: found.id, hsCode: item.hsCode ?? found.hsCode };
   }
+  // Декларации и сертификаты товаров не заводят: модели из них — строки, товары появятся из инвойсов.
+  if (!create) return { id: null, hsCode: item.hsCode };
   // Новый товар — без варианта: размер рулона и цвет остаются в позиции.
   const name = productBaseName(item.name);
   const [created] = await tx
@@ -176,7 +179,7 @@ async function resolveProduct(
 }
 
 /** Заменяет позиции документа. Возвращает сумму позиций (для суммы документа). */
-export async function replaceItems(tx: DbOrTx, userId: number | null, documentId: number, raw: unknown): Promise<number | null> {
+export async function replaceItems(tx: DbOrTx, userId: number | null, documentId: number, raw: unknown, opts: { createProducts?: boolean } = {}): Promise<number | null> {
   if (!Array.isArray(raw)) throw new HttpError(400, "Позиции — список");
   if (raw.length > 500) throw new HttpError(400, "Слишком много позиций");
   await tx.delete(documentItems).where(eq(documentItems.documentId, documentId));
@@ -197,7 +200,7 @@ export async function replaceItems(tx: DbOrTx, userId: number | null, documentId
       name,
       hsCode: hs || null,
       unit,
-    }, catalog);
+    }, catalog, opts.createProducts !== false);
     await tx.insert(documentItems).values({
       documentId,
       position: i,

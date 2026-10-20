@@ -177,7 +177,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
 
       const patch: Partial<typeof documents.$inferInsert> = {};
       if (spec.items && Array.isArray(input.items)) {
-        const total = await replaceItems(tx, user.id, doc.id, input.items);
+        const total = await replaceItems(tx, user.id, doc.id, input.items, { createProducts: type !== "conformity" });
         if (total !== null && fields.amount == null) patch.amount = String(total);
       }
       Object.assign(patch, await linkToShipment(tx, user.id, doc));
@@ -212,7 +212,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       }
       if (fields.paymentStatus === "paid" && !("paidAt" in input) && !before.paidAt) fields.paidAt = new Date().toISOString().slice(0, 10);
       if (spec.items && Array.isArray(input.items)) {
-        const total = await replaceItems(tx, user.id, id, input.items);
+        const total = await replaceItems(tx, user.id, id, input.items, { createProducts: before.type !== "conformity" });
         if (total !== null && !("amount" in input)) fields.amount = String(total);
       }
       await tx

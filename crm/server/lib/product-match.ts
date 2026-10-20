@@ -108,7 +108,7 @@ export async function supplierProducts(tx: DbOrTx, counterpartyId: number): Prom
 }
 
 /** Товары справочника с этими артикулами — в названии товара, его позициях в документах или ценах фабрик. */
-export async function productsByArticles(tx: DbOrTx, codes: Set<string>): Promise<{ id: number; name: string; hsCode: string | null }[]> {
+export async function productsByArticles(tx: DbOrTx, codes: Set<string>): Promise<{ id: number; name: string; hsCode: string | null; codes: string[] }[]> {
   if (!codes.size) return [];
   const rows = [
     ...(await tx.select({ id: products.id, name: products.name, hsCode: products.hsCode, alias: products.name }).from(products)),
@@ -121,7 +121,36 @@ export async function productsByArticles(tx: DbOrTx, codes: Set<string>): Promis
       .from(productOffers)
       .innerJoin(products, eq(products.id, productOffers.productId))),
   ];
-  const hits = new Map<number, { id: number; name: string; hsCode: string | null }>();
-  for (const r of rows) if (!hits.has(r.id) && articleCodes(r.alias).some((c) => codes.has(c))) hits.set(r.id, { id: r.id, name: r.name, hsCode: r.hsCode });
+  const hits = new Map<number, { id: number; name: string; hsCode: string | null; codes: string[] }>();
+  for (const r of rows) {
+    const found = articleCodes(r.alias).filter((c) => codes.has(c));
+    if (!found.length) continue;
+    const h = hits.get(r.id) ?? { id: r.id, name: r.name, hsCode: r.hsCode, codes: [] };
+    h.codes = [...new Set([...h.codes, ...found])];
+    hits.set(r.id, h);
+  }
   return [...hits.values()];
+}
+
+/**
+ * Декларации / сертификаты на товары: привязанные позициями к товару или совпавшие по артикулу — модель из
+ * декларации («K105») есть в названии товара, его позициях в документах или ценах фабрик. Так декларация,
+ * загруженная раньше товара, подхватывается сама.
+ */
+export async function conformityIdsForProducts(tx: DbOrTx, productIds: number[]): Promise<number[]> {
+  if (!productIds.length) return [];
+  const names = [
+    ...(await tx.select({ id: products.id, name: products.name }).from(products).where(inArray(products.id, productIds))),
+    ...(await tx.selectDistinct({ id: documentItems.productId, name: documentItems.name }).from(documentItems).where(inArray(documentItems.productId, productIds))),
+    ...(await tx.selectDistinct({ id: productOffers.productId, name: productOffers.name }).from(productOffers).where(inArray(productOffers.productId, productIds))),
+  ];
+  const codes = new Set(names.flatMap((n) => articleCodes(n.name)));
+  const rows = await tx
+    .select({ id: documents.id, productId: documentItems.productId, name: documentItems.name })
+    .from(documentItems)
+    .innerJoin(documents, eq(documents.id, documentItems.documentId))
+    .where(eq(documents.type, "conformity"));
+  const ids = new Set<number>();
+  for (const r of rows) if ((r.productId && productIds.includes(r.productId)) || articleCodes(r.name).some((c) => codes.has(c))) ids.add(r.id);
+  return [...ids];
 }

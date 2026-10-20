@@ -1310,8 +1310,10 @@ describe("ИИ-разбор: стороны и тип счёта", () => {
       models: ["PVC K777-1", "K777-1", "888-12", "PVC Z999"],
     } as never);
     assert.equal(d.counterparty?.id, sup.id, "сторона — изготовитель");
-    assert.deepEqual(d.items.map((i) => i.name).sort(), ["Демо линолеум 888-12, 3 м", "Демо линолеум K777-1"]);
-    assert.ok(d.items.every((i) => i.productId && i.hsCode === "5904100000"));
+    assert.deepEqual(d.items.filter((i) => i.productId).map((i) => i.name).sort(), ["Демо линолеум 888-12, 3 м", "Демо линолеум K777-1"]);
+    assert.deepEqual(d.items.filter((i) => !i.productId).map((i) => i.name), ["PVC Z999"], "модель без товара — строкой");
+    assert.ok(d.items.every((i) => i.hsCode === "5904100000"));
+    const productsBefore = (await call(s, "GET", "/products")).json().products.length;
     // Сохранили — видна в карточке товара и у поставщика.
     const saved = await call(s, "POST", "/documents", { type: "conformity", number: d.number, validUntil: d.validUntil, counterpartyId: sup.id, items: d.items });
     assert.equal(saved.statusCode, 200, saved.body);
@@ -1319,6 +1321,19 @@ describe("ИИ-разбор: стороны и тип счёта", () => {
     assert.equal(card.certificates[0].number, "RU-DEMO.01/26");
     assert.equal(card.certificates[0].counterpartyName, "DEMO DECL PLASTIC CO., LTD.");
     assert.ok((await call(s, "GET", `/counterparties/${sup.id}`)).json().documents.some((x: { type: string }) => x.type === "conformity"));
+    assert.equal((await call(s, "GET", "/products")).json().products.length, productsBefore, "декларация товары не заводит");
+    // Товар с моделью из декларации появился позже — декларация подхватывается по артикулу.
+    const later = await call(s, "POST", "/documents", { type: "supplier_invoice", number: "DDP-2", counterpartyId: sup.id, currency: "CNY", items: [{ name: "Демо линолеум Z999", quantity: 1, unit: "м²", price: 1, amount: 1 }] });
+    const laterProduct = (await call(s, "GET", `/documents/${later.json().document.id}`)).json().items[0].productId;
+    assert.equal((await call(s, "GET", `/products/${laterProduct}`)).json().certificates[0]?.number, "RU-DEMO.01/26");
+    // Пустые товары (только в декларациях / нигде) удаляются, остальные — нет.
+    const junk = (await call(s, "POST", "/products", { name: "Демо лишний товар из декларации" })).json().product;
+    const unused = (await call(s, "GET", "/products/unused")).json();
+    assert.ok(unused.names.includes("Демо лишний товар из декларации"));
+    assert.ok(!unused.names.includes("Демо линолеум K777-1"));
+    assert.ok((await call(s, "POST", "/products/unused/delete")).json().removed >= 1);
+    assert.equal((await call(s, "GET", `/products/${junk.id}`)).statusCode, 404);
+    assert.equal((await call(s, "GET", `/products/${laterProduct}`)).statusCode, 200);
   });
 
   test("стороной записали нас — сторона сбрасывается, тип не «счёт клиенту»", async () => {

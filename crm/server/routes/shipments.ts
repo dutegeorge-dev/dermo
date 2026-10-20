@@ -21,6 +21,7 @@ import {
 } from "../../shared/shipments.ts";
 import { db, type DbOrTx } from "../db/client.ts";
 import { counterparties, documentItems, documents, products, shipmentEvents, shipmentParties, shipments, users } from "../db/schema.ts";
+import { conformityIdsForProducts } from "../lib/product-match.ts";
 import { audit } from "../lib/audit.ts";
 import { shipmentDocuments, shipmentFinance } from "../lib/finance.ts";
 import { body, currentUser, HttpError, intParam, requireAdmin } from "../lib/http.ts";
@@ -135,6 +136,7 @@ async function shipmentItems(shipmentId: number) {
 
 /** Декларации соответствия / сертификаты: привязанные к сделке и выданные на её товары. */
 async function shipmentCertificates(shipmentId: number, productIds: number[]) {
+  const certIds = await conformityIdsForProducts(db, productIds);
   const rows = await db
     .select({
       id: documents.id,
@@ -154,9 +156,7 @@ async function shipmentCertificates(shipmentId: number, productIds: number[]) {
         eq(documents.type, "conformity"),
         or(
           eq(documents.shipmentId, shipmentId),
-          productIds.length
-            ? sql`exists (select 1 from document_items i where i.document_id = ${documents.id} and i.product_id in (${sql.join(productIds.map((id) => sql`${id}`), sql`, `)}))`
-            : sql`false`,
+          certIds.length ? inArray(documents.id, certIds) : sql`false`,
         ),
       ),
     )
