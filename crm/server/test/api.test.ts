@@ -944,6 +944,14 @@ describe("Упаковочный лист, спецификация для пе�
     const pack = (await call(s, "GET", `/shipments/${no}/customs-pack`)).json();
     assert.ok(pack.files >= 3, JSON.stringify(pack));
     assert.ok(pack.missing.some((m: string) => /Упаковочный лист.*нет файла/.test(m)));
+    // Экспортная декларация и сертификат происхождения — обязательны после погрузки.
+    assert.ok(pack.missing.includes("Экспортная декларация: нет") && pack.missing.includes("Сертификат происхождения: нет"), JSON.stringify(pack.missing));
+    const shId = (await call(s, "GET", `/shipments/${no}`)).json().shipment.id;
+    const exp = await call(s, "POST", "/documents", { type: "export_declaration", number: "000000000000000001", date: "2026-09-23", shipmentId: shId });
+    assert.equal(exp.statusCode, 200, exp.body);
+    const after = (await call(s, "GET", `/shipments/${no}/customs-pack`)).json();
+    assert.ok(!after.missing.includes("Экспортная декларация: нет"));
+    assert.ok(after.missing.some((m: string) => /Экспортная декларация № 000000000000000001: нет файла/.test(m)));
     const zipRes = await app.inject({ method: "GET", url: `${API}/shipments/${no}/customs-pack.zip`, headers: { cookie: s.cookie } });
     assert.equal(zipRes.statusCode, 200);
     const JSZip = (await import("jszip")).default;

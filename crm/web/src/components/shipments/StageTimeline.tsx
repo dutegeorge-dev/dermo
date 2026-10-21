@@ -126,6 +126,7 @@ export function StageTimeline({ data, saveField }: { data: ShipmentResponse; sav
                       <OrderChecklist data={data} />
                     )}
                     {(st.no === 4 || st.no === 5) && <AfterLoading data={data} />}
+                    {st.no === 5 && <MissingForCustoms number={shipment.number} />}
                     {st.no === 6 && <CustomsPack number={shipment.number} />}
 
                     {(st.flags.length > 0 || st.no === 3) && (
@@ -577,7 +578,7 @@ function openBlock(event: string, id: string) {
   setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }), 50);
 }
 
-/** После погрузки: упаковочный лист → спецификация для перевозчика. */
+/** После погрузки: упаковочный лист → спецификация для перевозчика, экспортная декларация, сертификат происхождения. */
 function AfterLoading({ data }: { data: ShipmentResponse }) {
   const sh = data.shipment;
   const packing = data.documents.filter((d) => d.type === "packing_list");
@@ -604,6 +605,46 @@ function AfterLoading({ data }: { data: ShipmentResponse }) {
           {spec ? "Открыть" : "Заполнить ↓"}
         </a>
       </Check>
+      <DocCheck data={data} type="export_declaration" label="Загрузить экспортную декларацию" />
+      <DocCheck data={data} type="certificate_origin" label="Загрузить сертификат происхождения" />
+    </div>
+  );
+}
+
+/** Обязательный документ после погрузки: есть — ссылка, нет — «Загрузить». */
+function DocCheck({ data, type, label }: { data: ShipmentResponse; type: string; label: string }) {
+  const docs = data.documents.filter((d) => d.type === type);
+  return (
+    <Check done={docs.length > 0}>
+      <span className={docs.length ? "muted line-through" : ""}>{label}</span>
+      {docs.map((d) => (
+        <Link key={d.id} to={`/documents/${d.id}`} className="text-xs link">
+          № {d.number ?? "б/н"}
+        </Link>
+      ))}
+      {!docs.length && (
+        <>
+          <Link to={`/documents/new?type=${type}&shipment=${data.shipment.number}`} className="btn btn-sm">
+            Загрузить
+          </Link>
+          <span className="text-xs text-amber-700 dark:text-amber-400">обязательно, нужен таможне</span>
+        </>
+      )}
+    </Check>
+  );
+}
+
+/** В пути: чего не хватает для таможни — чтобы собрать до прибытия. */
+function MissingForCustoms({ number }: { number: number }) {
+  const q = useQuery({ queryKey: ["customs-pack", number], queryFn: () => api<{ files: number; missing: string[] }>(`/shipments/${number}/customs-pack`) });
+  if (!q.data) return null;
+  if (!q.data.missing.length) return <p className="text-xs text-green-700 dark:text-green-400">✓ Документы для таможни собраны</p>;
+  return (
+    <div className="rounded-md bg-amber-50 px-3 py-2 dark:bg-amber-950/30">
+      <div className="text-xs font-semibold text-amber-900 dark:text-amber-300">К прибытию на таможню не хватает</div>
+      <ul className="mt-0.5 list-disc pl-5 text-xs text-amber-800 dark:text-amber-400">
+        {q.data.missing.map((m) => <li key={m}>{m}</li>)}
+      </ul>
     </div>
   );
 }
@@ -666,7 +707,7 @@ function CustomsPack({ number }: { number: number }) {
         </button>
         {q.data && <span className="text-xs muted">файлов: {q.data.files}</span>}
       </div>
-      <p className="text-xs muted">Контракт, инвойсы поставщика и перевозчика с документами об оплате, упаковочные листы, спецификация, накладные, сертификаты на товары — по папкам, с описью.</p>
+      <p className="text-xs muted">Контракт, инвойсы поставщика и перевозчика с документами об оплате, упаковочные листы, спецификация, накладные, сертификаты на товары, экспортная декларация, сертификат происхождения — по папкам, с описью.</p>
       {q.data && q.data.missing.length > 0 && (
         <ul className="list-disc pl-5 text-xs text-amber-800 dark:text-amber-400">
           {q.data.missing.map((m) => <li key={m}>{m}</li>)}

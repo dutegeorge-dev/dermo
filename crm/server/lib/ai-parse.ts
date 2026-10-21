@@ -40,6 +40,8 @@ const TYPE_HINTS: Partial<Record<DocType, string>> = {
   bill_of_lading: "морской коносамент B/L",
   customs_declaration: "декларация на товары (ДТ, ГТД)",
   conformity: "декларация / сертификат соответствия ЕАЭС",
+  export_declaration: "экспортная таможенная декларация страны отправления: 中华人民共和国海关出口货物报关单, 出口报关单, 通关无纸化出口放行通知书, Export Declaration",
+  certificate_origin: "сертификат происхождения: Certificate of Origin, CCPIT, форма A, СТ-1, 原产地证书 — не путать с conformity (декларация соответствия ЕАЭС)",
   client_invoice: "счёт, который выставила сама ТЛК БАРС (мы — продавец / исполнитель, наши реквизиты — получателя платежа). Если ТЛК БАРС — получатель счёта (TO, Buyer, Bill to, Плательщик), это НЕ client_invoice",
   packing_list: "упаковочный лист (Packing List, 装箱单): места, нетто, брутто, объём",
   carrier_spec: "спецификация «счёт-фактура — упаковочный лист — спецификация» для перевозчика",
@@ -177,6 +179,8 @@ docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k
 - Числа: «37 456,95», «7503,30», «59.700,00» — десятичная запятая (точка там — разделитель тысяч); «59,700.00» — десятичная точка. ￥, RMB, 元 — CNY. Даты — YYYY-MM-DD; «15/10/2026» — день/месяц/год.
 - amount — итог документа (для ДТ — таможенные платежи в рублях). containerNo — 4 буквы + 7 цифр. weightKg — только если в документе прямо написан общий вес брутто (не считай сам).
 - Декларация / сертификат соответствия (conformity): counterparty — изготовитель (Изготовитель / Manufacturer), не заявитель (заявитель — это мы); number — регистрационный номер («ЕАЭС N RU Д-CN.РА01.В.12345/26», «RU -CN.PA01.B.01297/26»); date — дата регистрации; validUntil — «по …» (день «00» или не указан — последний день месяца); items — продукция одной строкой на вид (name — что за продукция коротко, hsCode — «код ТН ВЭД ЕАЭС»); models — все модели / артикулы из декларации по одному, как написаны («PVC M103-4», «K105»). У других документов models пустой.
+- Экспортная декларация (export_declaration): number — 海关编号 (номер декларации), date — 申报日期 (дата подачи) или 出口日期; containerNo — 集装箱号; contractNumber — 合同协议号; relatedNumbers — 提运单号 (накладная) и номер инвойса, если есть; weightKg — 毛重 (брутто); counterparty пустой; items пустой.
+- Сертификат происхождения (certificate_origin): number — Certificate No.; date — дата выдачи (поле 12, Certification); relatedNumbers — номер(а) инвойса из поля 10 (Number and date of invoices); weightKg — G.WEIGHT, если написан; counterparty пустой; items пустой.
 - Поручение (commission_order): costs — строки сметы «Порядок возмещаемых платежей»: category — goods (стоимость товаров), transport (транспорт), broker (брокер, таможенное оформление), terminal (СВХ, терминал, досмотры), customs (таможенные платежи: пошлина + НДС), fx (курсовая разница, комиссия банка за перевод), currency_control (валютный контроль), eco (экосбор), commission (вознаграждение комиссионера); amount — сумма (если «подтверждаемый» / «по факту» — null); currency — валюта суммы. У других документов costs пустой.
 - Упаковочный лист (packing_list): items — его строки: name, quantity и unit (как в документе: м², шт…), строки не объединяй и не дели (позиции как в документе — по ним заполняется спецификация перевозчику), packages — число мест, packageType — вид мест по-русски («рул.», «кор.», «палл.»), netKg, grossKg, volumeM3 — по строке; итоговые weightKg (брутто) и volumeM3 — из строки «итого». У других документов эти поля строк пустые (null / "").
 - Документ об оплате (payment_order: платёжное поручение, SWIFT MT103, заявление на перевод, выписка с платежом): counterparty — получатель платежа, amount и currency — сумма платежа, date — дата платежа, number — номер платёжки, relatedNumbers — номера инвойсов / счетов / договоров из назначения платежа. В SWIFT: :32A: — дата ГГММДД, валюта и сумма («261009CNY59700,00» → 2026-10-09, CNY, 59700), :59: — получатель, :70: — назначение платежа, :20: — номер. Наш банк и мы (плательщик, :50:) — не counterparty.
@@ -220,11 +224,15 @@ async function askModel(buffer: Buffer, filename: string, mime: string): Promise
   const content = await fileContent(buffer, filename, mime);
   let response: Anthropic.Beta.BetaMessage;
   try {
+    // Черновик — вызовом инструмента по схеме, без строгой грамматики: строгий json_schema для такой большой
+    // схемы API отклоняет («compiled grammar is too large»). Ответ всё равно проверяется кодом.
     response = await aiClient().beta.messages.create({
       ...aiBase(),
       max_tokens: 16000,
       thinking: { type: "disabled" },
-      output_config: { effort: "low", format: { type: "json_schema", schema: DRAFT_SCHEMA as unknown as Record<string, unknown> } },
+      output_config: { effort: "low" },
+      tools: [{ name: DRAFT_TOOL, description: "Записать карточку документа в CRM", input_schema: DRAFT_SCHEMA as unknown as Anthropic.Beta.BetaTool.InputSchema }],
+      tool_choice: { type: "tool", name: DRAFT_TOOL },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content }],
     });
@@ -233,12 +241,40 @@ async function askModel(buffer: Buffer, filename: string, mime: string): Promise
   }
   if (response.stop_reason === "refusal") throw new HttpError(502, "ИИ отказался разбирать этот документ — заполните вручную");
   if (response.stop_reason === "max_tokens") throw new HttpError(502, "Документ слишком большой для разбора — заполните вручную");
-  const text = response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-  try {
-    return { raw: emptyToNull(JSON.parse(text)) as ModelDraft, usage: usageOf(response) };
-  } catch {
-    throw new HttpError(502, "ИИ вернул неразборчивый ответ — попробуйте ещё раз");
-  }
+  const call = response.content.find((b) => b.type === "tool_use" && b.name === DRAFT_TOOL);
+  if (!call || call.type !== "tool_use" || !call.input || typeof call.input !== "object") throw new HttpError(502, "ИИ вернул неразборчивый ответ — попробуйте ещё раз");
+  return { raw: normalizeDraft(emptyToNull(call.input) as Record<string, unknown>), usage: usageOf(response) };
+}
+
+const DRAFT_TOOL = "save_document_card";
+
+/** Без строгой схемы модель может пропустить поле или прислать строку вместо числа — приводим к ожидаемому виду. */
+function normalizeDraft(raw: Record<string, unknown>): ModelDraft {
+  const num = (v: unknown) => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = typeof v === "number" ? v : Number(String(v).replace(/\s/g, "").replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  };
+  const str = (v: unknown) => (typeof v === "string" ? v : typeof v === "number" ? String(v) : null);
+  const arr = (v: unknown) => (Array.isArray(v) ? v : []);
+  const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+  const ITEM_NUMS = ["quantity", "price", "amount", "packages", "netKg", "grossKg", "volumeM3"];
+  return {
+    ...raw,
+    docType: str(raw.docType) ?? "other",
+    amount: num(raw.amount),
+    weightKg: num(raw.weightKg),
+    volumeM3: num(raw.volumeM3),
+    counterparty: Object.fromEntries(Object.entries(obj(raw.counterparty)).map(([k, v]) => [k, str(v)])),
+    relatedNumbers: arr(raw.relatedNumbers).map(str).filter((x): x is string => !!x),
+    models: arr(raw.models).map(str).filter((x): x is string => !!x),
+    items: arr(raw.items).map((i) => {
+      const it = obj(i);
+      return { ...Object.fromEntries(Object.entries(it).map(([k, v]) => [k, ITEM_NUMS.includes(k) ? num(v) : str(v)])), name: str(it.name) ?? "" };
+    }),
+    costs: arr(raw.costs).map((c) => ({ category: str(obj(c).category), amount: num(obj(c).amount), currency: str(obj(c).currency) })),
+    summary: str(raw.summary) ?? "",
+  } as unknown as ModelDraft;
 }
 
 // ── Сопоставление с базой (код, без ИИ) ────────────────────────────────────

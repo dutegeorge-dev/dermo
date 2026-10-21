@@ -1,12 +1,11 @@
 /** Сделки (отгрузки): плашки этапов, даты, действия с ключевыми датами. */
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 
-import { addDays, daysBetween, FLAGS, type FlagKey, LAST_STAGE, milestoneSpec, SHIPMENT_STAGES, stageSpec } from "../../../../shared/shipments.ts";
-import { api, errorMessage } from "../../lib/api.ts";
-import type { CalendarEvent, Shipment } from "../../lib/types.ts";
+import { daysBetween, FLAGS, type FlagKey, LAST_STAGE, MILESTONES, SHIPMENT_STAGES, stageSpec } from "../../../../shared/shipments.ts";
+import { api } from "../../lib/api.ts";
+import type { CalendarEvent, Shipment, ShipmentResponse } from "../../lib/types.ts";
 import { StageChip } from "../crm/common.tsx";
 import { formatDay } from "../docs/common.tsx";
 import { Modal } from "../ui.tsx";
@@ -92,116 +91,86 @@ export function useShipmentActions() {
 }
 
 /**
- * Окно действия над событием: выполнено / перенести (со сдвигом следующих дат)
- * / снять отметку. Для флажка «перенести» двигает дату его ключевой точки.
+ * Событие календаря — краткая сводка по сделке, без правки дат (из календаря нажимали случайно — владелец
+ * попросил только смотреть). Отметить и перенести — в карточке сделки.
  */
 export function EventDialog({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
-  const { milestone, flag } = useShipmentActions();
-  const [factDate, setFactDate] = useState(today());
-  const [planDate, setPlanDate] = useState(event.date && !event.done ? event.date : addDays(today(), 1));
-  const [shift, setShift] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const sh = event.shipment;
-  const anchor = event.milestone ? milestoneSpec(event.milestone) : undefined;
-  const busy = milestone.isPending || flag.isPending;
-
-  const run = async (fn: () => Promise<unknown>) => {
-    setError(null);
-    try {
-      await fn();
-      onClose();
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
-  const markDone = () =>
-    run(() =>
-      event.kind === "flag"
-        ? flag.mutateAsync({ number: sh.number, key: event.key, done: true })
-        : milestone.mutateAsync({ number: sh.number, key: event.key, fact: factDate }),
-    );
-  const undo = () =>
-    run(() =>
-      event.kind === "flag"
-        ? flag.mutateAsync({ number: sh.number, key: event.key, done: false })
-        : milestone.mutateAsync({ number: sh.number, key: event.key, fact: null }),
-    );
-  const move = () => run(() => milestone.mutateAsync({ number: sh.number, key: event.milestone!, plan: planDate, shift }));
-
+  const q = useQuery({ queryKey: ["shipment", sh.number], queryFn: () => api<ShipmentResponse>(`/shipments/${sh.number}`) });
+  const full = q.data?.shipment;
+  const missing = useQuery({
+    queryKey: ["customs-pack", sh.number],
+    queryFn: () => api<{ missing: string[] }>(`/shipments/${sh.number}/customs-pack`),
+    enabled: sh.stage >= 4 && sh.stage <= 6,
+  });
+  const row = (label: string, value: React.ReactNode) =>
+    value ? (
+      <div className="flex gap-2">
+        <span className="w-28 shrink-0 muted">{label}</span>
+        <span className="min-w-0">{value}</span>
+      </div>
+    ) : null;
   return (
-    <Modal title={event.title} onClose={onClose}>
-      <div className="space-y-4 text-sm">
+    <Modal
+      title={event.title}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>Закрыть</button>
+          <Link to={`/shipments/${sh.number}`} className="btn btn-primary">Открыть сделку</Link>
+        </>
+      }
+    >
+      <div className="space-y-3 text-sm">
         <div className="rounded-md bg-slate-50 p-3 dark:bg-neutral-800/60">
-          <Link to={`/shipments/${sh.number}`} className="link font-medium">
-            {sh.title}
-          </Link>
+          <span className="font-medium">{sh.title}</span>
           <span className="ml-2 text-xs muted">{sh.label}</span>
           {sh.containerNo ? <span className="ml-2 font-mono text-xs">{sh.containerNo}</span> : <span className="ml-2 text-xs text-amber-700 dark:text-amber-400">контейнер не указан</span>}
-          <div className="mt-1 text-xs muted">{[sh.client, sh.carrier].filter(Boolean).join(" · ")}</div>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <ShipmentStage shipment={{ stage: sh.stage, status: "active" }} />
+            <span className="text-xs">
+              {event.done ? "✓ " : ""}
+              {event.title}: {event.date ? <DueLabel date={event.date} done={event.done} /> : "дата не задана"}
+            </span>
           </div>
         </div>
-
-        {event.done ? (
-          <div className="flex items-center justify-between gap-2">
-            <span>
-              Выполнено {event.kind === "milestone" ? formatDay(event.date) : `(отмечено ${formatDay(event.date)})`}
-            </span>
-            <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void undo()}>
-              Снять отметку
-            </button>
+        {q.isLoading && <p className="text-xs muted">Загрузка…</p>}
+        {full && (
+          <div className="space-y-1">
+            {row("Клиент", full.client?.name)}
+            {row("Поставщик", full.supplier?.name)}
+            {row("Перевозчик", full.carrier?.name)}
+            {row("Маршрут", [full.pickupLocation, full.deliveryLocation].filter(Boolean).join(" → "))}
+            {row("Груз", [full.weightKg ? `${full.weightKg.toLocaleString("ru-RU")} кг` : null, full.volumeM3 ? `${full.volumeM3.toLocaleString("ru-RU")} м³` : null].filter(Boolean).join(" / "))}
           </div>
-        ) : (
-          <>
-            <div>
-              <div className="mb-1 text-xs muted">Плановая дата: {event.date ? <DueLabel date={event.date} /> : "не задана"}</div>
-              {event.kind === "milestone" ? (
-                <div className="flex flex-wrap items-end gap-2">
-                  <label className="block">
-                    <span className="label">Фактическая дата</span>
-                    <input type="date" className="input w-40" value={factDate} onChange={(e) => setFactDate(e.target.value)} />
-                  </label>
-                  <button type="button" className="btn btn-primary" disabled={busy || !factDate} onClick={() => void markDone()}>
-                    Выполнено
-                  </button>
-                </div>
-              ) : (
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void markDone()}>
-                  {FLAGS[event.key as FlagKey]?.payment ? "Оплачено" : "Готово"}
-                </button>
-              )}
-            </div>
-            {event.milestone && (
-              <div className="border-t border-slate-200 pt-3 dark:border-neutral-800">
-                <div className="mb-1 font-medium">Перенести</div>
-                {event.kind === "flag" && anchor && <p className="mb-2 text-xs muted">Срок привязан к дате «{anchor.label}» — она и сдвинется.</p>}
-                <div className="flex flex-wrap items-end gap-2">
-                  <label className="block">
-                    <span className="label">Новая плановая дата</span>
-                    <input type="date" className="input w-40" value={planDate} onChange={(e) => setPlanDate(e.target.value)} />
-                  </label>
-                  <button type="button" className="btn" disabled={busy || !planDate || planDate === event.date} onClick={() => void move()}>
-                    Перенести
-                  </button>
-                </div>
-                {event.date && (
-                  <label className="mt-2 flex items-center gap-2 text-xs">
-                    <input type="checkbox" checked={shift} onChange={(e) => setShift(e.target.checked)} />
-                    Сдвинуть следующие даты этой сделки на столько же
-                    {planDate && event.date && planDate !== event.date && (
-                      <span className="muted">
-                        ({daysBetween(event.date, planDate) > 0 ? "+" : ""}
-                        {daysBetween(event.date, planDate)} дн.)
-                      </span>
-                    )}
-                  </label>
-                )}
-              </div>
-            )}
-          </>
         )}
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {full && (
+          <div>
+            <div className="mb-1 text-xs font-semibold muted">Даты</div>
+            <ul className="space-y-0.5 text-xs">
+              {MILESTONES.filter((m) => !m.optional || full.milestones[m.key]?.fact || full.milestones[m.key]?.plan).map((m) => {
+                const d = full.milestones[m.key] ?? { plan: null, fact: null };
+                return (
+                  <li key={m.key} className="flex gap-2">
+                    <span className={`w-36 shrink-0 ${d.fact ? "muted" : ""}`}>{m.label}</span>
+                    {d.fact ? <span className="text-green-700 dark:text-green-400">✓ {formatDay(d.fact)}</span> : d.plan ? <DueLabel date={d.plan} /> : <span className="muted">—</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+        {full && full.pendingFlags.length > 0 && (
+          <p className="text-xs text-amber-800 dark:text-amber-400">Не отмечено: {full.pendingFlags.map((k) => FLAGS[k as FlagKey]?.label.toLowerCase() ?? k).join(", ")}</p>
+        )}
+        {missing.data && missing.data.missing.length > 0 && (
+          <div className="text-xs">
+            <div className="font-semibold text-amber-800 dark:text-amber-400">Для таможни не хватает</div>
+            <ul className="list-disc pl-5 text-amber-800 dark:text-amber-400">
+              {missing.data.missing.map((m) => <li key={m}>{m}</li>)}
+            </ul>
+          </div>
+        )}
       </div>
     </Modal>
   );

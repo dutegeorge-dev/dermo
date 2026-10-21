@@ -4,14 +4,14 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { type DragEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
 
 import { addDays, FLAGS, type FlagKey, milestoneSpec, stageSpec } from "../../../../shared/shipments.ts";
-import { dateKey, DueLabel, EventDialog, today, useShipmentActions } from "../../components/shipments/common.tsx";
-import { IconCheck, IconChevronLeft, IconChevronRight, IconSearch } from "../../components/Icons.tsx";
+import { dateKey, DueLabel, EventDialog, today } from "../../components/shipments/common.tsx";
+import { IconChevronLeft, IconChevronRight, IconSearch } from "../../components/Icons.tsx";
 import { EmptyState, ErrorBox, Spinner } from "../../components/ui.tsx";
-import { api, errorMessage } from "../../lib/api.ts";
+import { api } from "../../lib/api.ts";
 import type { CalendarEvent } from "../../lib/types.ts";
 
 type View = "list" | "month";
@@ -64,18 +64,7 @@ function isCurrent(e: CalendarEvent): boolean {
 }
 
 function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: () => void }) {
-  const { milestone, flag } = useShipmentActions();
-  const [error, setError] = useState<string | null>(null);
   const sh = event.shipment;
-  const quickDone = async () => {
-    setError(null);
-    try {
-      if (event.kind === "flag") await flag.mutateAsync({ number: sh.number, key: event.key, done: true });
-      else await milestone.mutateAsync({ number: sh.number, key: event.key, fact: today() });
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
   return (
     <li className="flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-neutral-800/50">
       <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: eventColor(event) }} />
@@ -92,16 +81,6 @@ function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: () => void 
           {sh.containerNo && <span className="ml-1.5 font-mono">{sh.containerNo}</span>}
           {[sh.client, sh.carrier].filter(Boolean).map((x) => ` · ${x}`)}
         </div>
-        {error && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</div>}
-      </button>
-      <button
-        type="button"
-        className="btn btn-sm shrink-0"
-        title={event.kind === "flag" ? "Отметить выполненным" : "Выполнено сегодня"}
-        disabled={milestone.isPending || flag.isPending}
-        onClick={() => void quickDone()}
-      >
-        <IconCheck size={13} /> {event.kind === "flag" && event.payment ? "Оплачено" : "Готово"}
       </button>
     </li>
   );
@@ -168,11 +147,7 @@ function ListView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Cal
 }
 
 function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: CalendarEvent) => void }) {
-  const { milestone } = useShipmentActions();
   const [cursor, setCursor] = useState(() => today().slice(0, 7)); // YYYY-MM
-  const [shift, setShift] = useState(true);
-  const [dragOver, setDragOver] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const t = today();
@@ -200,20 +175,6 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
     setCursor(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   };
 
-  const onDrop = async (e: DragEvent, day: string) => {
-    e.preventDefault();
-    setDragOver(null);
-    const id = e.dataTransfer.getData("text/plain");
-    const ev = events.find((x) => x.id === id);
-    if (!ev || ev.done || !ev.milestone || ev.date === day) return;
-    setError(null);
-    try {
-      await milestone.mutateAsync({ number: ev.shipment.number, key: ev.milestone, plan: day, shift });
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  };
-
   const title = new Date(y, m - 1, 1).toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
   const noDate = events.filter((e) => !e.date && !e.done);
 
@@ -234,12 +195,7 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
           <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
           Выполненные
         </label>
-        <label className="flex items-center gap-2 text-xs muted">
-          <input type="checkbox" checked={shift} onChange={(e) => setShift(e.target.checked)} />
-          Перетаскивание сдвигает и следующие даты сделки
-        </label>
       </div>
-      {error && <p className="mb-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
       <div className="panel overflow-hidden">
         <div className="grid grid-cols-7 border-b border-slate-200 text-center text-[11px] font-medium uppercase muted dark:border-neutral-800">
           {WEEKDAYS.map((d) => (
@@ -259,13 +215,7 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
                 key={day}
                 className={`min-h-[110px] min-w-0 border-slate-200 p-1 dark:border-neutral-800 ${i % 7 ? "border-l" : ""} ${i >= 7 ? "border-t" : ""} ${
                   inMonth ? "" : "bg-slate-50/70 dark:bg-neutral-950/40"
-                } ${dragOver === day ? "bg-accent-soft dark:bg-accent/20" : ""}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(day);
-                }}
-                onDragLeave={() => setDragOver((d) => (d === day ? null : d))}
-                onDrop={(e) => void onDrop(e, day)}
+                }`}
               >
                 <div className={`mb-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${isToday ? "bg-accent font-semibold text-white" : inMonth ? "" : "muted"}`}>
                   {Number(day.slice(8))}
@@ -277,8 +227,6 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
                       <button
                         key={e.id}
                         type="button"
-                        draggable={!e.done && Boolean(e.milestone)}
-                        onDragStart={(d) => d.dataTransfer.setData("text/plain", e.id)}
                         onClick={() => onOpen(e)}
                         className={`block w-full rounded px-1 py-0.5 text-left text-[11px] leading-tight ${
                           e.done ? "text-slate-400 dark:text-neutral-500" : "text-slate-800 dark:text-neutral-100"
@@ -395,7 +343,7 @@ export function CalendarView() {
         </EmptyState>
       )}
       {data && data.events.length > 0 && (view === "list" ? <ListView events={events} onOpen={(e) => setOpenId(e.id)} /> : <MonthView events={events} onOpen={(e) => setOpenId(e.id)} />)}
-      <p className="mt-3 text-xs muted">Нажмите на событие, чтобы отметить выполнение или перенести дату.</p>
+      <p className="mt-3 text-xs muted">Нажмите на событие — краткая сводка по сделке. Отметить выполнение или перенести дату — в карточке сделки.</p>
       {opened && <EventDialog key={opened.id + String(opened.date) + String(opened.done)} event={opened} onClose={() => setOpenId(null)} />}
     </div>
   );

@@ -112,6 +112,8 @@ async function customsPack(tx: DbOrTx, sh: typeof shipments.$inferSelect) {
     ["5 Перевозка — счета", isCarrier],
     ["6 Транспортные документы", (d) => ["railway_bill", "cmr", "bill_of_lading", "air_waybill"].includes(d.type)],
     ["7 Сертификаты и декларации", (d) => d.type === "conformity"],
+    ["8 Экспортная декларация", (d) => d.type === "export_declaration"],
+    ["9 Сертификат происхождения", (d) => d.type === "certificate_origin"],
   ];
   const out: PackFile[] = [];
   const missing: string[] = [];

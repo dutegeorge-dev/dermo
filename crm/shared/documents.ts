@@ -204,6 +204,18 @@ export const DOC_TYPES = {
   cmr: { label: "CMR", group: "shipping", party: "contractor" },
   bill_of_lading: { label: "Коносамент", group: "shipping", party: "contractor" },
   air_waybill: { label: "Авианакладная", group: "shipping", party: "contractor" },
+  export_declaration: {
+    label: "Экспортная декларация",
+    group: "customs",
+    party: null,
+    hint: "Таможенная декларация страны отправления (Китай: 出口货物报关单) — после погрузки, нужна для таможни",
+  },
+  certificate_origin: {
+    label: "Сертификат происхождения",
+    group: "customs",
+    party: null,
+    hint: "Certificate of Origin (CCPIT, форма A / СТ-1) — после погрузки, нужен для таможни",
+  },
   customs_declaration: {
     label: "ДТ (ГТД)",
     group: "customs",
