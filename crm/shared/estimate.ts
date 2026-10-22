@@ -4,7 +4,7 @@
  *
  * Договор комиссии: товар и перевозку оплачиваем мы → комиссия за валютный перевод (4 %) — на товар + перевозку.
  * Договор ТЭУ: товар клиент оплачивает сам, мы — только фрахт → 4 % на фрахт, затем +6 % от общей суммы.
- * Комиссия компании — как везде, задаётся суммой (в базу 6 % не входит).
+ * Комиссия компании — как везде, задаётся суммой; по ТЭУ 6 % начисляются и на неё.
  */
 
 import { calcCustoms, type CustomsResult } from "./customs.ts";
@@ -111,7 +111,7 @@ export type EstimateResult = {
   terminal: number;
   lastMile: number;
   extras: number;
-  /** Всё, кроме ТЭУ-процента и комиссии компании, ₽. */
+  /** Всё, кроме ТЭУ-процента и комиссии компании, ₽ (база ТЭУ — subtotal + commission). */
   subtotal: number;
   teuRub: number;
   commission: number;
@@ -188,8 +188,9 @@ export function computeEstimate(p: EstimateParams, ctx: { rates: Record<string, 
   const lastMile = p.lastMile ?? 0;
   const extras = r2(p.extras.reduce((s, e) => s + (e.amount ?? 0), 0));
   const subtotal = r2(goodsRub + transportRub + fxRub + customs.duty + customs.vat + broker + terminal + lastMile + extras);
-  const teuRub = p.scheme === "teu" && p.teuPercent ? r2((subtotal * p.teuPercent) / 100) : 0;
   const commission = p.commission ?? 0;
+  // ТЭУ: 6 % от общей суммы — вместе с комиссией компании.
+  const teuRub = p.scheme === "teu" && p.teuPercent ? r2(((subtotal + commission) * p.teuPercent) / 100) : 0;
   return {
     goods,
     goodsRub,

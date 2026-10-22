@@ -1256,10 +1256,10 @@ describe("Раздел «Расчёт»: заявка клиента на его
     assert.equal(res.statusCode, 200, res.body);
     r = res.json().result;
     assert.equal(r.fxRub, 1600, "по ТЭУ — 4 % только от фрахта");
-    assert.deepEqual([r.subtotal, r.teuRub, r.totalRub], [163600, 9816, 183416], "6 % от общей суммы, комиссия компании — сверху");
+    assert.deepEqual([r.subtotal, r.teuRub, r.totalRub], [163600, 10416, 184016], "6 % от общей суммы вместе с комиссией компании");
 
     const list = (await call(s, "GET", "/estimates")).json().estimates;
-    assert.equal(list.find((e: { id: number }) => e.id === id).totalRub, 183416);
+    assert.equal(list.find((e: { id: number }) => e.id === id).totalRub, 184016);
     const kp = await app.inject({ method: "GET", url: `${API}/estimates/${id}/kp.docx`, headers: { cookie: s.cookie } });
     assert.equal(kp.statusCode, 200);
     const { docxText } = await import("../lib/file-text.ts");
@@ -1267,8 +1267,8 @@ describe("Раздел «Расчёт»: заявка клиента на его
     assert.match(text, /Демо-стенд/);
     assert.match(text, /Dongguan — Москва/);
     assert.match(text, /оплачивается клиентом поставщику/);
-    assert.match(text, /Транспортно-экспедиционное обслуживание 6%\t9\s816 руб\./);
-    assert.match(text, /183\s416 руб\./);
+    assert.match(text, /Транспортно-экспедиционное обслуживание 6%\t10\s416 руб\./);
+    assert.match(text, /184\s016 руб\./);
     assert.doesNotMatch(text, /\{\{/);
     assert.equal((await call(s, "DELETE", `/estimates/${id}`)).statusCode, 200);
   });
