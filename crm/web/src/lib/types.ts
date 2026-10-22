@@ -418,6 +418,10 @@ export type ShipmentResponse = {
   payments: ShipmentPayment[];
   /** Пояснение по оплатам для таможни — если оплата не «счёт — платёжка» в этой же сделке. */
   paymentNotes: string[];
+  /** Наличные сверху — только администраторам (остальным null). */
+  cash: import("../../../shared/shipments.ts").ShipmentCash | null;
+  /** Расчёт, из которого создана сделка. */
+  estimate: { id: number; title: string } | null;
 };
 
 export type ShipmentEvent = {

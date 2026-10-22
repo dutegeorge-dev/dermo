@@ -154,3 +154,7 @@ export const SHIPMENT_FIELD_GROUPS: { title: string; fields: ShipmentField[] }[]
   { title: "Маршрут", fields: ["transport", "pickupLocation", "deliveryLocation"] },
   { title: "Разрешения и маркировка", fields: ["exportLicense", "certificates", "certificateHolder", "chestnyZnak"] },
 ];
+
+/** Наличные сверху по сделке (только администраторам): за товар и за доставку, в одной валюте. */
+export type ShipmentCash = { currency: string; goods: number | null; delivery: number | null; note?: string };
+

@@ -154,6 +154,8 @@ export type EstimateResult = {
   commission: number;
   totalRub: number;
   warnings: string[];
+  /** Наличные сверху — как посчитано при сохранении (только админам; сервер скрывает от остальных). */
+  markup?: MarkupResult | null;
 };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;

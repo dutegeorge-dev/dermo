@@ -1322,7 +1322,23 @@ describe("Раздел «Расчёт»: заявка клиента на его
     const asPetr = (await call(petr, "GET", `/estimates/${id}`)).json().estimate;
     assert.equal(asPetr.params.markup, null);
     assert.equal((await call(petr, "PUT", `/estimates/${id}`, { params: { ...asPetr.params, title: "Демо-маты 2" } })).statusCode, 200);
-    assert.equal((await call(s, "GET", `/estimates/${id}`)).json().estimate.params.markup.deliveryClient, 1500);
+    const again = (await call(s, "GET", `/estimates/${id}`)).json().estimate;
+    assert.equal(again.params.markup.deliveryClient, 1500);
+    assert.equal(again.result.markup.deliveryCash, 290, "посчитанные наличные сохраняются с расчётом");
+
+    // Сделка по расчёту: груз, вес, маршрут, наличные (админу) — за товар и за доставку.
+    const created = await call(s, "POST", `/estimates/${id}/shipment`, { title: "Демо-маты", clientId: null });
+    assert.equal(created.statusCode, 200, created.body);
+    const no = created.json().shipment.number as number;
+    const deal = (await call(s, "GET", `/shipments/${no}`)).json();
+    assert.equal(deal.shipment.title, "Демо-маты");
+    assert.deepEqual([deal.cash.currency, deal.cash.goods, deal.cash.delivery], ["USD", 710, 290]);
+    assert.equal(deal.estimate.id, id);
+    assert.equal((await call(s, "GET", `/estimates/${id}`)).json().shipments[0].number, no);
+    assert.equal((await call(petr, "GET", `/shipments/${no}`)).json().cash, null, "менеджер наличных не видит");
+    assert.equal((await call(petr, "PUT", `/shipments/${no}/cash`, { goods: 1 })).statusCode, 403);
+    assert.equal((await call(s, "PUT", `/shipments/${no}/cash`, { currency: "USD", goods: 5000, delivery: 4000 })).statusCode, 200);
+    assert.equal((await call(s, "GET", `/shipments/${no}`)).json().cash.goods, 5000);
     assert.equal((await call(s, "DELETE", `/estimates/${id}`)).statusCode, 200);
   });
 });

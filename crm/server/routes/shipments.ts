@@ -15,12 +15,14 @@ import {
   MILESTONES,
   type MilestoneKey,
   SHIPMENT_FIELDS,
+  type ShipmentCash,
   type ShipmentField,
   shipmentLabel,
   stageSpec,
 } from "../../shared/shipments.ts";
+import { CURRENCIES } from "../../shared/documents.ts";
 import { db, type DbOrTx } from "../db/client.ts";
-import { counterparties, documentItems, documents, products, shipmentEvents, shipmentParties, shipments, users } from "../db/schema.ts";
+import { counterparties, documentItems, documents, estimates, products, shipmentEvents, shipmentParties, shipments, users } from "../db/schema.ts";
 import { conformityIdsForProducts } from "../lib/product-match.ts";
 import { audit } from "../lib/audit.ts";
 import { shipmentDocuments, shipmentFinance } from "../lib/finance.ts";
@@ -67,6 +69,17 @@ export type CalendarEvent = {
  * (и с фактом — как выполненные), неотмеченные флажки — на дату ключевой
  * точки их этапа. У ключевой даты текущего этапа без плана — событие без даты.
  */
+/** Наличные из запроса: валюта и суммы (неотрицательные). */
+export function shipmentCash(input: Record<string, unknown>): ShipmentCash {
+  const n = (v: unknown) => {
+    if (v === null || v === undefined || v === "") return null;
+    const x = typeof v === "number" ? v : Number(String(v).replace(/\s/g, "").replace(",", "."));
+    return Number.isFinite(x) && x >= 0 ? Math.round(x * 100) / 100 : null;
+  };
+  const c = String(input.currency ?? "USD").toUpperCase();
+  return { currency: (CURRENCIES as readonly string[]).includes(c) ? c : "USD", goods: n(input.goods), delivery: n(input.delivery), note: typeof input.note === "string" ? input.note.slice(0, 500) : "" };
+}
+
 export function calendarEvents(list: ShipmentDto[]): CalendarEvent[] {
   const events: CalendarEvent[] = [];
   for (const sh of list) {
@@ -248,7 +261,21 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
       // Оплаты на несколько счетов и пояснение для таможни — только если они есть.
       payments: pays,
       paymentNotes: paymentExplanation(pays, row.id),
+      // Наличные сверху — только администраторам.
+      cash: currentUser(request).role === "admin" ? (row.cash ?? null) : null,
+      estimate: row.estimateId ? ((await db.select({ id: estimates.id, title: estimates.title }).from(estimates).where(eq(estimates.id, row.estimateId)))[0] ?? null) : null,
     };
+  });
+
+  /** Наличные сверху по сделке: за товар и за доставку (только администраторы). null — убрать. */
+  app.put("/shipments/:number/cash", async (request) => {
+    const admin = requireAdmin(request);
+    const row = await findShipment(db, (request.params as { number: string }).number);
+    const input = (request.body ?? null) as Record<string, unknown> | null;
+    const cash = input && typeof input === "object" && Object.keys(input).length ? shipmentCash(input) : null;
+    await db.update(shipments).set({ cash, updatedAt: new Date() }).where(eq(shipments.id, row.id));
+    await audit(db, { userId: admin.id, action: "update", entityType: "shipment", entityId: row.number, summary: `Изменил наличные по сделке «${row.title}»`, ip: request.ip });
+    return { cash };
   });
 
   /** Правка полей; каждое изменение — в историю. Сменили клиента/схему/поставщика — договоры подбираются заново. */

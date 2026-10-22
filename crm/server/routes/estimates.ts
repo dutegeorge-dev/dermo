@@ -6,13 +6,14 @@ import type { FastifyInstance } from "fastify";
 
 import { config } from "../config.ts";
 import { db } from "../db/client.ts";
-import { estimates, users } from "../db/schema.ts";
+import { estimates, shipments, users } from "../db/schema.ts";
 import { aiEnabled } from "../lib/ai.ts";
 import { fileContent } from "../lib/ai-parse.ts";
 import { audit } from "../lib/audit.ts";
 import { estimateKpData, estimateParams, parseEstimateRequest, serverEstimate, suggestEstimateHs } from "../lib/estimates.ts";
 import { body, currentUser, HttpError, intParam } from "../lib/http.ts";
 import { renderQuoteKp } from "../lib/quotes.ts";
+import { createShipment } from "../lib/shipments.ts";
 import { cbrRates } from "../lib/rates.ts";
 
 /** Курсы: переданные (как видел пользователь) или свежие ЦБ. */
@@ -58,9 +59,10 @@ export async function estimateRoutes(app: FastifyInstance): Promise<void> {
     const id = intParam((request.params as { id: string }).id);
     const [row] = await db.select().from(estimates).where(eq(estimates.id, id));
     if (!row) throw new HttpError(404, "Расчёт не найден");
+    const linked = await db.select({ number: shipments.number, title: shipments.title }).from(shipments).where(eq(shipments.estimateId, id)).orderBy(shipments.number);
     // Наличные сверху расчёта — только администраторам.
-    if (currentUser(request).role !== "admin") return { estimate: { ...row, params: { ...row.params, markup: null } } };
-    return { estimate: row };
+    if (currentUser(request).role !== "admin") return { estimate: { ...row, params: { ...row.params, markup: null }, result: { ...row.result, markup: null } }, shipments: linked };
+    return { estimate: row, shipments: linked };
   });
 
   /** Текст заявки → поля расчёта (ИИ). */
@@ -135,6 +137,45 @@ export async function estimateRoutes(app: FastifyInstance): Promise<void> {
     if (!row) throw new HttpError(404, "Расчёт не найден");
     await audit(db, { userId: user.id, action: "update", entityType: "estimate", entityId: id, summary: `Изменил расчёт «${title(params)}» — ${Math.round(result.totalRub).toLocaleString("ru-RU")} ₽`, ip: request.ip });
     return { id, result };
+  });
+
+  /**
+   * Сделка по расчёту: груз, схема, вес, объём, маршрут, код ТН ВЭД, заметки; клиент — выбранный (clientId). Наличные
+   * сверху (если админ их посчитал) — в сделку как есть: за товар и за доставку.
+   */
+  app.post("/estimates/:id/shipment", async (request) => {
+    const user = currentUser(request);
+    const id = intParam((request.params as { id: string }).id);
+    const input = body<{ clientId?: unknown; title?: unknown }>(request);
+    const [row] = await db.select().from(estimates).where(eq(estimates.id, id));
+    if (!row) throw new HttpError(404, "Расчёт не найден");
+    const p = row.params;
+    const items = p.items.filter((i) => i.name);
+    const result = await db.transaction(async (tx) => {
+      const sh = await createShipment(
+        tx,
+        {
+          title: (typeof input.title === "string" && input.title.trim()) || row.title,
+          scheme: p.scheme === "teu" ? "teu" : "commission",
+          clientId: typeof input.clientId === "number" ? input.clientId : null,
+          weightKg: p.weightKg,
+          volumeM3: p.volumeM3,
+          hsCode: items.find((i) => i.hsCode)?.hsCode ?? null,
+          pickupLocation: p.pickup || null,
+          deliveryLocation: p.destination || null,
+          notes: [`По расчёту «${row.title}»: ${items.map((i) => `${i.name}${i.variant ? ` ${i.variant}` : ""}${i.quantity !== null ? ` — ${i.quantity} ${i.unit}` : ""}`).join("; ")}.`, p.notes].filter(Boolean).join("\n"),
+        },
+        user.id,
+      );
+      const m = row.result.markup;
+      await tx
+        .update(shipments)
+        .set({ estimateId: id, ...(user.role === "admin" && m ? { cash: { currency: m.currency, goods: m.goodsCash, delivery: m.deliveryCash, note: "из расчёта" } } : {}) })
+        .where(eq(shipments.id, sh.id));
+      await audit(tx, { userId: user.id, action: "create", entityType: "shipment", entityId: sh.number, summary: `Создал сделку «${sh.title}» по расчёту «${row.title}»`, ip: request.ip });
+      return sh;
+    });
+    return { shipment: { number: result.number } };
   });
 
   app.delete("/estimates/:id", async (request) => {

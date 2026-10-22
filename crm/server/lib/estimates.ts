@@ -4,7 +4,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { eq } from "drizzle-orm";
 
 import { CURRENCIES, formatMoney } from "../../shared/documents.ts";
-import { computeEstimate, DEFAULT_ESTIMATE, DEFAULT_MARKUP, type EstimateMarkup, type EstimateParams, MARKUP_MODES, type MarkupMode, type EstimateResult, estimateKpLines, ESTIMATE_SCHEMES, estimateUnits, fromRub } from "../../shared/estimate.ts";
+import { computeEstimate, computeMarkup, DEFAULT_ESTIMATE, DEFAULT_MARKUP, type EstimateMarkup, type EstimateParams, MARKUP_MODES, type MarkupMode, type EstimateResult, estimateKpLines, ESTIMATE_SCHEMES, estimateUnits, fromRub } from "../../shared/estimate.ts";
 import { FREIGHT_TRANSPORTS, type FreightRate } from "../../shared/quote.ts";
 import type { DbOrTx } from "../db/client.ts";
 import { freightRates } from "../db/schema.ts";
@@ -120,7 +120,10 @@ export async function serverEstimate(tx: DbOrTx, params: EstimateParams, rates: 
   const freight = row ? freightDto(row) : null;
   const known = await tnvedByCodes(tx, params.items.map((i) => i.hsCode ?? ""));
   const tariffs = Object.fromEntries([...known.entries()].map(([code, t]) => [code, t.tariff]));
-  return { freight, result: computeEstimate(params, { rates, tariffs, freight }) };
+  const result = computeEstimate(params, { rates, tariffs, freight });
+  // Наличные сверху — сохраняем и посчитанные суммы (переносятся в сделку).
+  result.markup = computeMarkup(params, result, rates);
+  return { freight, result };
 }
 
 // ── КП (шаблон тот же, что у расчёта цены товара: templates/product_kp.docx) ──

@@ -35,6 +35,7 @@ import {
 
 import type { SpecParams } from "../../shared/cargo.ts";
 import type { ShipmentCalc } from "../../shared/customs.ts";
+import type { ShipmentCash } from "../../shared/shipments.ts";
 import type { EstimateParams, EstimateResult } from "../../shared/estimate.ts";
 import type { FactoryProfile } from "../../shared/factories.ts";
 import type { FreightRate, QuoteParams, QuoteResult } from "../../shared/quote.ts";
@@ -695,6 +696,10 @@ export const shipments = pgTable(
     flags: jsonb("flags").$type<Record<string, string>>().notNull().default({}),
     /** Расчёт для клиента: смета КП / поручения и таможенные платежи (shared/customs.ts). */
     calc: jsonb("calc").$type<ShipmentCalc>(),
+    /** Наличные сверху (за товар и за доставку) — видят и меняют только администраторы. */
+    cash: jsonb("cash").$type<ShipmentCash>(),
+    /** Расчёт («Расчёт»), из которого создана сделка. */
+    estimateId: integer("estimate_id"),
     /** Параметры спецификации для перевозчика: получатель, станция… (shared/cargo.ts). */
     spec: jsonb("spec").$type<SpecParams>(),
     notes: text("notes").notNull().default(""),

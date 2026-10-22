@@ -16,13 +16,14 @@ import { IconFile, IconPlus, IconSparkles, IconTrash, IconUpload, IconX } from "
 import { ClientMarkup } from "../../components/estimates/ClientMarkup.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { NumInput } from "../../components/products/QuoteCalculator.tsx";
-import { ConfirmDialog, ErrorBox, PageHeader, Spinner } from "../../components/ui.tsx";
+import { ConfirmDialog, ErrorBox, Modal, PageHeader, Spinner } from "../../components/ui.tsx";
+import { CounterpartyPicker, ensureCounterparty, type Picked } from "../../components/crm/CounterpartyPicker.tsx";
 import { useAiEnabled } from "../../lib/ai.ts";
 import { api, apiDownload, errorMessage } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
 import { freightTitle, useFreightRates } from "../factories/FreightRatesPage.tsx";
 
-type Saved = { id: number; request: string; params: EstimateParams; ratesDate: string | null; createdBy: number | null };
+type Saved = { id: number; request: string; params: EstimateParams; ratesDate: string | null; createdBy: number | null; shipments?: { number: number; title: string }[] };
 
 const rub = (n: number | null | undefined) => (n === null || n === undefined ? "—" : formatMoney(n, "RUB"));
 
@@ -107,7 +108,14 @@ function BreakdownInput({ value, onChange }: { value: { label: string; packages:
 export function EstimatePage() {
   const { id } = useParams();
   const isNew = !id || id === "new";
-  const saved = useQuery({ queryKey: ["estimate", id], queryFn: () => api<{ estimate: Saved }>(`/estimates/${id}`), enabled: !isNew });
+  const saved = useQuery({
+    queryKey: ["estimate", id],
+    queryFn: async () => {
+      const r = await api<{ estimate: Saved; shipments: { number: number; title: string }[] }>(`/estimates/${id}`);
+      return { estimate: { ...r.estimate, shipments: r.shipments } };
+    },
+    enabled: !isNew,
+  });
   if (!isNew && !saved.data) {
     return (
       <Content>
@@ -212,23 +220,29 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
     }
   };
 
-  const save = async (kp: boolean) => {
-    if (!cbr.data) return;
-    setBusy(kp ? "kp" : "save");
+  /** Сохранить (и КП / сделка). Возвращает id расчёта. */
+  const save = async (kind: "save" | "kp" | "deal"): Promise<number | null> => {
+    if (!cbr.data) return null;
+    setBusy(kind);
     setError(null);
     try {
       const payload = { params: p, request, rates: cbr.data.rates, ratesDate: cbr.data.date };
       const { id } = saved ? await api<{ id: number }>(`/estimates/${saved.id}`, { method: "PUT", body: payload }) : await api<{ id: number }>("/estimates", { method: "POST", body: payload });
       await queryClient.invalidateQueries({ queryKey: ["estimates"] });
       await queryClient.invalidateQueries({ queryKey: ["estimate", String(id)] });
-      if (kp) await apiDownload(`/estimates/${id}/kp.docx`);
-      if (!saved) navigate(`/estimates/${id}`, { replace: true });
+      if (kind === "kp") await apiDownload(`/estimates/${id}/kp.docx`);
+      if (kind === "deal") setDealFor(id);
+      else if (!saved) navigate(`/estimates/${id}`, { replace: true });
+      return id;
     } catch (e) {
       setError(errorMessage(e));
+      return null;
     } finally {
       setBusy(null);
     }
   };
+  const [dealFor, setDealFor] = useState<number | null>(null);
+
 
   const teu = p.scheme === "teu";
   const goods = p.items.reduce((s, i) => s + (i.amount ?? 0), 0);
@@ -604,13 +618,26 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-primary btn-sm" disabled={!!busy || !res} onClick={() => void save(true)}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={!!busy || !res} onClick={() => void save("kp")}>
               <IconFile size={12} /> {busy === "kp" ? "Готовим…" : "КП в Word"}
             </button>
-            <button type="button" className="btn btn-sm" disabled={!!busy || !res} onClick={() => void save(false)}>
+            <button type="button" className="btn btn-sm" disabled={!!busy || !res} onClick={() => void save("save")}>
               {busy === "save" ? "Сохраняем…" : "Сохранить"}
             </button>
+            <button type="button" className="btn btn-sm" disabled={!!busy || !res} title="Сохранить расчёт и создать по нему сделку" onClick={() => void save("deal")}>
+              {busy === "deal" ? "Сохраняем…" : "Создать сделку"}
+            </button>
           </div>
+          {saved?.shipments && saved.shipments.length > 0 && (
+            <p className="text-xs">
+              Сделки по расчёту:{" "}
+              {saved.shipments.map((sh) => (
+                <Link key={sh.number} to={`/shipments/${sh.number}`} className="link mr-2">
+                  № {sh.number} «{sh.title}»
+                </Link>
+              ))}
+            </p>
+          )}
           {saved?.ratesDate && <p className="text-[11px] muted">Сохранён по курсам на {formatDay(saved.ratesDate)}; при сохранении — курсы на сегодня.</p>}
           {error && <p className="text-sm text-red-700 dark:text-red-400">{error}</p>}
         </div>
@@ -620,6 +647,7 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
           <ClientMarkup p={p} res={res} rates={{ RUB: 1, ...cbr.data.rates }} onChange={(markup) => set({ markup })} />
         </div>
       )}
+      {dealFor && <CreateDealDialog estimateId={dealFor} title={p.title} clientName={p.clientName} onClose={() => setDealFor(null)} />}
       {removing && saved && (
         <ConfirmDialog
           title="Удалить расчёт?"
@@ -635,3 +663,57 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
     </Content>
   );
 }
+
+/** «Создать сделку» по расчёту: клиент и название груза. */
+function CreateDealDialog({ estimateId, title, clientName, onClose }: { estimateId: number; title: string; clientName: string; onClose: () => void }) {
+  const navigate = useNavigate();
+  const [client, setClient] = useState<Picked | null>(clientName ? { id: null, name: clientName } : null);
+  const [name, setName] = useState(title);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  return (
+    <Modal
+      title="Сделка по расчёту"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>Отмена</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || !name.trim()}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                const clientId = await ensureCounterparty(client, "client");
+                const { shipment } = await api<{ shipment: { number: number } }>(`/estimates/${estimateId}/shipment`, { method: "POST", body: { clientId, title: name } });
+                navigate(`/shipments/${shipment.number}`);
+              } catch (e) {
+                setError(e);
+                setBusy(false);
+              }
+            }}
+          >
+            Создать сделку
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3 text-sm">
+        <label className="block">
+          <span className="label">Груз</span>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <div>
+          <span className="label">Клиент</span>
+          <CounterpartyPicker role="client" value={client} onChange={setClient} placeholder="Можно выбрать позже" />
+          {client && client.id === null && <span className="mt-1 block text-xs muted">Будет создан новый клиент «{client.name}».</span>}
+        </div>
+        <p className="text-xs muted">В сделку перейдут схема (комиссия / ТЭУ), вес, объём, маршрут, код ТН ВЭД, товары — в заметки; наличные сверху (если посчитаны) — в блок «Наличные» сделки.</p>
+        <ErrorBox error={error} />
+      </div>
+    </Modal>
+  );
+}
+

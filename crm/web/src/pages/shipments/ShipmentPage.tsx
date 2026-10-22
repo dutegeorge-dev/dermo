@@ -12,6 +12,7 @@ import { formatMoney } from "../../../../shared/documents.ts";
 import { formatDay, ValidityChip } from "../../components/docs/common.tsx";
 import { IconCheck } from "../../components/Icons.tsx";
 import { CalcBlock } from "../../components/shipments/CalcBlock.tsx";
+import { CashBlock } from "../../components/shipments/CashBlock.tsx";
 import { ShipmentStage } from "../../components/shipments/common.tsx";
 import { FinanceBlock, ShipmentDocs } from "../../components/shipments/ShipmentDocs.tsx";
 import { ShipmentFields } from "../../components/shipments/ShipmentFields.tsx";
@@ -211,6 +212,7 @@ export function ShipmentPage() {
           <StageTimeline data={data} saveField={save} />
           <ShipmentDocs data={data} save={save} />
           <FinanceBlock data={data} />
+          {user?.role === "admin" && <CashBlock data={data} />}
           <GoodsBlock data={data} />
           <History shipment={s} events={data.events} />
           <CalcBlock data={data} save={save} />
