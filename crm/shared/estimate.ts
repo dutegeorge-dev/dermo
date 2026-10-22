@@ -25,6 +25,15 @@ export type EstimateItem = {
   dutyQty?: number | null;
   /** Код подобран ИИ — проверить. */
   hsAuto?: boolean;
+  /** Размер / модель строки («0,5 × 25 м») — строка таблицы клиенту. */
+  variant?: string;
+  /** Мест (рулонов, коробок) и их вид. */
+  packages?: number | null;
+  packageUnit?: string;
+  /** Разбивка мест по цветам / моделям: колонки таблицы клиенту. */
+  breakdown?: { label: string; packages: number | null }[];
+  /** Цена за единицу в валюте товара (из инвойса). */
+  price?: number | null;
 };
 
 export type EstimateExtra = { name: string; amount: number | null };
@@ -65,7 +74,31 @@ export type EstimateParams = {
   commission: number | null;
   deliveryTerm: string;
   notes: string;
+  /** Контейнер из инвойса («20FT», «40HQ») — в заголовке таблицы клиенту. */
+  containerType?: string;
+  /** Наличные сверху расчёта и цена для клиента — только для администраторов (сервер скрывает от остальных). */
+  markup?: EstimateMarkup | null;
 };
+
+export const MARKUP_MODES = { manual: "вручную", unit: "целевая цена за единицу", margin: "желаемая маржа" } as const;
+export type MarkupMode = keyof typeof MARKUP_MODES;
+
+export type EstimateMarkup = {
+  /** Валюта таблицы клиенту. */
+  currency: string;
+  /** Доставка для клиента (наш расчёт + наличные), в currency; пусто — без наличных за доставку. */
+  deliveryClient: number | null;
+  mode: MarkupMode;
+  /** Вручную: наличные за товар, в currency. */
+  goodsCash: number | null;
+  /** Целевая цена для клиента за единицу (всё вместе: товар + доставка). */
+  targetUnitPrice: number | null;
+  targetUnitCurrency: string;
+  /** Желаемая маржа (наличные за товар + за доставку), в currency. */
+  margin: number | null;
+};
+
+export const DEFAULT_MARKUP: EstimateMarkup = { currency: "USD", deliveryClient: null, mode: "manual", goodsCash: null, targetUnitPrice: null, targetUnitCurrency: "RUB", margin: null };
 
 export const emptyEstimateItem = (): EstimateItem => ({ name: "", hsCode: null, quantity: null, unit: "шт", amount: null, vat10: false, dutyQty: null });
 
@@ -288,5 +321,96 @@ export function estimateUnits(p: EstimateParams, q: EstimateResult, rates: Recor
       perUnitRub: i.quantity ? r2(totalRub / i.quantity) : null,
     };
   });
+}
+
+// ── Наличные сверху расчёта и таблица клиенту (только админы) ─────────────────
+
+export type MarkupItem = EstimateItem & { costAmount: number; clientPrice: number | null; clientAmount: number };
+
+export type MarkupResult = {
+  currency: string;
+  /** Безналичные: товар по инвойсу и доставка по расчёту (всё, кроме товара), в currency. */
+  goodsCost: number;
+  deliveryCost: number;
+  deliveryClient: number;
+  deliveryCash: number;
+  goodsClient: number;
+  goodsCash: number;
+  totalClient: number;
+  margin: number;
+  /** Количество и цена для клиента за единицу (всё вместе) — если у товаров одна единица. */
+  totalQuantity: number | null;
+  unit: string | null;
+  unitClient: number | null;
+  items: MarkupItem[];
+  warnings: string[];
+};
+
+/**
+ * Наценка наличными поверх расчёта. Доставка для клиента задаётся суммой (наш расчёт доставки + наличные), остальное
+ * — на товар: вручную, по целевой цене за единицу (вся партия × цена − доставка − товар по инвойсу) или по желаемой
+ * марже (маржа − наличные за доставку). Наличные за товар раскладываются по позициям пропорционально стоимости —
+ * получается цена для клиента за единицу (округляем вверх до копеек / центов; итог считаем от округлённых цен).
+ */
+export function computeMarkup(p: EstimateParams, q: EstimateResult, rates: Record<string, number>): MarkupResult | null {
+  const m = p.markup;
+  if (!m) return null;
+  const warnings: string[] = [];
+  const cur = m.currency;
+  const toCur = (rub: number) => {
+    const v = fromRub(rub, cur, rates);
+    if (v === null) warnings.push(`Нет курса ${cur}`);
+    return v ?? 0;
+  };
+  const goodsRate = p.currency === "RUB" ? 1 : (rates[p.currency] ?? 0);
+  const items = p.items.filter((i) => i.name.trim() || i.amount);
+  const costs = items.map((i) => r2(toCur((i.amount ?? 0) * goodsRate)));
+  const goodsCost = r2(costs.reduce((s, c) => s + c, 0));
+  const deliveryCost = r2(toCur(q.totalRub - q.goodsRub));
+  const deliveryClient = m.deliveryClient ?? deliveryCost;
+  const deliveryCash = r2(deliveryClient - deliveryCost);
+  if (deliveryCash < 0) warnings.push("Доставка для клиента меньше нашего расчёта доставки");
+
+  const units = [...new Set(items.map((i) => i.unit))];
+  const totalQuantity = units.length === 1 ? items.reduce((s, i) => s + (i.quantity ?? 0), 0) : null;
+  let planned = 0;
+  if (m.mode === "manual") planned = m.goodsCash ?? 0;
+  else if (m.mode === "margin") planned = (m.margin ?? 0) - deliveryCash;
+  else {
+    if (!totalQuantity) warnings.push(units.length > 1 ? "Целевая цена за единицу — только когда у всех товаров одна единица" : "Укажите количество товара");
+    else if (!m.targetUnitPrice) warnings.push("Укажите целевую цену за единицу");
+    else {
+      const targetRub = m.targetUnitCurrency === "RUB" ? m.targetUnitPrice : m.targetUnitPrice * (rates[m.targetUnitCurrency] ?? 0);
+      planned = toCur(targetRub * totalQuantity) - deliveryClient - goodsCost;
+    }
+  }
+  if (planned < 0) warnings.push("Наличные за товар получаются меньше нуля — цена для клиента ниже нашей себестоимости");
+
+  const out: MarkupItem[] = items.map((i, n) => {
+    const share = goodsCost ? costs[n] / goodsCost : 1 / items.length;
+    const target = costs[n] + planned * share;
+    // Цена — вверх до копеек / центов: маржа не меньше заданной.
+    const clientPrice = i.quantity ? Math.ceil((target / i.quantity) * 100 - 1e-9) / 100 : null;
+    return { ...i, costAmount: costs[n], clientPrice, clientAmount: clientPrice !== null ? r2(clientPrice * i.quantity!) : r2(target) };
+  });
+  const goodsClient = r2(out.reduce((s, i) => s + i.clientAmount, 0));
+  const goodsCash = r2(goodsClient - goodsCost);
+  const totalClient = r2(goodsClient + deliveryClient);
+  return {
+    currency: cur,
+    goodsCost,
+    deliveryCost,
+    deliveryClient: r2(deliveryClient),
+    deliveryCash,
+    goodsClient,
+    goodsCash,
+    totalClient,
+    margin: r2(goodsCash + deliveryCash),
+    totalQuantity,
+    unit: units.length === 1 ? units[0] : null,
+    unitClient: totalQuantity ? r2(totalClient / totalQuantity) : null,
+    items: out,
+    warnings,
+  };
 }
 

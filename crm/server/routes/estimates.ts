@@ -1,5 +1,6 @@
 /** Раздел «Расчёт»: расчёты по заявкам клиентов на их товары и КП. */
 
+import type Anthropic from "@anthropic-ai/sdk";
 import { and, desc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
@@ -7,6 +8,7 @@ import { config } from "../config.ts";
 import { db } from "../db/client.ts";
 import { estimates, users } from "../db/schema.ts";
 import { aiEnabled } from "../lib/ai.ts";
+import { fileContent } from "../lib/ai-parse.ts";
 import { audit } from "../lib/audit.ts";
 import { estimateKpData, estimateParams, parseEstimateRequest, serverEstimate, suggestEstimateHs } from "../lib/estimates.ts";
 import { body, currentUser, HttpError, intParam } from "../lib/http.ts";
@@ -56,13 +58,24 @@ export async function estimateRoutes(app: FastifyInstance): Promise<void> {
     const id = intParam((request.params as { id: string }).id);
     const [row] = await db.select().from(estimates).where(eq(estimates.id, id));
     if (!row) throw new HttpError(404, "Расчёт не найден");
+    // Наличные сверху расчёта — только администраторам.
+    if (currentUser(request).role !== "admin") return { estimate: { ...row, params: { ...row.params, markup: null } } };
     return { estimate: row };
   });
 
   /** Текст заявки → поля расчёта (ИИ). */
   app.post("/estimates/parse", async (request) => {
     if (!aiEnabled()) throw new HttpError(503, "ИИ не подключён");
-    const { params, usage } = await parseEstimateRequest(db, String(body<{ text?: string }>(request).text ?? ""));
+    // Текст заявки (JSON { text }) или файл инвойса (multipart: file, text).
+    let text = "";
+    const files: Anthropic.Beta.BetaContentBlockParam[] = [];
+    if (request.isMultipart()) {
+      for await (const part of request.parts({ limits: { files: 1 } })) {
+        if (part.type === "file") files.push(...(await fileContent(await part.toBuffer(), part.filename || "file", part.mimetype || "application/octet-stream")));
+        else if (part.fieldname === "text") text = String(part.value ?? "");
+      }
+    } else text = String(body<{ text?: string }>(request).text ?? "");
+    const { params, usage } = await parseEstimateRequest(db, text, files);
     request.log.info({ ai: "estimate-request", model: config.ai.model, usage }, "ИИ: заявка на расчёт");
     return { params };
   });
@@ -80,6 +93,7 @@ export async function estimateRoutes(app: FastifyInstance): Promise<void> {
     const user = currentUser(request);
     const input = body<{ params: unknown; request?: unknown; rates?: unknown; ratesDate?: unknown }>(request);
     const params = estimateParams(input.params);
+    if (user.role !== "admin") params.markup = null;
     const { rates, ratesDate } = await ratesOf(input);
     const { freight, result } = await serverEstimate(db, params, rates);
     const [row] = await db
@@ -95,6 +109,11 @@ export async function estimateRoutes(app: FastifyInstance): Promise<void> {
     const id = intParam((request.params as { id: string }).id);
     const input = body<{ params: unknown; request?: unknown; rates?: unknown; ratesDate?: unknown }>(request);
     const params = estimateParams(input.params);
+    // Не админ наличные не видит и не меняет — оставляем как было.
+    if (user.role !== "admin") {
+      const [prev] = await db.select({ params: estimates.params }).from(estimates).where(eq(estimates.id, id));
+      params.markup = prev?.params.markup ?? null;
+    }
     const { rates, ratesDate } = await ratesOf(input);
     const { freight, result } = await serverEstimate(db, params, rates);
     const [row] = await db

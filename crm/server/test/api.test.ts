@@ -1294,6 +1294,37 @@ describe("Раздел «Расчёт»: заявка клиента на его
     assert.doesNotMatch(text, /\{\{/);
     assert.equal((await call(s, "DELETE", `/estimates/${id}`)).statusCode, 200);
   });
+
+  test("наличные сверху расчёта: доставка для клиента, маржа / целевая цена → цена товара; только админам", async () => {
+    const { computeMarkup } = await import("../../shared/estimate.ts");
+    const s = await adminSession();
+    // Товар $1000 (80 000 ₽), всё остальное 96 800 ₽ = $1210 (как в тесте выше, комиссия).
+    const base = {
+      title: "Демо-маты", scheme: "commission", currency: "USD",
+      items: [{ name: "Маты", variant: "1 × 25 м", hsCode: null, quantity: 100, unit: "м²", amount: 1000, packages: 4, packageUnit: "рул.", breakdown: [{ label: "Серый", packages: 2 }, { label: "Синий", packages: 2 }] }],
+      transportMode: "manual", transportAmount: 500, transportCurrency: "USD", fxPercent: 4, broker: 20000, commission: 10000,
+    };
+    const markup = { currency: "USD", deliveryClient: 1500, mode: "margin", margin: 1000, goodsCash: null, targetUnitPrice: null, targetUnitCurrency: "RUB" };
+    const res = await call(s, "POST", "/estimates", { params: { ...base, markup } });
+    assert.equal(res.statusCode, 200, res.body);
+    const id = res.json().id as number;
+    const saved = (await call(s, "GET", `/estimates/${id}`)).json().estimate;
+    const rates = { RUB: 1, USD: 80, EUR: 90, CNY: 11 };
+    let r = computeMarkup(saved.params, saved.result, rates)!;
+    assert.deepEqual([r.goodsCost, r.deliveryCost, r.deliveryCash], [1000, 1210, 290], "наличные за доставку = 1500 − 1210");
+    assert.deepEqual([r.goodsCash, r.items[0].clientPrice, r.totalClient, r.margin], [710, 17.1, 3210, 1000], "маржа 1000 − 290 → на товар 710 → $17,10 за м²");
+    // Целевая цена 3000 ₽ за м² (всё вместе): 100 м² × 3000 = 300 000 ₽ = $3750 → на товар 3750 − 1500 − 1000 = 1250.
+    r = computeMarkup({ ...saved.params, markup: { ...markup, mode: "unit", targetUnitPrice: 3000 } }, saved.result, rates)!;
+    assert.deepEqual([r.goodsCash, r.items[0].clientPrice, r.unitClient], [1250, 22.5, 37.5]);
+
+    // Менеджер наличных не видит и не стирает их при сохранении.
+    const petr = await login("petr", "managerpass", "10.0.0.41");
+    const asPetr = (await call(petr, "GET", `/estimates/${id}`)).json().estimate;
+    assert.equal(asPetr.params.markup, null);
+    assert.equal((await call(petr, "PUT", `/estimates/${id}`, { params: { ...asPetr.params, title: "Демо-маты 2" } })).statusCode, 200);
+    assert.equal((await call(s, "GET", `/estimates/${id}`)).json().estimate.params.markup.deliveryClient, 1500);
+    assert.equal((await call(s, "DELETE", `/estimates/${id}`)).statusCode, 200);
+  });
 });
 
 describe("Клиент ↔ договор комиссии", () => {

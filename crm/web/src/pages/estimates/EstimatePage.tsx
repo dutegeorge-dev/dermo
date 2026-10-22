@@ -12,7 +12,8 @@ import { dutyUnit, dutyUnitLabel, isWeightUnit, unitMatches } from "../../../../
 import { CURRENCIES, formatMoney } from "../../../../shared/documents.ts";
 import { computeEstimate, DEFAULT_ESTIMATE, emptyEstimateItem, type EstimateItem, type EstimateParams, type EstimateResult, ESTIMATE_SCHEMES, type EstimateScheme, estimateUnits, fromRub } from "../../../../shared/estimate.ts";
 import { formatDay } from "../../components/docs/common.tsx";
-import { IconFile, IconPlus, IconSparkles, IconTrash, IconX } from "../../components/Icons.tsx";
+import { IconFile, IconPlus, IconSparkles, IconTrash, IconUpload, IconX } from "../../components/Icons.tsx";
+import { ClientMarkup } from "../../components/estimates/ClientMarkup.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { NumInput } from "../../components/products/QuoteCalculator.tsx";
 import { ConfirmDialog, ErrorBox, PageHeader, Spinner } from "../../components/ui.tsx";
@@ -77,6 +78,29 @@ function BigFigures({ p, res, rates }: { p: EstimateParams; res: EstimateResult;
         ? row("unit", "Стоимость единицы", null, "укажите количество товара")
         : units.map((u, i) => row(`unit${i}`, "Стоимость единицы", u.perUnitRub, `за 1 ${u.unit} с доставкой${units.length > 1 ? ` · ${u.name}` : ""}`))}
     </div>
+  );
+}
+
+/** Разбивка мест по цветам / моделям: «Серый 8; Красный 8». */
+function BreakdownInput({ value, onChange }: { value: { label: string; packages: number | null }[]; onChange: (v: { label: string; packages: number | null }[]) => void }) {
+  const text = value.map((b) => `${b.label}${b.packages !== null ? ` ${b.packages}` : ""}`).join("; ");
+  return (
+    <input
+      key={text}
+      className="input mt-1 py-1 text-xs"
+      defaultValue={text}
+      placeholder="по цветам: Серый 8; Красный 8"
+      title="Разбивка мест по цветам / моделям — колонки таблицы клиенту"
+      onBlur={(e) =>
+        onChange(
+          e.target.value
+            .split(/[;\n]/)
+            .map((part) => /^(.*?)\s*(\d+(?:[.,]\d+)?)?\s*$/.exec(part.trim()))
+            .filter((m): m is RegExpExecArray => !!m && !!m[1])
+            .map((m) => ({ label: m[1].trim(), packages: m[2] ? Number(m[2].replace(",", ".")) : null })),
+        )
+      }
+    />
   );
 }
 
@@ -169,10 +193,18 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
     }
   };
 
-  const parse = async () => {
+  /** Текст заявки и / или файл инвойса → поля (ИИ). */
+  const parse = async (file?: File) => {
     setAi({ busy: true, error: null, done: false });
     try {
-      const { params } = await api<{ params: Partial<EstimateParams> }>("/estimates/parse", { method: "POST", body: { text: request } });
+      let body: { body?: unknown; form?: FormData };
+      if (file) {
+        const form = new FormData();
+        form.append("text", request);
+        form.append("file", file);
+        body = { form };
+      } else body = { body: { text: request } };
+      const { params } = await api<{ params: Partial<EstimateParams> }>("/estimates/parse", { method: "POST", ...body });
       setP((x) => ({ ...x, ...params, items: params.items?.length ? params.items : x.items }));
       setAi({ busy: false, error: null, done: true });
     } catch (e) {
@@ -220,9 +252,24 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
             title="Заявка клиента"
             aside={
               aiEnabled && (
-                <button type="button" className="btn btn-sm" disabled={ai.busy || !request.trim()} onClick={() => void parse()}>
-                  <IconSparkles size={13} /> {ai.busy ? "Разбираем…" : "Заполнить по заявке"}
-                </button>
+                <>
+                  <label className={`btn btn-sm ${ai.busy ? "pointer-events-none opacity-50" : "cursor-pointer"}`} title="Инвойс / проформа поставщика (Excel, PDF, фото) — товары по строкам, размеры, цвета, рулоны">
+                    <IconUpload size={13} /> Загрузить инвойс
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".xlsx,.xls,.pdf,.docx,image/*"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (f) void parse(f);
+                      }}
+                    />
+                  </label>
+                  <button type="button" className="btn btn-sm" disabled={ai.busy || !request.trim()} onClick={() => void parse()}>
+                    <IconSparkles size={13} /> {ai.busy ? "Разбираем…" : "Заполнить по заявке"}
+                  </button>
+                </>
               )
             }
           >
@@ -233,7 +280,7 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
               placeholder="Вставьте заявку как прислали: что за товар, производитель, место забора, пункт назначения, упаковка и размеры, вес, стоимость, код ТН ВЭД, условия (EXW…)"
             />
             {ai.error && <p className="text-xs text-red-700 dark:text-red-400">{ai.error}</p>}
-            {ai.done && <p className="text-xs text-green-700 dark:text-green-400">Поля заполнены по заявке — проверьте. Доставку, брокера и проценты задайте ниже.</p>}
+            {ai.done && <p className="text-xs text-green-700 dark:text-green-400">Поля заполнены — проверьте. Доставку, брокера и проценты задайте ниже.</p>}
           </Section>
 
           <Section title="Основное">
@@ -286,6 +333,12 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
                 <div className="grid gap-2 pr-6 sm:grid-cols-[1fr_150px]">
                   <Field label="Наименование">
                     <input className="input" value={it.name} onChange={(e) => setItem(i, { name: e.target.value })} />
+                    <div className="mt-1 grid grid-cols-[1fr_70px_70px] gap-1">
+                      <input className="input py-1 text-xs" value={it.variant ?? ""} placeholder="размер / модель" title="Размер / модель — строка таблицы клиенту" onChange={(e) => setItem(i, { variant: e.target.value })} />
+                      <NumInput className="input py-1 text-xs" value={it.packages ?? null} placeholder="мест" onChange={(v) => setItem(i, { packages: v })} />
+                      <input className="input py-1 text-xs" value={it.packageUnit ?? ""} placeholder="рул." onChange={(e) => setItem(i, { packageUnit: e.target.value })} />
+                    </div>
+                    <BreakdownInput value={it.breakdown ?? []} onChange={(breakdown) => setItem(i, { breakdown })} />
                   </Field>
                   <Field
                     label="Код ТН ВЭД"
@@ -562,6 +615,11 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
           {error && <p className="text-sm text-red-700 dark:text-red-400">{error}</p>}
         </div>
       </div>
+      {user?.role === "admin" && res && cbr.data && (
+        <div className="mt-4">
+          <ClientMarkup p={p} res={res} rates={{ RUB: 1, ...cbr.data.rates }} onChange={(markup) => set({ markup })} />
+        </div>
+      )}
       {removing && saved && (
         <ConfirmDialog
           title="Удалить расчёт?"
