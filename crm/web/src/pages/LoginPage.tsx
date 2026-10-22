@@ -31,8 +31,8 @@ export function LoginPage() {
           <img src={`${BASE}/logo-mark.png`} alt="" className="h-9 w-auto dark:hidden" />
           <img src={`${BASE}/logo-mark-on-brand.png`} alt="" className="hidden h-9 w-auto dark:block" />
           <div>
-            <h1 className="text-base font-semibold">ТЛК БАРС</h1>
-            <p className="text-xs muted">Внутренний раздел для сотрудников</p>
+            <h1 className="text-base font-semibold">Ирбис</h1>
+            <p className="text-xs muted">Система ТЛК БАРС для сотрудников</p>
           </div>
         </div>
         <div className="space-y-3">

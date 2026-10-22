@@ -64,8 +64,8 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           <img src={`${BASE}/logo-mark.png`} alt="" className="h-7 w-auto dark:hidden" />
           <img src={`${BASE}/logo-mark-on-brand.png`} alt="" className="hidden h-7 w-auto dark:block" />
           <span className="leading-tight">
-            <span className="block text-sm font-semibold">ТЛК БАРС</span>
-            <span className="block text-[11px] muted">Внутренний раздел</span>
+            <span className="block text-sm font-semibold">Ирбис</span>
+            <span className="block text-[11px] muted">система ТЛК БАРС</span>
           </span>
         </Link>
         {onClose && (
