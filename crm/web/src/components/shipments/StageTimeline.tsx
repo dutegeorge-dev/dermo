@@ -128,6 +128,7 @@ export function StageTimeline({ data, saveField }: { data: ShipmentResponse; sav
                     {(st.no === 4 || st.no === 5) && <AfterLoading data={data} />}
                     {st.no === 5 && <MissingForCustoms number={shipment.number} />}
                     {st.no === 6 && <CustomsPack number={shipment.number} />}
+                    {(st.no === 7 || st.no === 8) && <ReleasedDtCheck data={data} />}
 
                     {(st.flags.length > 0 || st.no === 3) && (
                       <div className="space-y-1.5">
@@ -631,6 +632,35 @@ function DocCheck({ data, type, label }: { data: ShipmentResponse; type: string;
         </>
       )}
     </Check>
+  );
+}
+
+/** После выпуска — обязательно ДТ (ГТД) с отметкой о выпуске: файлом, как его выдаёт таможня / брокер. */
+function ReleasedDtCheck({ data }: { data: ShipmentResponse }) {
+  const docs = data.documents.filter((d) => d.type === "customs_declaration");
+  const withFile = docs.filter((d) => d.fileCount > 0);
+  const done = withFile.length > 0;
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-semibold muted">Документы после выпуска</div>
+      <Check done={done}>
+        <span className={done ? "muted line-through" : ""}>Загрузить ДТ (ГТД) с отметкой о выпуске</span>
+        {docs.map((d) => (
+          <Link key={d.id} to={`/documents/${d.id}`} className="text-xs link">
+            № {d.number ?? "б/н"}
+            {d.fileCount ? "" : " — нет файла"}
+          </Link>
+        ))}
+        {!done && (
+          <>
+            <Link to={docs[0] ? `/documents/${docs[0].id}` : `/documents/new?type=customs_declaration&shipment=${data.shipment.number}`} className="btn btn-sm">
+              {docs[0] ? "Прикрепить файл" : "Загрузить"}
+            </Link>
+            <span className="text-xs text-amber-700 dark:text-amber-400">обязательно — PDF выпущенной ДТ</span>
+          </>
+        )}
+      </Check>
+    </div>
   );
 }
 

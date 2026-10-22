@@ -38,7 +38,7 @@ const TYPE_HINTS: Partial<Record<DocType, string>> = {
   contractor_invoice: "счёт / инвойс / Commercial Invoice / debit note перевозчика, экспедитора (Freight Forwarding, Logistics), брокера, СВХ за услуги: перевозка, фрахт, transportation costs",
   railway_bill: "ж/д накладная СМГС",
   bill_of_lading: "морской коносамент B/L",
-  customs_declaration: "декларация на товары (ДТ, ГТД)",
+  customs_declaration: "декларация на товары (ДТ, ГТД): номер вида 10131020/201026/5146061 (графа A), date — из номера (ДДММГГ в середине: 201026 → 2026-10-20), amount — «ИТОГО» таможенных платежей в рублях (графа 47 / B), containerNo — из графы 31 («MOFU6721940»)",
   conformity: "декларация / сертификат соответствия ЕАЭС",
   export_declaration: "экспортная таможенная декларация страны отправления: 中华人民共和国海关出口货物报关单, 出口报关单, 通关无纸化出口放行通知书, Export Declaration",
   certificate_origin: "сертификат происхождения: Certificate of Origin, CCPIT, форма A, СТ-1, 原产地证书 — не путать с conformity (декларация соответствия ЕАЭС)",
