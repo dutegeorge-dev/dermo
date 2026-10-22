@@ -23,6 +23,8 @@ export type EstimateItem = {
   vat10: boolean;
   /** Пошлина «за кг»: вес этого товара, кг (пусто — доля общего веса по стоимости). */
   dutyQty?: number | null;
+  /** Код подобран ИИ — проверить. */
+  hsAuto?: boolean;
 };
 
 export type EstimateExtra = { name: string; amount: number | null };

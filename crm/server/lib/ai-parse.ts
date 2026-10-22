@@ -634,7 +634,7 @@ export const HS_SCHEMA = {
  * начинающиеся с догадки модели (сужаем до ≤ 40); один кандидат — берём его, несколько —
  * одним коротким запросом просим модель выбрать. Подобранное помечается hsAuto — человек проверяет.
  */
-async function suggestHsCodes(tx: DbOrTx, draft: DocumentDraft & { hsGuesses: (string | null)[] }): Promise<AiUsage | null> {
+export async function suggestHsCodes(tx: DbOrTx, draft: { items: { name: string; hsCode: string | null; hsAuto?: boolean }[]; hsGuesses: (string | null)[] }): Promise<AiUsage | null> {
   if (!draft.items.length || (await tnvedCount(tx)) === 0) return null;
   const known = await tnvedByCodes(tx, draft.items.map((i) => i.hsCode ?? ""));
   const ask: { n: number; name: string; options: { code: string; name: string; tariff: string }[] }[] = [];

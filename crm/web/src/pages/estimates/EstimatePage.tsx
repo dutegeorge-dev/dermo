@@ -55,33 +55,27 @@ function BigFigures({ p, res, rates }: { p: EstimateParams; res: EstimateResult;
     return v === null ? "—" : formatMoney(v, "USD");
   };
   const units = estimateUnits(p, res, rates).filter((u) => u.perUnitRub !== null);
-  const tile = (label: string, rubValue: number, hint?: string, accent = false) => (
-    <div className={`rounded-md p-2.5 ${accent ? "bg-blue-600 text-white" : "bg-white dark:bg-neutral-900"}`}>
-      <div className={`text-[11px] font-medium uppercase tracking-wide ${accent ? "text-blue-100" : "muted"}`}>{label}</div>
-      <div className="text-lg font-semibold leading-tight tabular-nums">{rub(rubValue)}</div>
-      <div className={`text-sm font-medium tabular-nums ${accent ? "text-blue-50" : ""}`}>{usd(rubValue)}</div>
-      {hint && <div className={`mt-0.5 text-[10px] leading-tight ${accent ? "text-blue-100" : "muted"}`}>{hint}</div>}
+  // Строкой: слева что, справа рубли крупно и доллары под ними.
+  const row = (key: string, label: string, rubValue: number | null, hint?: string, accent = false) => (
+    <div key={key} className={`flex items-start justify-between gap-3 rounded-md px-3 py-2 ${accent ? "bg-blue-600 text-white" : "bg-white dark:bg-neutral-900"}`}>
+      <div className="min-w-0">
+        <div className={`text-xs font-semibold uppercase tracking-wide ${accent ? "" : "text-slate-600 dark:text-neutral-300"}`}>{label}</div>
+        {hint && <div className={`text-[10px] leading-tight ${accent ? "text-blue-100" : "muted"}`}>{hint}</div>}
+      </div>
+      <div className="shrink-0 text-right">
+        <div className="text-lg font-semibold leading-tight tabular-nums">{rubValue === null ? "—" : rub(rubValue)}</div>
+        <div className={`text-sm font-medium tabular-nums ${accent ? "text-blue-50" : ""}`}>{rubValue === null ? "" : usd(rubValue)}</div>
+      </div>
     </div>
   );
   return (
-    <div className="grid grid-cols-2 gap-2">
-      {tile(p.scheme === "teu" ? "Товар (платит клиент)" : "Товар", res.goodsRub, p.currency === "USD" || p.currency === "RUB" ? undefined : formatMoney(res.goods, p.currency))}
-      {tile("Доставка", res.totalRub - res.goodsRub, "перевозка, таможня, услуги — всё без товара")}
-      {tile("Стоимость партии", res.totalRub, "товар + доставка", true)}
-      {units.length <= 1 ? (
-        tile("Стоимость единицы", units[0]?.perUnitRub ?? 0, units[0] ? `за 1 ${units[0].unit} с доставкой` : "укажите количество")
-      ) : (
-        <div className="rounded-md bg-white p-2.5 dark:bg-neutral-900">
-          <div className="text-[11px] font-medium uppercase tracking-wide muted">Стоимость единицы</div>
-          {units.map((u, i) => (
-            <div key={i} className="mt-1 leading-tight">
-              <div className="truncate text-[10px] muted">{u.name}, за 1 {u.unit}</div>
-              <div className="text-sm font-semibold tabular-nums">{rub(u.perUnitRub)}</div>
-              <div className="text-xs tabular-nums">{usd(u.perUnitRub!)}</div>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="space-y-1.5">
+      {row("goods", p.scheme === "teu" ? "Товар (платит клиент)" : "Товар", res.goodsRub, p.currency === "USD" || p.currency === "RUB" ? undefined : formatMoney(res.goods, p.currency))}
+      {row("delivery", "Доставка", res.totalRub - res.goodsRub, "перевозка, таможня, услуги — всё без товара")}
+      {row("total", "Стоимость партии", res.totalRub, "товар + доставка", true)}
+      {units.length === 0
+        ? row("unit", "Стоимость единицы", null, "укажите количество товара")
+        : units.map((u, i) => row(`unit${i}`, "Стоимость единицы", u.perUnitRub, `за 1 ${u.unit} с доставкой${units.length > 1 ? ` · ${u.name}` : ""}`))}
     </div>
   );
 }
@@ -159,6 +153,21 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p, cbr.data, tariffKey, rate]);
   const res = result && !("error" in result) ? result : null;
+
+  const [hsBusy, setHsBusy] = useState<number | null>(null);
+  const [hsError, setHsError] = useState<{ i: number; text: string } | null>(null);
+  const pickHs = async (i: number) => {
+    setHsBusy(i);
+    setHsError(null);
+    try {
+      const { hsCode } = await api<{ hsCode: string }>("/estimates/hs", { method: "POST", body: { name: [p.items[i].name, p.title].filter(Boolean).join(" — ") } });
+      setP((x) => ({ ...x, items: x.items.map((it, j) => (j === i ? { ...it, hsCode, hsAuto: true } : it)) }));
+    } catch (e) {
+      setHsError({ i, text: errorMessage(e) });
+    } finally {
+      setHsBusy(null);
+    }
+  };
 
   const parse = async () => {
     setAi({ busy: true, error: null, done: false });
@@ -292,7 +301,21 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
                       ) : undefined
                     }
                   >
-                    <input className="input font-mono" value={it.hsCode ?? ""} placeholder="10 цифр" onChange={(e) => setItem(i, { hsCode: e.target.value.replace(/\D/g, "").slice(0, 10) || null })} />
+                    <div className="flex gap-1">
+                      <input
+                        className={`input min-w-0 font-mono ${it.hsAuto ? "border-amber-400 dark:border-amber-600" : ""}`}
+                        value={it.hsCode ?? ""}
+                        placeholder="10 цифр"
+                        onChange={(e) => setItem(i, { hsCode: e.target.value.replace(/\D/g, "").slice(0, 10) || null, hsAuto: false })}
+                      />
+                      {aiEnabled && (
+                        <button type="button" className="btn btn-sm shrink-0 px-2" title="Подобрать код ТН ВЭД по названию (ИИ + справочник)" disabled={hsBusy === i || !it.name.trim()} onClick={() => void pickHs(i)}>
+                          <IconSparkles size={13} />
+                        </button>
+                      )}
+                    </div>
+                    {it.hsAuto && <span className="mt-0.5 block text-[11px] text-amber-700 dark:text-amber-400">подобран ИИ — проверьте</span>}
+                    {hsError?.i === i && <span className="mt-0.5 block text-[11px] text-red-700 dark:text-red-400">{hsError.text}</span>}
                   </Field>
                 </div>
                 {(() => {
@@ -474,8 +497,7 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
             {result && "error" in result && <p className="text-sm text-red-700 dark:text-red-400">{result.error}</p>}
             {res && (
               <>
-                <BigFigures p={p} res={res} rates={{ RUB: 1, ...cbr.data!.rates }} />
-                <div className="mt-3 text-[11px] font-medium uppercase tracking-wide muted">Из чего складывается, ₽</div>
+                <div className="text-[11px] font-medium uppercase tracking-wide muted">Смета, ₽</div>
                 <table className="mt-1 w-full text-xs">
                   <tbody className="divide-y divide-slate-200 dark:divide-neutral-800">
                     {(
@@ -505,6 +527,9 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
                       ))}
                   </tbody>
                 </table>
+                <div className="mt-3">
+                  <BigFigures p={p} res={res} rates={{ RUB: 1, ...cbr.data!.rates }} />
+                </div>
                 <div className="mt-2 text-[11px] muted">
                   {[
                     p.weightKg && `вес ${p.weightKg.toLocaleString("ru-RU")} кг`,

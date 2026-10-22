@@ -8,7 +8,7 @@ import { db } from "../db/client.ts";
 import { estimates, users } from "../db/schema.ts";
 import { aiEnabled } from "../lib/ai.ts";
 import { audit } from "../lib/audit.ts";
-import { estimateKpData, estimateParams, parseEstimateRequest, serverEstimate } from "../lib/estimates.ts";
+import { estimateKpData, estimateParams, parseEstimateRequest, serverEstimate, suggestEstimateHs } from "../lib/estimates.ts";
 import { body, currentUser, HttpError, intParam } from "../lib/http.ts";
 import { renderQuoteKp } from "../lib/quotes.ts";
 import { cbrRates } from "../lib/rates.ts";
@@ -62,9 +62,18 @@ export async function estimateRoutes(app: FastifyInstance): Promise<void> {
   /** Текст заявки → поля расчёта (ИИ). */
   app.post("/estimates/parse", async (request) => {
     if (!aiEnabled()) throw new HttpError(503, "ИИ не подключён");
-    const { params, usage } = await parseEstimateRequest(String(body<{ text?: string }>(request).text ?? ""));
+    const { params, usage } = await parseEstimateRequest(db, String(body<{ text?: string }>(request).text ?? ""));
     request.log.info({ ai: "estimate-request", model: config.ai.model, usage }, "ИИ: заявка на расчёт");
     return { params };
+  });
+
+  /** Подобрать код ТН ВЭД по названию товара (ИИ + справочник). */
+  app.post("/estimates/hs", async (request) => {
+    if (!aiEnabled()) throw new HttpError(503, "ИИ не подключён");
+    const { hsCode, usage } = await suggestEstimateHs(db, String(body<{ name?: string }>(request).name ?? ""));
+    request.log.info({ ai: "estimate-hs", model: config.ai.model, usage }, "ИИ: код ТН ВЭД");
+    if (!hsCode) throw new HttpError(422, "Не удалось подобрать код — впишите вручную");
+    return { hsCode };
   });
 
   app.post("/estimates", async (request) => {

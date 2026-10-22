@@ -8,7 +8,8 @@ import { computeEstimate, DEFAULT_ESTIMATE, type EstimateParams, type EstimateRe
 import { FREIGHT_TRANSPORTS, type FreightRate } from "../../shared/quote.ts";
 import type { DbOrTx } from "../db/client.ts";
 import { freightRates } from "../db/schema.ts";
-import { aiBase, aiClient, aiError, type AiUsage, usageOf } from "./ai.ts";
+import { addUsage, aiBase, aiClient, aiError, type AiUsage, usageOf } from "./ai.ts";
+import { suggestHsCodes } from "./ai-parse.ts";
 import { HttpError } from "./http.ts";
 import { freightDto } from "./quotes.ts";
 import { tnvedByCodes } from "./tnved.ts";
@@ -36,7 +37,7 @@ export function estimateParams(input: unknown): EstimateParams {
     .slice(0, 100)
     .map((raw) => {
       const i = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-      return { name: str(i.name, 500), hsCode: hs(i.hsCode), quantity: num(i.quantity), unit: str(i.unit, 30) || "шт", amount: num(i.amount), vat10: i.vat10 === true, dutyQty: num(i.dutyQty) };
+      return { name: str(i.name, 500), hsCode: hs(i.hsCode), quantity: num(i.quantity), unit: str(i.unit, 30) || "шт", amount: num(i.amount), vat10: i.vat10 === true, dutyQty: num(i.dutyQty), hsAuto: i.hsAuto === true };
     })
     .filter((i) => i.name || i.amount);
   const extras = (Array.isArray(p.extras) ? p.extras : [])
@@ -157,8 +158,8 @@ export const ESTIMATE_REQUEST_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "hsCode", "quantity", "unit", "amount"],
-        properties: { name: STR, hsCode: STR, quantity: NUM, unit: STR, amount: NUM },
+        required: ["name", "hsCode", "hsGuess", "quantity", "unit", "amount"],
+        properties: { name: STR, hsCode: STR, hsGuess: STR, quantity: NUM, unit: STR, amount: NUM },
       },
     },
     currency: STR,
@@ -177,7 +178,7 @@ export const ESTIMATE_REQUEST_SCHEMA = {
 const REQUEST_PROMPT = `Ты переписываешь заявку клиента на доставку и растаможку товара из Китая в поля расчёта CRM компании ООО «ТЛК БАРС». Только то, что написано в заявке, ничего не придумывай; нет значения — пустая строка (у чисел — null).
 - title — короткое название груза по-русски («Рекламный призматрон Tri-Vision»).
 - clientName — клиент, если назван; supplier — производитель / продавец («SHENZHEN DEMO TECH CO., LTD.»).
-- items — товары по одному: name — коротко по-русски, hsCode — код ТН ВЭД, если указан (только цифры), quantity и unit (шт, м², кг, компл.), amount — стоимость строки в валюте заявки. Одна общая стоимость партии на один товар — его amount; если количество не указано, а товар один — quantity 1, unit «шт».
+- items — товары по одному: name — коротко по-русски, hsCode — код ТН ВЭД, если указан в заявке (только цифры); hsGuess — твой код ТН ВЭД ЕАЭС для этого товара как можно точнее (минимум 4 цифры, лучше 10), даже если в заявке код есть; quantity и unit (шт, м², кг, компл.), amount — стоимость строки в валюте заявки. Одна общая стоимость партии на один товар — его amount; если количество не указано, а товар один — quantity 1, unit «шт».
 - currency — валюта стоимости (USD, CNY, EUR, RUB).
 - incoterms — условия поставки кратко («EXW Dongguan»).
 - pickup — место забора («Dongguan, Guangdong, Китай»), destination — пункт назначения («Москва»).
@@ -185,7 +186,7 @@ const REQUEST_PROMPT = `Ты переписываешь заявку клиен�
 - deliveryTerm — желаемый срок, если есть.
 - notes — важные оговорки одной-двумя строками по-русски (что уточнить, что проверить: код ТН ВЭД «проверить», адрес уточнят, перевозится разобранным…).`;
 
-export async function parseEstimateRequest(text: string): Promise<{ params: Partial<EstimateParams>; usage: AiUsage }> {
+export async function parseEstimateRequest(tx: DbOrTx, text: string): Promise<{ params: Partial<EstimateParams>; usage: AiUsage }> {
   if (!text.trim()) throw new HttpError(400, "Вставьте текст заявки");
   let response: Anthropic.Beta.BetaMessage;
   try {
@@ -211,7 +212,42 @@ export async function parseEstimateRequest(text: string): Promise<{ params: Part
   const out: Partial<EstimateParams> = {};
   for (const k of ["title", "clientName", "supplier", "incoterms", "pickup", "destination", "packaging", "deliveryTerm", "notes"] as const) if (parsed[k]) out[k] = parsed[k];
   for (const k of ["places", "weightKg", "volumeM3"] as const) if (parsed[k] !== null) out[k] = parsed[k];
-  if (parsed.items.length) out.items = parsed.items;
+  let usage = usageOf(response);
+  if (parsed.items.length) {
+    // Код ТН ВЭД: указанный в заявке (если он есть в справочнике), иначе подбираем сами — как в документах.
+    const rawItems = (Array.isArray(raw.items) ? raw.items : []).filter((i: { name?: string; amount?: unknown }) => i && (i.name || i.amount));
+    const hsGuesses = rawItems.map((i: { hsGuess?: unknown }) => (typeof i.hsGuess === "string" ? i.hsGuess.replace(/\D/g, "") || null : null));
+    const extra = await suggestHsCodes(tx, { items: parsed.items, hsGuesses });
+    if (extra) usage = addUsage(usage, extra);
+    out.items = parsed.items;
+  }
   if (typeof raw.currency === "string" && (CURRENCIES as readonly string[]).includes(raw.currency.toUpperCase())) out.currency = parsed.currency;
-  return { params: out, usage: usageOf(response) };
+  return { params: out, usage };
+}
+
+/** «Подобрать» у товара: название → код ТН ВЭД (догадка модели → кандидаты справочника → выбор). */
+export async function suggestEstimateHs(tx: DbOrTx, name: string): Promise<{ hsCode: string | null; usage: AiUsage | null }> {
+  if (!name.trim()) throw new HttpError(400, "Впишите название товара");
+  let response: Anthropic.Beta.BetaMessage;
+  try {
+    response = await aiClient().beta.messages.create({
+      ...aiBase(),
+      max_tokens: 300,
+      thinking: { type: "disabled" },
+      output_config: { effort: "low", format: { type: "json_schema", schema: { type: "object", additionalProperties: false, required: ["hsGuess"], properties: { hsGuess: STR } } } },
+      system: "Ты таможенный декларант ЕАЭС. Назови код ТН ВЭД ЕАЭС для товара как можно точнее (10 цифр, минимум 4).",
+      messages: [{ role: "user", content: name.slice(0, 1000) }],
+    });
+  } catch (error) {
+    throw aiError(error);
+  }
+  let guess: string | null = null;
+  try {
+    guess = String(JSON.parse(response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("")).hsGuess ?? "").replace(/\D/g, "") || null;
+  } catch {
+    // без догадки — кода нет
+  }
+  const item: { name: string; hsCode: string | null; hsAuto?: boolean } = { name, hsCode: null };
+  const extra = await suggestHsCodes(tx, { items: [item], hsGuesses: [guess] });
+  return { hsCode: item.hsCode, usage: extra ? addUsage(usageOf(response), extra) : usageOf(response) };
 }

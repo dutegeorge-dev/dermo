@@ -375,7 +375,7 @@ sudo systemctl start bars-crm
 | `GET /shipments?status=active\|closed\|cancelled\|all&stage=&assignee=me&clientId=&q=`, `POST /shipments` | Сделки (доска и список) |
 | `GET/PATCH/DELETE /shipments/:number` | Карточка: поля, документы, план/факт, товары, сертификаты на товары, подрядчики, история |
 | `PUT /shipments/:number/milestones/:key` `{plan?, fact?, shift?}`, `PUT /shipments/:number/flags/:key` `{done, date?}` | Ключевые даты (со сдвигом следующих) и флажки (галочки оплат меняют оплату документов, `date` — дата оплаты) |
-| `GET/POST /estimates`, `GET/PUT/DELETE /estimates/:id`, `POST /estimates/parse` `{text}`, `GET /estimates/:id/kp.docx` | Раздел «Расчёт»: расчёты по заявкам (пересчёт на сервере по переданным курсам), ИИ-разбор текста заявки, КП в Word |
+| `GET/POST /estimates`, `GET/PUT/DELETE /estimates/:id`, `POST /estimates/parse` `{text}`, `POST /estimates/hs` `{name}`, `GET /estimates/:id/kp.docx` | Раздел «Расчёт»: расчёты по заявкам (пересчёт на сервере по переданным курсам), ИИ-разбор текста заявки (с подбором кода ТН ВЭД), подбор кода по названию, КП в Word |
 | `POST /payments` `{shipment?, counterpartyId?, number?, date, amount, currency, note?, allocations: [{documentId, amount}]}`, `DELETE /payments/:id`, `POST /payments/:id/files` | Оплата на несколько счетов: статусы оплаты счетов и галочки сделок — из разнесения. В карточке сделки — `payments`, `paymentNotes` (пояснение для таможни) |
 | `POST /shipments/:number/flags/:key/proof` (multipart `file`) | Платёжка к галочке оплаты — файл `payment` к последнему инвойсу / счёту / ДТ этой оплаты |
 | `POST /shipments/:number/stage` `{stage}`, `POST /shipments/:number/status` `{status}` | Перенос на доске; закрыть / отменить / вернуть |
