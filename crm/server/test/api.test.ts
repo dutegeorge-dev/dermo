@@ -1234,6 +1234,23 @@ describe("Товары: варианты, объединение; ставки �
 });
 
 describe("Раздел «Расчёт»: заявка клиента на его товар", () => {
+  test("единица пошлины закреплена за кодом ТН ВЭД: пары, м², кг", async () => {
+    const { calcCustoms, dutyUnit, unitMatches } = await import("../../shared/customs.ts");
+    const rates = { RUB: 1, USD: 80, EUR: 90 };
+    const item = (tariff: string, quantity: number, unit: string, amount = 1000) => ({ productId: null, name: "Т", hsCode: "0000000000", tariff, vat10: false, quantity, unit, amount });
+    const duty = (it: ReturnType<typeof item>, weightKg: number | null = null) => calcCustoms({ items: [it], goodsCurrency: "USD", transportAmount: null, transportCurrency: "RUB", weightKg, rates });
+    assert.equal(dutyUnit("1.5 EUR за 1 пар"), "пар");
+    assert.equal(dutyUnit("10%"), null);
+    assert.ok(unitMatches("м2", "кв.м") && unitMatches("м2", "м²") && unitMatches("пар", "пары") && !unitMatches("м2", "рул."));
+    assert.equal(duty(item("1.5 EUR за 1 пар", 100, "пары")).duty, 13500, "обувь: 100 пар × 1,5 € × 90");
+    assert.equal(duty(item("0.2 EUR за 1 м2", 500, "кв.м")).duty, 9000, "ковролин: 500 м² × 0,2 € × 90");
+    const roll = duty(item("0.2 EUR за 1 м2", 10, "рул."));
+    assert.equal(roll.duty, 0);
+    assert.match(roll.warnings.join(), /пошлина за м² — укажите количество в м²/);
+    assert.equal(duty(item("6.5%, но не менее 0.096 EUR за 1 кг", 1000, "кг", 100)).duty, 8640, "за кг — вес из позиции в кг");
+    assert.equal(duty(item("6.5%, но не менее 0.096 EUR за 1 кг", 3, "шт", 100), 500).duty, 4320, "иначе — общий вес");
+  });
+
   test("комиссия: 4 % на товар + перевозку; ТЭУ: 4 % на фрахт и +6 % от общей суммы; КП", async () => {
     const s = await adminSession();
     // USD = 80 ₽ (CRM_RATES_FIXED). Товар 1000 $, перевозка 500 $, кода ТН ВЭД нет — пошлина 0, НДС 22 %.

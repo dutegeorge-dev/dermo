@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useId } from "react";
 
+import { dutyUnit, dutyUnitLabel, isWeightUnit, unitMatches } from "../../../../shared/customs.ts";
 import { formatMoney } from "../../../../shared/documents.ts";
 import { api } from "../../lib/api.ts";
 import type { DocItem, ProductRow } from "../../lib/types.ts";
@@ -60,6 +61,13 @@ function HsCell({ item, productHs, onChange }: { item: DocItem; productHs: strin
         {item.hsAuto && <span className="mr-1 text-amber-700 dark:text-amber-400">ИИ, проверьте ·</span>}
         {tariff === null ? (item.hsCode ? "нужно 10 цифр" : "") : tariff === undefined ? "…" : tariff.tariff || <span className="text-amber-700 dark:text-amber-400">нет в справочнике</span>}
       </div>
+      {(() => {
+        // Пошлина за пару / м² / шт / л — количество позиции должно быть в этой единице.
+        const du = tariff ? dutyUnit(tariff.tariff) : null;
+        return du && !isWeightUnit(du) && !unitMatches(du, item.unit) ? (
+          <div className="mt-0.5 text-[10px] leading-tight text-amber-700 dark:text-amber-400">пошлина за 1 {dutyUnitLabel(du)} — количество в {dutyUnitLabel(du)}</div>
+        ) : null;
+      })()}
       {productHs && productHs !== item.hsCode && (
         <button type="button" className="mt-0.5 block text-left text-[10px] leading-tight text-amber-700 hover:underline dark:text-amber-400" onClick={() => onChange(productHs)}>
           у товара {productHs} — взять

@@ -7,7 +7,7 @@
  * Комиссия компании — как везде, задаётся суммой; по ТЭУ 6 % начисляются и на неё.
  */
 
-import { calcCustoms, type CustomsResult } from "./customs.ts";
+import { calcCustoms, type CustomsResult, dutyUnit, isWeightUnit } from "./customs.ts";
 import { CONTAINERS, type ContainerType, FREIGHT_TRANSPORTS, type FreightRate } from "./quote.ts";
 
 export const ESTIMATE_SCHEMES = { commission: "Договор комиссии", teu: "Договор ТЭУ" } as const;
@@ -21,6 +21,8 @@ export type EstimateItem = {
   /** Стоимость строки в валюте товара. */
   amount: number | null;
   vat10: boolean;
+  /** Пошлина «за кг»: вес этого товара, кг (пусто — доля общего веса по стоимости). */
+  dutyQty?: number | null;
 };
 
 export type EstimateExtra = { name: string; amount: number | null };
@@ -63,7 +65,7 @@ export type EstimateParams = {
   notes: string;
 };
 
-export const emptyEstimateItem = (): EstimateItem => ({ name: "", hsCode: null, quantity: null, unit: "шт", amount: null, vat10: false });
+export const emptyEstimateItem = (): EstimateItem => ({ name: "", hsCode: null, quantity: null, unit: "шт", amount: null, vat10: false, dutyQty: null });
 
 export const DEFAULT_ESTIMATE: EstimateParams = {
   title: "",
@@ -172,7 +174,12 @@ export function computeEstimate(p: EstimateParams, ctx: { rates: Record<string, 
   transportLabel ||= [p.pickup, p.destination].filter(Boolean).length ? `Перевозка ${[p.pickup, p.destination].filter(Boolean).join(" — ")}` : "Перевозка";
 
   const customs = calcCustoms({
-    items: items.map((i) => ({ productId: null, name: i.name || "Товар", hsCode: i.hsCode, tariff: i.hsCode ? (ctx.tariffs[i.hsCode] ?? null) : null, vat10: i.vat10, quantity: i.quantity, unit: i.unit, amount: i.amount ?? 0 })),
+    items: items.map((i) => {
+      const tariff = i.hsCode ? (ctx.tariffs[i.hsCode] ?? null) : null;
+      // Единица пошлины закреплена за кодом: м², пары, шт — количество позиции; кг — вес позиции, если задан.
+      const weightQty = isWeightUnit(dutyUnit(tariff)) && i.dutyQty ? (dutyUnit(tariff) === "т" ? i.dutyQty / 1000 : i.dutyQty) : null;
+      return { productId: null, name: i.name || "Товар", hsCode: i.hsCode, tariff, vat10: i.vat10, quantity: i.quantity, unit: i.unit, amount: i.amount ?? 0, dutyQuantity: weightQty };
+    }),
     goodsCurrency: p.currency,
     transportAmount: transportRub || null,
     transportCurrency: "RUB",

@@ -5,9 +5,10 @@
  */
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
+import { dutyUnit, dutyUnitLabel, isWeightUnit, unitMatches } from "../../../../shared/customs.ts";
 import { CURRENCIES, formatMoney } from "../../../../shared/documents.ts";
 import { computeEstimate, DEFAULT_ESTIMATE, emptyEstimateItem, type EstimateItem, type EstimateParams, ESTIMATE_SCHEMES, type EstimateScheme } from "../../../../shared/estimate.ts";
 import { formatDay } from "../../components/docs/common.tsx";
@@ -97,6 +98,17 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
     }
   });
   const tariffKey = JSON.stringify(tariffs);
+  /** Единица пошлины по коду ТН ВЭД («за 1 пар» → пар); undefined — ставка ещё не загружена. */
+  const unitOf = (it: EstimateItem) => (it.hsCode && tariffs[it.hsCode] !== undefined ? dutyUnit(tariffs[it.hsCode]) : null);
+  // Пошлина за пару / м² / шт / л — единица товара закрепляется за кодом.
+  useEffect(() => {
+    const fixed = p.items.map((it) => {
+      const du = unitOf(it);
+      return du && !isWeightUnit(du) && !unitMatches(du, it.unit) ? { ...it, unit: dutyUnitLabel(du) } : it;
+    });
+    if (fixed.some((it, i) => it !== p.items[i])) set({ items: fixed });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tariffKey, p.items.map((i) => i.hsCode).join()]);
 
   const rate = freight.data?.rates.find((r) => r.id === p.freightRateId) ?? null;
   const result = useMemo(() => {
@@ -245,20 +257,43 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
                     <input className="input font-mono" value={it.hsCode ?? ""} placeholder="10 цифр" onChange={(e) => setItem(i, { hsCode: e.target.value.replace(/\D/g, "").slice(0, 10) || null })} />
                   </Field>
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <Field label="Количество">
-                    <NumInput value={it.quantity} onChange={(v) => setItem(i, { quantity: v })} />
-                  </Field>
-                  <Field label="Ед.">
-                    <input className="input" value={it.unit} onChange={(e) => setItem(i, { unit: e.target.value })} />
-                  </Field>
+                {(() => {
+                  const du = unitOf(it);
+                  const locked = !!du && !isWeightUnit(du);
+                  const share = p.weightKg && goods && it.amount ? Math.round((p.weightKg * it.amount) / goods) : null;
+                  return (
+                    <>
+                      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <Field label={locked ? `Количество, ${dutyUnitLabel(du!)}` : "Количество"}>
+                          <NumInput value={it.quantity} onChange={(v) => setItem(i, { quantity: v })} />
+                        </Field>
+                        <Field label="Ед." hint={locked ? "по ТН ВЭД" : undefined}>
+                          <input
+                            className="input"
+                            value={it.unit}
+                            disabled={locked}
+                            title={locked ? `Пошлина по этому коду — за 1 ${dutyUnitLabel(du!)}, количество — в ${dutyUnitLabel(du!)}` : undefined}
+                            onChange={(e) => setItem(i, { unit: e.target.value })}
+                          />
+                        </Field>
                   <Field label={`Стоимость, ${p.currency}`}>
                     <NumInput value={it.amount} onChange={(v) => setItem(i, { amount: v })} />
                   </Field>
-                  <label className="flex items-end gap-1.5 pb-2 text-xs">
-                    <input type="checkbox" checked={it.vat10} onChange={(e) => setItem(i, { vat10: e.target.checked })} /> НДС 10%
-                  </label>
-                </div>
+                        <label className="flex items-end gap-1.5 pb-2 text-xs">
+                          <input type="checkbox" checked={it.vat10} onChange={(e) => setItem(i, { vat10: e.target.checked })} /> НДС 10%
+                        </label>
+                      </div>
+                      {locked && <p className="mt-1 text-[11px] muted">Пошлина по этому коду — за 1 {dutyUnitLabel(du!)}: количество указывайте в {dutyUnitLabel(du!)}.</p>}
+                      {du && isWeightUnit(du) && (
+                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <Field wide label="Вес товара для пошлины, кг" hint={`пошлина за 1 ${dutyUnitLabel(du)}${it.dutyQty ? "" : share ? ` · пусто — ${share.toLocaleString("ru-RU")} кг (доля общего веса)` : " · пусто — доля общего веса"}`}>
+                            <NumInput value={it.dutyQty ?? null} onChange={(v) => setItem(i, { dutyQty: v })} placeholder={share ? String(share) : undefined} />
+                          </Field>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             ))}
             <div className="flex flex-wrap items-center gap-3">

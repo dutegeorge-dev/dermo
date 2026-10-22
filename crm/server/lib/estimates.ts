@@ -36,7 +36,7 @@ export function estimateParams(input: unknown): EstimateParams {
     .slice(0, 100)
     .map((raw) => {
       const i = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-      return { name: str(i.name, 500), hsCode: hs(i.hsCode), quantity: num(i.quantity), unit: str(i.unit, 30) || "шт", amount: num(i.amount), vat10: i.vat10 === true };
+      return { name: str(i.name, 500), hsCode: hs(i.hsCode), quantity: num(i.quantity), unit: str(i.unit, 30) || "шт", amount: num(i.amount), vat10: i.vat10 === true, dutyQty: num(i.dutyQty) };
     })
     .filter((i) => i.name || i.amount);
   const extras = (Array.isArray(p.extras) ? p.extras : [])

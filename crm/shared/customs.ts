@@ -108,6 +108,8 @@ export type CalcItem = {
   unit: string | null;
   /** Сумма строки в валюте товара. */
   amount: number;
+  /** Количество в единице ставки пошлины (вес для «за кг»), если задано отдельно. */
+  dutyQuantity?: number | null;
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -120,16 +122,46 @@ export function toRub(amount: number | null | undefined, currency: string, rates
   return amount * r;
 }
 
-/** Количество в единице специфической ставки: кг — доля веса сделки; м², шт, пар, л — из позиции. */
+/**
+ * Единицы специфической ставки (как в тарифе: «за 1 пар», «за 1 м2», «за 1 кг»…) и как их пишут в позициях.
+ * Количество товара для пошлины должно быть именно в этой единице — её закрепляем за кодом ТН ВЭД.
+ */
+export const DUTY_UNITS: Record<string, { label: string; re: RegExp }> = {
+  кг: { label: "кг", re: /^(кг|kg|kgs|килограмм\S*)$/ },
+  т: { label: "т", re: /^(т|тн|тонн\S*|t)$/ },
+  м2: { label: "м²", re: /^(м2|м²|квм|мкв|кв|sqm|m2|sqm2)$/ },
+  м3: { label: "м³", re: /^(м3|м³|кубм|куб|cbm|m3)$/ },
+  шт: { label: "шт", re: /^(шт|штук\S*|pcs|pc|ед|единиц\S*)$/ },
+  пар: { label: "пар", re: /^(пар|пара|пары|pairs?|prs)$/ },
+  л: { label: "л", re: /^(л|литр\S*|l|ltr)$/ },
+  см3: { label: "см³", re: /^(см3|см³|мл|ml|cc)$/ },
+};
+
+const normUnit = (unit: string | null | undefined) => (unit ?? "").toLowerCase().replace(/[\s.]/g, "");
+
+/** Единица, в которой по коду ТН ВЭД считается пошлина (специфическая часть ставки); null — пошлина только в %. */
+export function dutyUnit(tariff: string | null | undefined): string | null {
+  return parseTariff(tariff)?.specific?.unit ?? null;
+}
+
+/** «м2» → «м²» — как писать единицу в позиции. */
+export const dutyUnitLabel = (unit: string) => DUTY_UNITS[unit]?.label ?? unit;
+
+/** Единица позиции совпадает с единицей ставки? */
+export function unitMatches(unit: string, itemUnit: string | null | undefined): boolean {
+  const spec = DUTY_UNITS[unit];
+  return !!spec && spec.re.test(normUnit(itemUnit));
+}
+
+/** По весу считается (кг, т) — количество берётся из веса, а не из позиции. */
+export const isWeightUnit = (unit: string | null) => unit === "кг" || unit === "т";
+
+/** Количество в единице специфической ставки: кг — вес позиции (или доля веса сделки); м², шт, пар, л — из позиции. */
 function quantityIn(unit: string, item: CalcItem, weightShare: number | null): number | null {
-  const u = (item.unit ?? "").toLowerCase().replace(/\s|\./g, "");
-  if (unit === "кг") return weightShare;
-  if (unit === "т") return weightShare === null ? null : weightShare / 1000;
-  if (unit === "м2") return /^(м2|м²|кв\.?м|sqm|m2)$/.test(u) ? item.quantity : null;
-  if (unit === "шт") return /^(шт|pcs|pc)$/.test(u) ? item.quantity : null;
-  if (unit === "пар") return /^(пар|пара|pairs?)$/.test(u) ? item.quantity : null;
-  if (unit === "л") return /^(л|l)$/.test(u) ? item.quantity : null;
-  return null;
+  if (item.dutyQuantity !== undefined && item.dutyQuantity !== null) return item.dutyQuantity;
+  if (unit === "кг") return unitMatches("кг", item.unit) && item.quantity ? item.quantity : unitMatches("т", item.unit) && item.quantity ? item.quantity * 1000 : weightShare;
+  if (unit === "т") return unitMatches("т", item.unit) && item.quantity ? item.quantity : unitMatches("кг", item.unit) && item.quantity ? item.quantity / 1000 : weightShare === null ? null : weightShare / 1000;
+  return unitMatches(unit, item.unit) ? item.quantity : null;
 }
 
 export function calcCustoms(input: {
@@ -160,7 +192,7 @@ export function calcCustoms(input: {
       if (tariff.specific) {
         const qty = quantityIn(tariff.specific.unit, item, input.weightKg ? input.weightKg * share : null);
         if (qty === null) {
-          note = tariff.specific.unit === "кг" ? "нет веса сделки — специфическая часть не посчитана" : `нужно количество в «${tariff.specific.unit}» — специфическая часть не посчитана`;
+          note = isWeightUnit(tariff.specific.unit) ? "нет веса — специфическая часть не посчитана" : `пошлина за ${dutyUnitLabel(tariff.specific.unit)} — укажите количество в ${dutyUnitLabel(tariff.specific.unit)}, специфическая часть не посчитана`;
         } else {
           spec = (qty / tariff.specific.per) * tariff.specific.amount * (rates[tariff.specific.currency] ?? 0);
         }
