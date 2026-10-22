@@ -10,6 +10,7 @@ import { AiChat } from "./AiChat.tsx";
 import { GlobalSearch } from "./GlobalSearch.tsx";
 import {
   IconBoard,
+  IconCalculator,
   IconBook,
   IconBox,
   IconContainer,
@@ -87,6 +88,9 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         </NavItem>
         <NavItem to="/deals" icon={<IconBoard />}>
           Воронка продаж
+        </NavItem>
+        <NavItem to="/estimates" icon={<IconCalculator />}>
+          Расчёт
         </NavItem>
         <NavItem to="/clients" icon={<IconBuilding />}>
           Клиенты

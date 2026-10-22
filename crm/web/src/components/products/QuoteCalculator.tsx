@@ -54,7 +54,7 @@ const parseNum = (s: string) => {
 };
 
 /** Числовое поле, которое не «съедает» запятую и ноль при вводе. */
-function NumInput({ value, onChange, placeholder, className = "input" }: { value: number | null; onChange: (v: number | null) => void; placeholder?: string; className?: string }) {
+export function NumInput({ value, onChange, placeholder, className = "input" }: { value: number | null; onChange: (v: number | null) => void; placeholder?: string; className?: string }) {
   const [text, setText] = useState(value === null ? "" : String(value));
   useEffect(() => {
     if (parseNum(text) !== value) setText(value === null ? "" : String(value));

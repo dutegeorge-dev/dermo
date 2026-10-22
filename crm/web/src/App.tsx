@@ -19,6 +19,8 @@ import { ProductPage, ProductsPage } from "./pages/crm/ProductsPage.tsx";
 import { FactoriesPage } from "./pages/factories/FactoriesPage.tsx";
 import { FactoryPage } from "./pages/factories/FactoryPage.tsx";
 import { FreightRatesPage } from "./pages/factories/FreightRatesPage.tsx";
+import { EstimatePage } from "./pages/estimates/EstimatePage.tsx";
+import { EstimatesPage } from "./pages/estimates/EstimatesPage.tsx";
 import { DocumentEditor } from "./pages/docs/DocumentEditor.tsx";
 import { DocumentPage } from "./pages/docs/DocumentPage.tsx";
 import { DocumentsPage } from "./pages/docs/DocumentsPage.tsx";
@@ -84,6 +86,8 @@ const router = createBrowserRouter(
             { path: "factories/new", element: <FactoryPage key="new" /> },
             { path: "factories/:id", element: <FactoryPage /> },
             { path: "freight-rates", element: <FreightRatesPage /> },
+            { path: "estimates", element: <EstimatesPage /> },
+            { path: "estimates/:id", element: <EstimatePage /> },
             { path: "products", element: <ProductsPage /> },
             { path: "products/:id", element: <ProductPage /> },
             { path: "profile", element: <ProfilePage /> },

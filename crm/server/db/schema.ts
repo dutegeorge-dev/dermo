@@ -35,6 +35,7 @@ import {
 
 import type { SpecParams } from "../../shared/cargo.ts";
 import type { ShipmentCalc } from "../../shared/customs.ts";
+import type { EstimateParams, EstimateResult } from "../../shared/estimate.ts";
 import type { FactoryProfile } from "../../shared/factories.ts";
 import type { FreightRate, QuoteParams, QuoteResult } from "../../shared/quote.ts";
 
@@ -793,5 +794,30 @@ export const paymentAllocations = pgTable(
     amount: numeric("amount", { precision: 16, scale: 2 }).notNull(),
   },
   (t) => [index("payment_allocations_payment_idx").on(t.paymentId), index("payment_allocations_document_idx").on(t.documentId)],
+);
+
+/**
+ * Раздел «Расчёт»: заявка клиента на его товар → стоимость с доставкой и растаможкой → КП (shared/estimate.ts).
+ * С товарами справочника и сделками не связан (решение владельца: «только расчёт и КП»).
+ */
+export const estimates = pgTable(
+  "estimates",
+  {
+    id: serial("id").primaryKey(),
+    title: text("title").notNull().default(""),
+    clientName: text("client_name").notNull().default(""),
+    scheme: text("scheme").notNull().default("commission"),
+    /** Текст заявки, как прислали. */
+    request: text("request").notNull().default(""),
+    params: jsonb("params").$type<EstimateParams>().notNull(),
+    result: jsonb("result").$type<EstimateResult>().notNull(),
+    freight: jsonb("freight").$type<FreightRate | null>(),
+    ratesDate: date("rates_date"),
+    rates: jsonb("rates").$type<Record<string, number>>().notNull(),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("estimates_created_idx").on(t.createdAt)],
 );
 

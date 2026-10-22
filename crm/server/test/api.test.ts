@@ -1233,6 +1233,47 @@ describe("Товары: варианты, объединение; ставки �
   });
 });
 
+describe("Раздел «Расчёт»: заявка клиента на его товар", () => {
+  test("комиссия: 4 % на товар + перевозку; ТЭУ: 4 % на фрахт и +6 % от общей суммы; КП", async () => {
+    const s = await adminSession();
+    // USD = 80 ₽ (CRM_RATES_FIXED). Товар 1000 $, перевозка 500 $, кода ТН ВЭД нет — пошлина 0, НДС 22 %.
+    const params = {
+      title: "Демо-стенд", clientName: "ООО «Демо»", scheme: "commission", currency: "USD",
+      items: [{ name: "Стенд", hsCode: null, quantity: 1, unit: "шт", amount: 1000 }],
+      pickup: "Dongguan", destination: "Москва", weightKg: 400, volumeM3: 2.67, places: 1,
+      transportMode: "manual", transportAmount: 500, transportCurrency: "USD", transportLabel: "Авто перевозка Dongguan — Москва",
+      fxPercent: 4, teuPercent: 6, broker: 20000, commission: 10000,
+    };
+    let res = await call(s, "POST", "/estimates", { params });
+    assert.equal(res.statusCode, 200, res.body);
+    const id = res.json().id as number;
+    let r = res.json().result;
+    assert.equal(r.fxRub, 4800, "4 % от (80 000 + 40 000)");
+    assert.equal(r.customs.vat, 22000, "НДС 22 % от (товар + ½ перевозки)");
+    assert.deepEqual([r.subtotal, r.teuRub, r.totalRub], [166800, 0, 176800]);
+
+    res = await call(s, "PUT", `/estimates/${id}`, { params: { ...params, scheme: "teu" } });
+    assert.equal(res.statusCode, 200, res.body);
+    r = res.json().result;
+    assert.equal(r.fxRub, 1600, "по ТЭУ — 4 % только от фрахта");
+    assert.deepEqual([r.subtotal, r.teuRub, r.totalRub], [163600, 9816, 183416], "6 % от общей суммы, комиссия компании — сверху");
+
+    const list = (await call(s, "GET", "/estimates")).json().estimates;
+    assert.equal(list.find((e: { id: number }) => e.id === id).totalRub, 183416);
+    const kp = await app.inject({ method: "GET", url: `${API}/estimates/${id}/kp.docx`, headers: { cookie: s.cookie } });
+    assert.equal(kp.statusCode, 200);
+    const { docxText } = await import("../lib/file-text.ts");
+    const text = await docxText(kp.rawPayload);
+    assert.match(text, /Демо-стенд/);
+    assert.match(text, /Dongguan — Москва/);
+    assert.match(text, /оплачивается клиентом поставщику/);
+    assert.match(text, /Транспортно-экспедиционное обслуживание 6%\t9\s816 руб\./);
+    assert.match(text, /183\s416 руб\./);
+    assert.doesNotMatch(text, /\{\{/);
+    assert.equal((await call(s, "DELETE", `/estimates/${id}`)).statusCode, 200);
+  });
+});
+
 describe("Клиент ↔ договор комиссии", () => {
   test("реквизиты: цифры чистятся, ИП определяется кодом", async () => {
     const { requisitesValues } = await import("../lib/requisites.ts");
