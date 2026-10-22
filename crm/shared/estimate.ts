@@ -241,3 +241,50 @@ export function estimateKpLines(p: EstimateParams, q: EstimateResult): { name: s
   if (q.lastMile) lines.push({ name: "*Доставка до склада клиента", amount: q.lastMile, approx: true });
   return lines;
 }
+
+/** Рубли → доллары (или другая валюта) по курсу ЦБ расчёта; нет курса — null. */
+export function fromRub(n: number, currency: string, rates: Record<string, number>): number | null {
+  if (currency === "RUB") return n;
+  return rates[currency] ? r2(n / rates[currency]) : null;
+}
+
+export type EstimateUnitCost = {
+  name: string;
+  quantity: number | null;
+  unit: string;
+  goodsRub: number;
+  /** Доля доставки, таможни и остального, ₽. */
+  costsRub: number;
+  totalRub: number;
+  /** За единицу: товар и всё вместе (с доставкой и растаможкой), ₽. */
+  perUnitGoodsRub: number | null;
+  perUnitRub: number | null;
+};
+
+/**
+ * Себестоимость единицы для клиента: товар позиции + её доля всего остального (доставка, таможня, комиссии,
+ * вознаграждение) пропорционально стоимости товара.
+ */
+export function estimateUnits(p: EstimateParams, q: EstimateResult, rates: Record<string, number>): EstimateUnitCost[] {
+  const items = p.items.filter((i) => i.name.trim() || i.amount);
+  const costs = q.totalRub - q.goodsRub;
+  const goods = items.reduce((s, i) => s + (i.amount ?? 0), 0);
+  const rate = p.currency === "RUB" ? 1 : (rates[p.currency] ?? 0);
+  return items.map((i) => {
+    const share = goods ? (i.amount ?? 0) / goods : 1 / items.length;
+    const goodsRub = r2((i.amount ?? 0) * rate);
+    const costsRub = r2(costs * share);
+    const totalRub = r2(goodsRub + costsRub);
+    return {
+      name: i.name || "Товар",
+      quantity: i.quantity,
+      unit: i.unit,
+      goodsRub,
+      costsRub,
+      totalRub,
+      perUnitGoodsRub: i.quantity ? r2(goodsRub / i.quantity) : null,
+      perUnitRub: i.quantity ? r2(totalRub / i.quantity) : null,
+    };
+  });
+}
+

@@ -10,7 +10,7 @@ import { Link, useNavigate, useParams } from "react-router";
 
 import { dutyUnit, dutyUnitLabel, isWeightUnit, unitMatches } from "../../../../shared/customs.ts";
 import { CURRENCIES, formatMoney } from "../../../../shared/documents.ts";
-import { computeEstimate, DEFAULT_ESTIMATE, emptyEstimateItem, type EstimateItem, type EstimateParams, ESTIMATE_SCHEMES, type EstimateScheme } from "../../../../shared/estimate.ts";
+import { computeEstimate, DEFAULT_ESTIMATE, emptyEstimateItem, type EstimateItem, type EstimateParams, type EstimateResult, ESTIMATE_SCHEMES, type EstimateScheme, estimateUnits, fromRub } from "../../../../shared/estimate.ts";
 import { formatDay } from "../../components/docs/common.tsx";
 import { IconFile, IconPlus, IconSparkles, IconTrash, IconX } from "../../components/Icons.tsx";
 import { Content } from "../../components/Layout.tsx";
@@ -45,6 +45,44 @@ function Section({ title, children, aside }: { title: string; children: ReactNod
       </div>
       {children}
     </section>
+  );
+}
+
+/** Четыре главные цифры — в рублях и долларах: товар, доставка (всё, кроме товара), партия, единица. */
+function BigFigures({ p, res, rates }: { p: EstimateParams; res: EstimateResult; rates: Record<string, number> }) {
+  const usd = (n: number) => {
+    const v = fromRub(n, "USD", rates);
+    return v === null ? "—" : formatMoney(v, "USD");
+  };
+  const units = estimateUnits(p, res, rates).filter((u) => u.perUnitRub !== null);
+  const tile = (label: string, rubValue: number, hint?: string, accent = false) => (
+    <div className={`rounded-md p-2.5 ${accent ? "bg-blue-600 text-white" : "bg-white dark:bg-neutral-900"}`}>
+      <div className={`text-[11px] font-medium uppercase tracking-wide ${accent ? "text-blue-100" : "muted"}`}>{label}</div>
+      <div className="text-lg font-semibold leading-tight tabular-nums">{rub(rubValue)}</div>
+      <div className={`text-sm font-medium tabular-nums ${accent ? "text-blue-50" : ""}`}>{usd(rubValue)}</div>
+      {hint && <div className={`mt-0.5 text-[10px] leading-tight ${accent ? "text-blue-100" : "muted"}`}>{hint}</div>}
+    </div>
+  );
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {tile(p.scheme === "teu" ? "Товар (платит клиент)" : "Товар", res.goodsRub, p.currency === "USD" || p.currency === "RUB" ? undefined : formatMoney(res.goods, p.currency))}
+      {tile("Доставка", res.totalRub - res.goodsRub, "перевозка, таможня, услуги — всё без товара")}
+      {tile("Стоимость партии", res.totalRub, "товар + доставка", true)}
+      {units.length <= 1 ? (
+        tile("Стоимость единицы", units[0]?.perUnitRub ?? 0, units[0] ? `за 1 ${units[0].unit} с доставкой` : "укажите количество")
+      ) : (
+        <div className="rounded-md bg-white p-2.5 dark:bg-neutral-900">
+          <div className="text-[11px] font-medium uppercase tracking-wide muted">Стоимость единицы</div>
+          {units.map((u, i) => (
+            <div key={i} className="mt-1 leading-tight">
+              <div className="truncate text-[10px] muted">{u.name}, за 1 {u.unit}</div>
+              <div className="text-sm font-semibold tabular-nums">{rub(u.perUnitRub)}</div>
+              <div className="text-xs tabular-nums">{usd(u.perUnitRub!)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -436,15 +474,14 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
             {result && "error" in result && <p className="text-sm text-red-700 dark:text-red-400">{result.error}</p>}
             {res && (
               <>
-                <div className="text-xs muted">Итого для клиента</div>
-                <div className="text-2xl font-semibold tabular-nums">{rub(res.totalRub)}</div>
-                <div className="text-xs muted tabular-nums">без товара {rub(res.totalRub - res.goodsRub)}</div>
-                <table className="mt-3 w-full text-xs">
+                <BigFigures p={p} res={res} rates={{ RUB: 1, ...cbr.data!.rates }} />
+                <div className="mt-3 text-[11px] font-medium uppercase tracking-wide muted">Из чего складывается, ₽</div>
+                <table className="mt-1 w-full text-xs">
                   <tbody className="divide-y divide-slate-200 dark:divide-neutral-800">
                     {(
                       [
                         [teu ? "Товар (платит клиент)" : "Товар", res.goodsRub, formatMoney(res.goods, p.currency)],
-                        ["Доставка", res.transportRub, res.transportLabel],
+                        ["Перевозка", res.transportRub, res.transportLabel],
                         [`Комиссия за перевод ${(p.fxPercent ?? 0).toLocaleString("ru-RU")}%`, res.fxRub, `от ${rub(res.fxBase)}`],
                         ["Пошлина", res.customs.duty],
                         ["НДС", res.customs.vat],

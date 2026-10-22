@@ -3,8 +3,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { eq } from "drizzle-orm";
 
-import { CURRENCIES } from "../../shared/documents.ts";
-import { computeEstimate, DEFAULT_ESTIMATE, type EstimateParams, type EstimateResult, estimateKpLines, ESTIMATE_SCHEMES } from "../../shared/estimate.ts";
+import { CURRENCIES, formatMoney } from "../../shared/documents.ts";
+import { computeEstimate, DEFAULT_ESTIMATE, type EstimateParams, type EstimateResult, estimateKpLines, ESTIMATE_SCHEMES, estimateUnits, fromRub } from "../../shared/estimate.ts";
 import { FREIGHT_TRANSPORTS, type FreightRate } from "../../shared/quote.ts";
 import type { DbOrTx } from "../db/client.ts";
 import { freightRates } from "../db/schema.ts";
@@ -95,7 +95,12 @@ const dmy = (d: string) => d.split("-").reverse().join(".");
 const rateText = (n: number) => n.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
 
 export function estimateKpData(params: EstimateParams, result: EstimateResult, freight: FreightRate | null, ratesDate: string, rates: Record<string, number>) {
-  const used = new Set([params.currency, freight?.currency, freight?.feeCurrency, params.transportMode === "manual" ? params.transportCurrency : null].filter((c): c is string => !!c && c !== "RUB"));
+  // Главные суммы — в рублях и долларах по курсу ЦБ расчёта.
+  const both = (rubAmount: number) => {
+    const usd = fromRub(rubAmount, "USD", rates);
+    return `${rubText(rubAmount)}${usd !== null ? ` / ${formatMoney(usd, "USD")}` : ""}`;
+  };
+  const used = new Set(["USD", params.currency, freight?.currency, freight?.feeCurrency, params.transportMode === "manual" ? params.transportCurrency : null].filter((c): c is string => !!c && c !== "RUB"));
   const ratesList = [...used].map((c) => (rates[c] ? `1 ${c} = ${rateText(rates[c])} RUB` : null)).filter(Boolean).join(", ");
   const kind = freight ? (FREIGHT_TRANSPORTS[freight.transport as keyof typeof FREIGHT_TRANSPORTS] ?? freight.transport) : "";
   const items = params.items.filter((i) => i.name);
@@ -118,10 +123,19 @@ export function estimateKpData(params: EstimateParams, result: EstimateResult, f
       cargo: cargo || "—",
       term: params.deliveryTerm || (freight?.transitDays ? `около ${freight.transitDays} дней после отправки` : "—"),
       rates: `${dmy(ratesDate)}: ${ratesList || "—"}`,
-      total: rubText(result.totalRub),
+      total: both(result.totalRub),
       date: dmy(new Date().toISOString().slice(0, 10)),
     },
-    lines: estimateKpLines(params, result).map((l) => ({ name: l.indent ? `    ${l.name}` : l.name, value: `${l.approx ? "Прим.  " : ""}${rubText(l.amount)}` })),
+    lines: [
+      ...estimateKpLines(params, result).map((l) => ({ name: l.indent ? `    ${l.name}` : l.name, value: `${l.approx ? "Прим.  " : ""}${rubText(l.amount)}` })),
+      { name: "ТОВАР", value: both(result.goodsRub) },
+      { name: "ДОСТАВКА (перевозка, таможенные платежи, услуги — всё, кроме товара)", value: both(result.totalRub - result.goodsRub) },
+      { name: "СТОИМОСТЬ ПАРТИИ", value: both(result.totalRub) },
+      // Стоимость единицы с доставкой и растаможкой — по каждой позиции с количеством.
+      ...estimateUnits(params, result, rates)
+        .filter((u) => u.perUnitRub !== null)
+        .map((u) => ({ name: `СТОИМОСТЬ ЕДИНИЦЫ — 1 ${u.unit}${items.length > 1 ? ` (${u.name})` : ""}`, value: both(u.perUnitRub!) })),
+    ],
   };
 }
 
