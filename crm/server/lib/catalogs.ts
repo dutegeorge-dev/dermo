@@ -50,7 +50,12 @@ type Extracted = {
   /** Что отправить модели. */
   content: Anthropic.Beta.BetaContentBlockParam[];
   note: string | null;
+  /** Не разобрали из-за сервера (нет poppler-utils) — «Ошибка»: поправят сервер — разберётся заново. */
+  serverProblem?: boolean;
 };
+
+/** Заметка у каталогов, отложенных из-за отсутствия poppler-utils (по ней их возвращают в очередь). */
+const NO_POPPLER = "На сервере нет poppler-utils";
 
 export type CatalogKind = "pdf" | "docx" | "xlsx" | "pptx" | "image" | "text" | "old" | "archive" | "other";
 
@@ -128,9 +133,13 @@ async function pdfCatalog(file: string): Promise<Extracted> {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") return none("PDF не открылся — файл повреждён или защищён паролем");
     // На сервере нет poppler-utils: текст — через pdfjs (только небольшие файлы), сканы не разобрать.
     const { size } = await fs.promises.stat(file);
-    if (size > 60 * 1024 * 1024) return none("На сервере нет poppler-utils (apt install poppler-utils) — большой PDF не разобрать");
+    const later = (text = ""): Extracted => ({
+      ...none(`${NO_POPPLER} (sudo apt-get install poppler-utils) — после установки и перезапуска разберётся сам`, text),
+      serverProblem: true,
+    });
+    if (size > 60 * 1024 * 1024) return later();
     const text = clean(await pdfText(await fs.promises.readFile(file)).catch(() => ""));
-    if (letters(text) < 300) return none("На сервере нет poppler-utils (apt install poppler-utils) — сканы не разбираются", text);
+    if (letters(text) < 300) return later(text);
     return { method: "text", pages: null, text, content: [{ type: "text", text: sampleText(text.split(/^--- стр\. \d+$/m)) }], note: null };
   }
   const text = clean(pageTexts.join("\n\n"));
@@ -344,6 +353,17 @@ export function kickCatalogQueue(): void {
 /** После перезапуска: прерванные разборы — снова в очередь. */
 export async function resetCatalogQueue(): Promise<void> {
   await db.update(catalogs).set({ status: "queued" }).where(eq(catalogs.status, "processing"));
+  // poppler-utils поставили — отложенные без него PDF разбираются заново.
+  const poppler = await exec("pdftoppm", ["-v"], { timeout: 10_000 }).then(
+    () => true,
+    () => false,
+  );
+  if (poppler) {
+    await db
+      .update(catalogs)
+      .set({ status: "queued", note: null })
+      .where(and(inArray(catalogs.status, ["review", "failed"]), sql`${catalogs.note} like ${`${NO_POPPLER}%`}`));
+  }
 }
 
 /** Остановить очередь и дождаться текущих разборов (при выключении сервера). */
@@ -406,7 +426,7 @@ async function processCatalog(id: number): Promise<void> {
   }
   const base = { method: extracted.method, pages: extracted.pages, text: extracted.text.slice(0, STORE_CHARS) };
   if (extracted.method === "none" || !aiEnabled()) {
-    await finish({ ...base, status: "review", note: extracted.note ?? "ИИ не подключён — укажите категории вручную" });
+    await finish({ ...base, status: extracted.serverProblem ? "failed" : "review", note: extracted.note ?? "ИИ не подключён — укажите категории вручную" });
     return;
   }
   try {

@@ -34,7 +34,12 @@ git rebase --empty=drop -X theirs origin/main
 
 echo "→ 3/5 зависимости, сборка фронтенда, миграции"
 # poppler-utils (pdftotext, pdftoppm) — разбор каталогов фабрик, в том числе сканов.
-command -v pdftoppm >/dev/null 2>&1 || apt-get install -y poppler-utils || echo "! Не установился poppler-utils — сканы каталогов не будут разбираться: apt install poppler-utils"
+# Без apt-get update на сервере пакет может «не найтись» — обновляем списки перед установкой.
+if ! command -v pdftoppm >/dev/null 2>&1; then
+  apt-get update -qq || true
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq poppler-utils \
+    || echo "! Не установился poppler-utils — каталоги PDF не разберутся: sudo apt-get update && sudo apt-get install -y poppler-utils" >&2
+fi
 npm --prefix crm ci
 npm --prefix crm run build
 npm --prefix crm run db:migrate

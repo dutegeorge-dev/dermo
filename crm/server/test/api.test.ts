@@ -1744,5 +1744,18 @@ describe("Каталоги фабрик из рассылки", () => {
     assert.equal((await call(admin, "DELETE", `/catalogs/${d.id}`)).statusCode, 200);
     assert.equal((await call(admin, "GET", `/files/${fileId}`)).statusCode, 404);
     assert.equal((await call(admin, "DELETE", `/catalogs/${a.json().catalog.id}`)).statusCode, 404, "подтверждённый не удаляется");
+
+    // Отложенный без poppler-utils PDF после установки и перезапуска сервера — снова в очередь.
+    const { catalogs: catalogsTable } = await import("../db/schema.ts");
+    const { resetCatalogQueue } = await import("../lib/catalogs.ts");
+    const { eq } = await import("drizzle-orm");
+    const [late] = await tdb
+      .insert(catalogsTable)
+      .values({ filename: "late.pdf", size: 1, status: "failed", note: "На сервере нет poppler-utils (sudo apt-get install poppler-utils) — после установки и перезапуска разберётся сам" })
+      .returning({ id: catalogsTable.id });
+    await resetCatalogQueue();
+    const [requeued] = await tdb.select({ status: catalogsTable.status, note: catalogsTable.note }).from(catalogsTable).where(eq(catalogsTable.id, late.id));
+    assert.deepEqual(requeued, { status: "queued", note: null });
+    await tdb.delete(catalogsTable).where(eq(catalogsTable.id, late.id));
   });
 });
