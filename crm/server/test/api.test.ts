@@ -1614,6 +1614,8 @@ describe("Каталоги фабрик из рассылки", () => {
     const text = sampleText(Array.from({ length: 100 }, (_, i) => `Раздел ${i + 1} ${"x".repeat(1000)}`));
     assert.ok(text.length <= 8000 + 2000 && text.includes("Раздел 1 ") && text.includes("Раздел 100") === false && /Раздел [5-9]\d /.test(text), "понемногу с разных страниц");
     assert.deepEqual(normalizeCategories(["Ковролин", " SPC-ламинат ", "ковролин", "Ковёр"], ["ковролин", "spc ламинат", "ковер"]), ["ковролин", "spc ламинат", "ковер"]);
+    assert.deepEqual(normalizeCategories(["ковролин", "огнестойкий ковролин", "ковролин на пвх-основе", "линолеум"], []), ["ковролин", "линолеум"], "разновидности — одна категория");
+    assert.deepEqual(normalizeCategories(["резиновая плитка"], ["плитка"]), ["резиновая плитка"], "с существующими сами не сливаем");
     assert.equal(companyCore("Dezhou Chengda Nonwoven Products Co., Ltd."), "dezhou chengda nonwoven products");
     const unions = JSON.stringify(CATALOG_SCHEMA).match(/"type":\[/g)?.length ?? 0;
     assert.ok(unions <= 16);
