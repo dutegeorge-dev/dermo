@@ -529,4 +529,5 @@ export type CatalogsData = {
   groups: CatalogGroup[];
   senders: string[];
   categories: { c: string; n: number }[];
+  shots: { id: number; filename: string; status: string; rows: number; note: string | null; attachmentId: string | null }[];
 };

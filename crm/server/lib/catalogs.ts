@@ -12,14 +12,14 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import JSZip from "jszip";
 
 import { type CatalogResult, normCategory } from "../../shared/factories.ts";
 import { config } from "../config.ts";
 import { db, type DbOrTx } from "../db/client.ts";
-import { attachments, catalogs, catalogSenders, factories } from "../db/schema.ts";
+import { attachments, catalogs, catalogSenders, catalogShots, factories } from "../db/schema.ts";
 import { storagePath } from "../routes/files.ts";
 import { type AiUsage, aiBase, aiClient, aiEnabled, aiError, usageOf } from "./ai.ts";
 import { emptyToNull } from "./ai-parse.ts";
@@ -281,6 +281,23 @@ export async function knownCategories(tx: DbOrTx): Promise<{ c: string; n: numbe
   return rows.rows;
 }
 
+/** Временные сбои шлюза (перегружен, 502, нет связи) — очередь ждёт и повторяет сама, а не бросает файл. */
+const TRANSIENT = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
+const RETRY_DELAYS = [20, 60, 180, 300];
+
+async function createWithRetry(params: Anthropic.Beta.MessageCreateParamsNonStreaming): Promise<Anthropic.Beta.BetaMessage> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await aiClient().beta.messages.create(params);
+    } catch (error) {
+      const transient = error instanceof Anthropic.APIConnectionError || (error instanceof Anthropic.APIError && TRANSIENT.has(error.status ?? 0));
+      if (!transient || attempt >= RETRY_DELAYS.length || stopping) throw error;
+      log.info({ attempt: attempt + 1, status: error instanceof Anthropic.APIError ? error.status : "connection" }, "ИИ: сбой шлюза, повтор");
+      for (let s = 0; s < RETRY_DELAYS[attempt] && !stopping; s++) await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+}
+
 async function recognizeCatalog(
   content: Anthropic.Beta.BetaContentBlockParam[],
   ctx: { filename: string; sender: string | null; known: string[] },
@@ -288,7 +305,7 @@ async function recognizeCatalog(
   const ask = `Файл «${ctx.filename}»${ctx.sender ? `, прислал контакт WeChat «${ctx.sender}»` : ""}. Определи компанию и категории товара.`;
   let response: Anthropic.Beta.BetaMessage;
   try {
-    response = await aiClient().beta.messages.create({
+    response = await createWithRetry({
       ...aiBase(),
       max_tokens: 1500,
       thinking: { type: "disabled" },
@@ -353,6 +370,7 @@ export function kickCatalogQueue(): void {
 /** После перезапуска: прерванные разборы — снова в очередь. */
 export async function resetCatalogQueue(): Promise<void> {
   await db.update(catalogs).set({ status: "queued" }).where(eq(catalogs.status, "processing"));
+  await db.update(catalogShots).set({ status: "queued" }).where(eq(catalogShots.status, "processing"));
   // poppler-utils поставили — отложенные без него PDF разбираются заново.
   const poppler = await exec("pdftoppm", ["-v"], { timeout: 10_000 }).then(
     () => true,
@@ -392,6 +410,15 @@ async function work(): Promise<void> {
   for (;;) {
     if (stopping) return;
     wanted = false;
+    // Сначала скриншоты (дёшево, и у каталогов сразу появляются отправители), потом каталоги.
+    const shot = await db.execute<{ id: number }>(sql`
+      update catalog_shots set status = 'processing', updated_at = now()
+      where id = (select id from catalog_shots where status = 'queued' order by id limit 1 for update skip locked)
+      returning id`);
+    if (shot.rows[0]) {
+      await processShot(shot.rows[0].id);
+      continue;
+    }
     const claimed = await db.execute<{ id: number }>(sql`
       update catalogs set status = 'processing', updated_at = now()
       where id = (select id from catalogs where status = 'queued' order by id limit 1 for update skip locked)
@@ -436,6 +463,31 @@ async function processCatalog(id: number): Promise<void> {
     await finish({ ...base, status: "review", result, usage, note: result.categories.length ? null : "ИИ не нашёл категорий — укажите вручную" });
   } catch (error) {
     await finish({ ...base, status: "failed", note: aiError(error).message });
+  }
+}
+
+/** Скриншот «Файлы» WeChat → строки «файл — отправитель» → отправители у каталогов. */
+async function processShot(id: number): Promise<void> {
+  const [row] = await db
+    .select({ filename: catalogShots.filename, createdBy: catalogShots.createdBy, key: attachments.storageKey, mime: attachments.mime })
+    .from(catalogShots)
+    .leftJoin(attachments, eq(attachments.id, catalogShots.attachmentId))
+    .where(eq(catalogShots.id, id));
+  if (!row) return;
+  const finish = (values: Partial<typeof catalogShots.$inferInsert>) => db.update(catalogShots).set({ ...values, updatedAt: new Date() }).where(eq(catalogShots.id, id));
+  if (!row.key) return void (await finish({ status: "failed", note: "Файл не найден" }));
+  if (!aiEnabled()) return void (await finish({ status: "failed", note: "ИИ не подключён" }));
+  try {
+    const buffer = await fs.promises.readFile(storagePath(row.key));
+    const { rows, usage } = await recognizeSenders([{ buffer, filename: row.filename, mime: row.mime ?? "" }]);
+    log.info({ ai: "catalog-senders", model: config.ai.model, shot: id, rows: rows.length, usage }, "ИИ: отправители каталогов");
+    await db.transaction(async (tx) => {
+      if (rows.length) await tx.insert(catalogSenders).values(rows.map((r) => ({ ...r, createdBy: row.createdBy })));
+      await applySenders(tx);
+    });
+    await finish({ status: "done", rows: rows.length, note: rows.length ? null : "Строк с файлами не нашлось — это точно окно «Файлы» WeChat?" });
+  } catch (error) {
+    await finish({ status: "failed", note: aiError(error).message });
   }
 }
 
@@ -555,7 +607,7 @@ export async function recognizeSenders(files: { buffer: Buffer; filename: string
   if (!content.length) throw new HttpError(400, skipped.length ? `Нечего разбирать: ${skipped.join("; ")}` : "Пришлите скриншоты окна «Файлы» WeChat");
   let response: Anthropic.Beta.BetaMessage;
   try {
-    response = await aiClient().beta.messages.create({
+    response = await createWithRetry({
       ...aiBase(),
       max_tokens: 8000,
       thinking: { type: "disabled" },

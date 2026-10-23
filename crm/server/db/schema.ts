@@ -546,6 +546,24 @@ export const catalogs = pgTable(
   (t) => [index("catalogs_status_idx").on(t.status, t.id), index("catalogs_sha_idx").on(t.sha256), index("catalogs_factory_idx").on(t.factoryId)],
 );
 
+/** Скриншоты окна «Файлы» WeChat: хранятся и читаются ИИ в фоне, как каталоги (queued → processing → done / failed). */
+export const catalogShots = pgTable(
+  "catalog_shots",
+  {
+    id: serial("id").primaryKey(),
+    attachmentId: uuid("attachment_id").references(() => attachments.id, { onDelete: "set null" }),
+    filename: text("filename").notNull(),
+    status: text("status").notNull().default("queued"),
+    /** Сколько строк файлов прочитано. */
+    rows: integer("rows").notNull().default(0),
+    note: text("note"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("catalog_shots_status_idx").on(t.status, t.id)],
+);
+
 /** Строки со скриншотов окна «Файлы» WeChat: какой файл от кого (сопоставляются с каталогами по имени и размеру). */
 export const catalogSenders = pgTable(
   "catalog_senders",

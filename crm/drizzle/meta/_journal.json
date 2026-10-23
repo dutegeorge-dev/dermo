@@ -113,6 +113,13 @@
       "when": 1792750754793,
       "tag": "0015_factory_catalogs",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792754099468,
+      "tag": "0016_catalog_shots",
+      "breakpoints": true
     }
   ]
 }

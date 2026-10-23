@@ -15,11 +15,10 @@ import type { FastifyInstance } from "fastify";
 import type { CatalogResult } from "../../shared/factories.ts";
 import { config } from "../config.ts";
 import { db } from "../db/client.ts";
-import { attachments, catalogs, catalogSenders, factories } from "../db/schema.ts";
+import { attachments, catalogs, catalogSenders, catalogShots, factories } from "../db/schema.ts";
 import { aiEnabled } from "../lib/ai.ts";
 import { audit } from "../lib/audit.ts";
 import {
-  applySenders,
   catalogMime,
   companyCore,
   type ConfirmGroup,
@@ -27,7 +26,6 @@ import {
   kickCatalogQueue,
   knownCategories,
   matchSender,
-  recognizeSenders,
   renameCategory,
   sameSender,
   senderKey,
@@ -36,7 +34,7 @@ import {
   suggestFactories,
 } from "../lib/catalogs.ts";
 import { body, HttpError, intParam, requireAdmin } from "../lib/http.ts";
-import { storagePath, unlinkStoredFiles } from "./files.ts";
+import { storagePath, storeBuffer, unlinkStoredFiles } from "./files.ts";
 
 const itemColumns = {
   id: catalogs.id,
@@ -77,7 +75,7 @@ export async function catalogRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/catalogs", async (request) => {
     requireAdmin(request);
-    const [items, done, counts, senders, categories] = await Promise.all([
+    const [items, done, counts, senders, categories, shots] = await Promise.all([
       db.select(itemColumns).from(catalogs).where(ne(catalogs.status, "done")).orderBy(catalogs.id).limit(3000),
       db
         .select({ ...itemColumns, factoryName: factories.name, factoryNameRu: factories.nameRu })
@@ -89,6 +87,11 @@ export async function catalogRoutes(app: FastifyInstance): Promise<void> {
       db.select({ status: catalogs.status, n: sql<number>`count(*)::int` }).from(catalogs).groupBy(catalogs.status),
       db.selectDistinct({ sender: catalogSenders.sender }).from(catalogSenders).orderBy(catalogSenders.sender).limit(3000),
       knownCategories(db),
+      db
+        .select({ id: catalogShots.id, filename: catalogShots.filename, status: catalogShots.status, rows: catalogShots.rows, note: catalogShots.note, attachmentId: catalogShots.attachmentId })
+        .from(catalogShots)
+        .orderBy(desc(catalogShots.id))
+        .limit(300),
     ]);
     const groups = new Map<string, { key: string; sender: string | null; chat: string | null; catalogIds: number[]; results: CatalogResult[] }>();
     const inReview = items.filter((c) => c.status === "review" || c.status === "failed");
@@ -111,6 +114,7 @@ export async function catalogRoutes(app: FastifyInstance): Promise<void> {
       groups: list.map((g, i) => ({ key: g.key, sender: g.sender, chat: g.chat, catalogIds: g.catalogIds, match: matches[i] })),
       senders: senders.map((s) => s.sender),
       categories,
+      shots,
     };
   });
 
@@ -206,22 +210,44 @@ export async function catalogRoutes(app: FastifyInstance): Promise<void> {
     return { catalog, duplicate: false };
   });
 
-  /** Скриншоты окна «Файлы» WeChat (multipart, несколько картинок) → кто какой файл прислал. */
+  /**
+   * Скриншоты окна «Файлы» WeChat (multipart, несколько картинок): сохраняются сразу, ИИ читает их в фоне по
+   * одному (сбой шлюза — повтор сам) → кто какой файл прислал. Тот же скриншот второй раз не берём.
+   */
   app.post("/catalogs/senders", async (request) => {
     const user = requireAdmin(request);
-    if (!aiEnabled()) throw new HttpError(503, "ИИ не подключён");
-    const files: { buffer: Buffer; filename: string; mime: string }[] = [];
-    for await (const part of request.files({ limits: { files: 10 } })) {
-      files.push({ buffer: await part.toBuffer(), filename: part.filename || "screenshot.png", mime: part.mimetype || "" });
+    let saved = 0;
+    let same = 0;
+    const skipped: string[] = [];
+    for await (const part of request.files({ limits: { files: 50, fileSize: 15 * 1024 * 1024 } })) {
+      const filename = path.basename(part.filename || "screenshot.png").slice(0, 200);
+      const buffer = await part.toBuffer();
+      const mime = catalogMime(filename, part.mimetype || "");
+      if (!mime.startsWith("image/")) {
+        skipped.push(`${filename} — не картинка`);
+        continue;
+      }
+      const sha = crypto.createHash("sha256").update(buffer).digest("hex");
+      const [dup] = await db
+        .select({ id: attachments.id })
+        .from(attachments)
+        .where(and(eq(attachments.ownerType, "catalog_shot"), eq(attachments.label, sha)))
+        .limit(1);
+      if (dup) {
+        same++;
+        continue;
+      }
+      await db.transaction(async (tx) => {
+        const [shot] = await tx.insert(catalogShots).values({ filename, createdBy: user.id }).returning({ id: catalogShots.id });
+        // label — sha256 картинки: по нему ловим повторную загрузку того же скриншота.
+        const id = await storeBuffer(tx, { type: "catalog_shot", id: shot.id }, { filename, mime, buffer, label: sha }, user.id);
+        await tx.update(catalogShots).set({ attachmentId: id }).where(eq(catalogShots.id, shot.id));
+      });
+      saved++;
     }
-    if (!files.length) throw new HttpError(400, "Нет скриншотов");
-    const { rows, usage, skipped } = await recognizeSenders(files);
-    request.log.info({ ai: "catalog-senders", model: config.ai.model, files: files.length, rows: rows.length, usage }, "ИИ: отправители каталогов");
-    const matched = await db.transaction(async (tx) => {
-      if (rows.length) await tx.insert(catalogSenders).values(rows.map((r) => ({ ...r, createdBy: user.id })));
-      return applySenders(tx);
-    });
-    return { rows: rows.length, matched, skipped };
+    if (!saved && !same) throw new HttpError(400, skipped.length ? `Нечего загружать: ${skipped.join("; ")}` : "Нет скриншотов");
+    kickCatalogQueue();
+    return { saved, same, skipped };
   });
 
   /** Указать отправителя вручную. */
@@ -245,8 +271,9 @@ export async function catalogRoutes(app: FastifyInstance): Promise<void> {
     const raw = (request.params as { id: string }).id;
     const where = raw === "all" ? eq(catalogs.status, "failed") : and(eq(catalogs.id, intParam(raw)), inArray(catalogs.status, ["failed", "review"]));
     const rows = await db.update(catalogs).set({ status: "queued", note: null, updatedAt: new Date() }).where(where).returning({ id: catalogs.id });
+    const shots = raw === "all" ? await db.update(catalogShots).set({ status: "queued", note: null, updatedAt: new Date() }).where(eq(catalogShots.status, "failed")).returning({ id: catalogShots.id }) : [];
     kickCatalogQueue();
-    return { queued: rows.length };
+    return { queued: rows.length + shots.length };
   });
 
   /** Удалить каталог (не подтверждённый) вместе с файлом. */

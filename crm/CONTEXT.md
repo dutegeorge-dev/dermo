@@ -291,6 +291,11 @@
     («…260» и «…260李») — `sameSender` считает их одним контактом. poppler-utils ставит `deploy-crm.sh` (с
     `apt-get update` — на сервере без него пакет «не находился» и PDF не разбирались). PDF, отложенные без poppler,
     — «Ошибка»; после установки при старте сервера `resetCatalogQueue` сам возвращает их в очередь.
+    **Скриншоты «Файлы» тоже в фоне** (`catalog_shots`): первая версия читала их сразу пачкой по 8 — шлюз ответил 502,
+    скриншоты пропали, владелец не понял, загрузились ли они. Теперь сохраняются сразу (attachments `catalog_shot`,
+    label — sha256: тот же скриншот второй раз не берётся), ИИ читает по одному, раньше каталогов; список со статусами
+    — «Скриншоты «Файлы»» на странице. Временные сбои шлюза (408/409/429/5xx, нет связи) очередь пережидает сама
+    (`createWithRetry`: 20 с, 1, 3, 5 мин), потом — «Ошибка» и «Повторить все с ошибкой» (и каталоги, и скриншоты).
 24. **Единица товара закреплена за кодом ТН ВЭД (октябрь 2026).** Специфическая пошлина считается «за 1 пар» (обувь),
     «за 1 м2» (ковролин 5704), «за 1 кг», «за 1 л», «за 1 шт»… — единица берётся из самой ставки (`dutyUnit`,
     `DUTY_UNITS` в shared/customs.ts). В «Расчёте» единица позиции ставится по коду и не правится («по ТН ВЭД»),
@@ -463,7 +468,8 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   `product_quotes` (product_id, params / result / freight / rates jsonb — расчёт как был на момент сохранения).
   `catalogs` (attachment_id, filename, size, sha256, sender / chat — контакт WeChat, status queued/processing/review/
   done/failed, method text/images/none, pages, result jsonb — компания и категории, text, note, usage, factory_id),
-  `catalog_senders` (строки со скриншотов «Файлы» WeChat: filename, size как на экране, sender, chat).
+  `catalog_senders` (строки со скриншотов «Файлы» WeChat: filename, size как на экране, sender, chat),
+  `catalog_shots` (сами скриншоты: attachment_id, filename, status queued/processing/done/failed, rows, note).
 - **Документы:** `documents` (type, number, date, counterparty_id, client_id, **shipment_id**, parent_id (договор),
   seq_no, currency, amount, status, payment_status, paid_amount, paid_at, valid_until, data jsonb, notes),
   `document_items` (product_id, name, batch_no, hs_code, qty, unit, price, amount), `products`, `settings` (company).
@@ -471,7 +477,7 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   currency, note — что за не разнесённый остаток; файл — attachments owner_type `payment`), `payment_allocations`
   (payment_id, document_id, amount). Обычная оплата одного счёта сюда не пишется.
 
-**Миграции:** … **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).

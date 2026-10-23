@@ -125,7 +125,8 @@ export function CatalogsPage() {
     queryFn: () => api<CatalogsData>("/catalogs"),
     refetchInterval: (q) => {
       const c = q.state.data?.counts;
-      return (c?.queued ?? 0) + (c?.processing ?? 0) > 0 ? 4000 : false;
+      const shots = q.state.data?.shots.some((x) => x.status === "queued" || x.status === "processing");
+      return (c?.queued ?? 0) + (c?.processing ?? 0) > 0 || shots ? 4000 : false;
     },
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["catalogs"] });
@@ -204,19 +205,19 @@ export function CatalogsPage() {
     setMessage(null);
     setError(null);
     try {
-      let rows = 0;
-      let matched = 0;
+      let saved = 0;
+      let same = 0;
       const skipped: string[] = [];
-      // По 8 скриншотов за запрос — иначе ответ ИИ получается слишком длинным.
-      for (let i = 0; i < files.length; i += 8) {
+      // Скриншоты только сохраняются (ИИ читает их в фоне) — по 10 за запрос, чтобы не упереться в лимит тела.
+      for (let i = 0; i < files.length; i += 10) {
         const form = new FormData();
-        for (const f of files.slice(i, i + 8)) form.append("file", f, f.name);
-        const r = await api<{ rows: number; matched: number; skipped: string[] }>("/catalogs/senders", { method: "POST", form });
-        rows += r.rows;
-        matched += r.matched;
+        for (const f of files.slice(i, i + 10)) form.append("file", f, f.name);
+        const r = await api<{ saved: number; same: number; skipped: string[] }>("/catalogs/senders", { method: "POST", form });
+        saved += r.saved;
+        same += r.same;
         skipped.push(...r.skipped);
       }
-      setMessage(`Со скриншотов прочитано файлов: ${rows}. Отправитель найден у каталогов: ${matched}.${skipped.length ? ` Пропущено: ${skipped.join("; ")}` : ""}`);
+      setMessage(`Скриншоты сохранены: ${saved}${same ? `, уже были: ${same}` : ""}. ИИ прочитает их в фоне — страницу можно закрыть.${skipped.length ? ` Пропущено: ${skipped.join("; ")}` : ""}`);
       await refresh();
     } catch (e) {
       setError(e);
@@ -251,6 +252,12 @@ export function CatalogsPage() {
   const selected = groups.filter((x) => x.edit.selected);
   const setEdit = (key: string, base: Edit, patch: Partial<Edit>) => setEdits((prev) => ({ ...prev, [key]: { ...(prev[key] ?? base), ...patch } }));
   const pending = data.items.filter((i) => i.status === "queued" || i.status === "processing");
+  const shotCount = {
+    done: data.shots.filter((x) => x.status === "done").length,
+    rows: data.shots.reduce((sum, x) => sum + x.rows, 0),
+    waiting: data.shots.filter((x) => x.status === "queued" || x.status === "processing").length,
+    failed: data.shots.filter((x) => x.status === "failed").length,
+  };
 
   async function confirm() {
     await act(async () => {
@@ -287,7 +294,7 @@ export function CatalogsPage() {
           <button type="button" className="btn" disabled={upload?.running} onClick={() => folderRef.current?.click()}>
             Выбрать папку
           </button>
-          <button type="button" className="btn" disabled={busy || !data.ai} onClick={() => shotsRef.current?.click()} title="Окно «Файлы» (Manage Files) WeChat: имя файла и «отправитель | чат»">
+          <button type="button" className="btn" disabled={busy} onClick={() => shotsRef.current?.click()} title="Окно «Файлы» (Manage Files) WeChat: имя файла и «отправитель | чат»">
             Скриншоты «Файлы» WeChat
           </button>
           {upload?.running && (
@@ -342,12 +349,36 @@ export function CatalogsPage() {
             ) : null,
           )}
           {pending.length > 0 && <span className="muted">разбор идёт в фоне — страницу можно закрыть</span>}
-          {(data.counts.failed ?? 0) > 0 && (
+          {((data.counts.failed ?? 0) > 0 || shotCount.failed > 0) && (
             <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void act(() => api("/catalogs/all/retry", { method: "POST" }))}>
               <IconHistory /> Повторить все с ошибкой
             </button>
           )}
         </div>
+        {data.shots.length > 0 && (
+          <details className="mt-2 text-sm">
+            <summary className="cursor-pointer">
+              Скриншоты «Файлы»: <b>{data.shots.length}</b> — прочитано {shotCount.done} (строк: {shotCount.rows})
+              {shotCount.waiting > 0 && `, ждут ИИ: ${shotCount.waiting}`}
+              {shotCount.failed > 0 && <span className="text-red-700 dark:text-red-400">, ошибка: {shotCount.failed}</span>}
+            </summary>
+            <ul className="mt-1 max-h-48 overflow-auto text-xs">
+              {data.shots.map((x) => (
+                <li key={x.id} className={x.status === "failed" ? "text-red-700 dark:text-red-400" : ""}>
+                  {x.attachmentId ? (
+                    <a href={fileUrl(x.attachmentId)} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline dark:text-blue-400">
+                      {x.filename}
+                    </a>
+                  ) : (
+                    x.filename
+                  )}{" "}
+                  — {x.status === "done" ? `строк: ${x.rows}` : CATALOG_STATUSES[x.status as CatalogStatus] ?? x.status}
+                  {x.note && ` · ${x.note}`}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         {busy && <Spinner label="Подождите…" />}
         {message && <div className="mt-2 rounded-md bg-green-50 p-2 text-sm text-green-900 dark:bg-green-950 dark:text-green-200">{message}</div>}
         <ErrorBox error={error} />

@@ -1590,7 +1590,8 @@ describe("Каталоги фабрик из рассылки", () => {
     for (let i = 0; i < 100; i++) {
       await catalogQueueIdle();
       const data = (await call(s, "GET", "/catalogs")).json();
-      if (!data.counts.queued && !data.counts.processing) return data;
+      const shotsBusy = data.shots.some((x: { status: string }) => x.status === "queued" || x.status === "processing");
+      if (!data.counts.queued && !data.counts.processing && !shotsBusy) return data;
       await new Promise((r) => setTimeout(r, 50));
     }
     throw new Error("очередь каталогов не разобралась");
@@ -1744,6 +1745,25 @@ describe("Каталоги фабрик из рассылки", () => {
     assert.equal((await call(admin, "DELETE", `/catalogs/${d.id}`)).statusCode, 200);
     assert.equal((await call(admin, "GET", `/files/${fileId}`)).statusCode, 404);
     assert.equal((await call(admin, "DELETE", `/catalogs/${a.json().catalog.id}`)).statusCode, 404, "подтверждённый не удаляется");
+
+    // Скриншоты «Файлы» сохраняются сразу (ИИ читает в фоне); тот же второй раз не берётся; без ИИ — ошибка, не потеря.
+    const shotForm = (names: string[]) => {
+      const b = "----crmshots";
+      const parts = names.map((n) => Buffer.concat([Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="file"; filename="${n}"\r\nContent-Type: image/png\r\n\r\n`), Buffer.from(`png-${n.slice(0, 5)}`), Buffer.from("\r\n")]));
+      return { payload: Buffer.concat([...parts, Buffer.from(`--${b}--\r\n`)]), type: `multipart/form-data; boundary=${b}` };
+    };
+    const sendShots = (names: string[]) => {
+      const f = shotForm(names);
+      return app.inject({ method: "POST", url: `${API}/catalogs/senders`, headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf, "content-type": f.type }, payload: f.payload });
+    };
+    const shots1 = await sendShots(["shot1.png", "shot2.png"]);
+    assert.deepEqual(shots1.json(), { saved: 2, same: 0, skipped: [] }, shots1.body);
+    assert.deepEqual((await sendShots(["shot1.png"])).json(), { saved: 0, same: 1, skipped: [] });
+    const afterShots = await settle(admin);
+    assert.equal(afterShots.shots.length, 2);
+    assert.ok(afterShots.shots.every((x: { status: string; note: string }) => x.status === "failed" && /ИИ не подключён/.test(x.note)));
+    assert.ok((await call(admin, "POST", "/catalogs/all/retry")).json().queued >= 2, "«Повторить все с ошибкой» — и скриншоты");
+    await settle(admin);
 
     // Отложенный без poppler-utils PDF после установки и перезапуска сервера — снова в очередь.
     const { catalogs: catalogsTable } = await import("../db/schema.ts");
