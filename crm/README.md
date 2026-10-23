@@ -157,8 +157,8 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now bars-crm
 curl -s http://127.0.0.1:3100/crm/api/health      # {"ok":true}
 
-# 6. nginx — в server{} для tlkbars.ru добавить блоки location = /crm/api/catalogs и location /crm/
-#    (они уже есть в deploy/nginx/tlkbars.live.conf и tlkbars.ru.conf):
+# 6. nginx — в server{} для tlkbars.ru добавить блок location /crm/
+#    (он уже есть в deploy/nginx/tlkbars.live.conf и tlkbars.ru.conf):
 sudo cp /etc/nginx/sites-available/tlkbars /etc/nginx/sites-available/tlkbars.bak
 sudo cp deploy/nginx/tlkbars.live.conf /etc/nginx/sites-available/tlkbars
 sudo nginx -t && sudo systemctl reload nginx
@@ -202,7 +202,7 @@ location ^~ /crm/ {
 
 Если в обновлении менялись шаблоны сайта или `server/`, нужен полный `deploy.sh`.
 
-Каталоги фабрик (миграция 0015): `deploy-crm.sh` сам ставит `poppler-utils` (pdftotext / pdftoppm — сканы). В nginx нужен блок `location = /crm/api/catalogs` из `deploy/nginx/tlkbars.live.conf` (лимит тела 400 МБ — у общего `/crm/` 30 МБ); на живом сервере его вставить перед `location ^~ /crm/` и `sudo nginx -t && sudo systemctl reload nginx`.
+Каталоги фабрик (миграция 0015): `deploy-crm.sh` сам ставит `poppler-utils` (pdftotext / pdftoppm — сканы). nginx менять не нужно: файлы идут кусками по 8 МБ (лимит тела `/crm/` — 30 МБ).
 
 После обновления с документами (миграция 0003: `clients` → `counterparties`, документы, товары) один раз выполните `npm run crm:seed` — он заполнит «Реквизиты компании» для поручений, если они пусты (остальное `seed` не трогает).
 
@@ -410,7 +410,8 @@ sudo systemctl start bars-crm
 | `GET/PATCH/DELETE /factories/:id` | Карточка (анкета, цены, файлы) / правка (offers — заменить целиком) / удаление (кандидата — нашедший или админ, поставщика — админ) |
 | `POST /factories/:id/files?label=photo\|catalog\|screenshot`, `POST /factories/:id/supplier` | Файл фабрики; «сделать поставщиком» |
 | `GET /catalogs` | Каталоги (только админ): файлы не в «Готово», группы на проверке по контакту с подходящей фабрикой (`match`), счётчики, отправители со скриншотов, категории |
-| `POST /catalogs` (multipart `file`, до `CRM_MAX_CATALOG_MB`), `POST /catalogs/check` `{files:[{name,size}]}` | Загрузить каталог в очередь разбора (тот же sha256 — `duplicate`); какие файлы уже загружены |
+| `POST /catalogs/uploads` `{name, size, lastModified}` → `{id, offset}`; `PUT /catalogs/uploads/:id?offset=N` (тело — кусок ≤ 16 МБ, `application/octet-stream`; не то место — 409 с `offset`); `POST /catalogs/uploads/:id/finish` `{name, size, type}` | Загрузка каталога кусками с докачкой (до `CRM_MAX_CATALOG_MB`): недокачанное — `CRM_UPLOAD_DIR/partial/<id>` (id — от пользователя, имени, размера и даты файла; брошенное > 7 дней удаляется); после завершения — в очередь разбора (тот же sha256 — `duplicate`) |
+| `POST /catalogs/check` `{files:[{name,size}]}` | Какие файлы уже загружены (имя + размер) — повторная загрузка папки их пропускает |
 | `POST /catalogs/senders` (multipart, скриншоты) | ИИ читает строки окна «Файлы» WeChat → `catalog_senders`, отправитель у каталогов без него |
 | `PATCH /catalogs/:id` `{sender}`, `POST /catalogs/:id/retry` (`all` — все с ошибкой), `DELETE /catalogs/:id` | Отправитель вручную; разобрать заново; удалить неподтверждённый с файлом |
 | `POST /catalogs/confirm` `{groups:[{catalogIds, factoryId, nameRu, categories}]}` | Группы → новая (`factoryId: null`) или найденная фабрика, файлы — в её карточку |

@@ -1538,18 +1538,25 @@ describe("ИИ-разбор: стороны и тип счёта", () => {
 });
 
 describe("Каталоги фабрик из рассылки", () => {
-  const boundary = "----crmcatalog";
-  const upload = (s: Session, name: string, content: Buffer | string, type = "application/octet-stream") =>
-    app.inject({
-      method: "POST",
-      url: `${API}/catalogs`,
-      headers: { cookie: s.cookie, "x-csrf-token": s.csrf, "content-type": `multipart/form-data; boundary=${boundary}` },
-      payload: Buffer.concat([
-        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: ${type}\r\n\r\n`),
-        Buffer.isBuffer(content) ? content : Buffer.from(content),
-        Buffer.from(`\r\n--${boundary}--\r\n`),
-      ]),
-    });
+  /** Загрузка кусками, как в браузере: начать → куски → завершить. */
+  const upload = async (s: Session, name: string, content: Buffer | string, chunk = 64) => {
+    const data = Buffer.isBuffer(content) ? content : Buffer.from(content);
+    const start = await call(s, "POST", "/catalogs/uploads", { name, size: data.length, lastModified: 1 });
+    if (start.statusCode !== 200) return start;
+    const { id } = start.json();
+    let offset = start.json().offset as number;
+    while (offset < data.length) {
+      const res = await app.inject({
+        method: "PUT",
+        url: `${API}/catalogs/uploads/${id}?offset=${offset}`,
+        headers: { cookie: s.cookie, "x-csrf-token": s.csrf, "content-type": "application/octet-stream" },
+        payload: data.subarray(offset, offset + chunk),
+      });
+      assert.equal(res.statusCode, 200, res.body);
+      offset = res.json().offset;
+    }
+    return call(s, "POST", `/catalogs/uploads/${id}/finish`, { name, size: data.length });
+  };
 
   /** Простой PDF: страницы с текстом (Helvetica) или только с рисунком (как скан без текстового слоя). */
   function demoPdf(pages: string[]): Buffer {
@@ -1590,7 +1597,7 @@ describe("Каталоги фабрик из рассылки", () => {
   };
 
   test("сопоставление со скриншотами, выбор страниц, категории, схема ответа", async () => {
-    const { matchSender, sizeMatches, pickPages, sampleText, normalizeCategories, companyCore, CATALOG_SCHEMA } = await import("../lib/catalogs.ts");
+    const { matchSender, sizeMatches, pickPages, sampleText, normalizeCategories, companyCore, CATALOG_SCHEMA, sameSender } = await import("../lib/catalogs.ts");
     assert.ok(sizeMatches(Math.round(12.8 * 1024 * 1024), "12.8M"));
     assert.ok(sizeMatches(12_800_000, "12.8M"));
     assert.ok(!sizeMatches(13_500_000, "12.8M"));
@@ -1617,6 +1624,8 @@ describe("Каталоги фабрик из рассылки", () => {
     assert.deepEqual(normalizeCategories(["ковролин", "огнестойкий ковролин", "ковролин на пвх-основе", "линолеум"], []), ["ковролин", "линолеум"], "разновидности — одна категория");
     assert.deepEqual(normalizeCategories(["резиновая плитка"], ["плитка"]), ["резиновая плитка"], "с существующими сами не сливаем");
     assert.equal(companyCore("Dezhou Chengda Nonwoven Products Co., Ltd."), "dezhou chengda nonwoven products");
+    assert.ok(sameSender("Leah Lee 18375803260李", "Leah Lee 18375803260"), "ИИ потерял иероглиф на одном скриншоте");
+    assert.ok(!sameSender("A-地板厂", "A-地板厂-小王-123456"));
     const unions = JSON.stringify(CATALOG_SCHEMA).match(/"type":\[/g)?.length ?? 0;
     assert.ok(unions <= 16);
   });
@@ -1626,6 +1635,27 @@ describe("Каталоги фабрик из рассылки", () => {
     const ivan = await login("ivan", "managerpass", "10.0.0.41");
     assert.equal((await call(ivan, "GET", "/catalogs")).statusCode, 403);
     assert.equal((await upload(ivan, "x.pdf", "x")).statusCode, 403);
+
+    // Обрыв связи: часть файла ушла, загрузка начата заново (тот же файл) — продолжается с того же места.
+    const big = Buffer.from("Demo resumable catalog. ".repeat(40));
+    const first = (await call(admin, "POST", "/catalogs/uploads", { name: "resume.txt", size: big.length, lastModified: 7 })).json();
+    const put = (offset: number, part: Buffer) =>
+      app.inject({ method: "PUT", url: `${API}/catalogs/uploads/${first.id}?offset=${offset}`, headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf, "content-type": "application/octet-stream" }, payload: part });
+    const p0 = await put(0, big.subarray(0, 300));
+    assert.equal(p0.json().offset, 300, p0.body);
+    const again2 = (await call(admin, "POST", "/catalogs/uploads", { name: "resume.txt", size: big.length, lastModified: 7 })).json();
+    assert.deepEqual(again2, { id: first.id, offset: 300 });
+    const wrong = await put(100, big.subarray(100, 200));
+    assert.equal(wrong.statusCode, 409);
+    assert.equal(wrong.json().offset, 300, "повтор куска не с того места — сервер говорит, откуда продолжать");
+    assert.equal((await call(admin, "POST", `/catalogs/uploads/${first.id}/finish`, { name: "resume.txt", size: big.length })).statusCode, 409, "не докачан");
+    assert.equal((await put(300, big.subarray(300))).json().offset, big.length);
+    const resumed = await call(admin, "POST", `/catalogs/uploads/${first.id}/finish`, { name: "resume.txt", size: big.length });
+    assert.equal(resumed.statusCode, 200, resumed.body);
+    assert.equal(resumed.json().catalog.size, big.length);
+    await settle(admin);
+    assert.equal((await call(admin, "DELETE", `/catalogs/${resumed.json().catalog.id}`)).statusCode, 200);
+    assert.equal((await call(admin, "POST", "/catalogs/uploads", { name: "huge.pdf", size: 10 * 1024 * 1024 * 1024 })).statusCode, 413);
 
     // Строки «со скриншота» до загрузки файлов: отправитель подхватывается при загрузке.
     const { db: tdb } = await import("../db/client.ts");
@@ -1640,7 +1670,7 @@ describe("Каталоги фабрик из рассылки", () => {
     // Фабрика с таким именем WeChat уже есть (завёл менеджер) — каталог её найдёт.
     const known = (await call(ivan, "POST", "/factories", { name: "Demo Wallpaper 13800000002", categories: ["обои"] })).json().factory;
 
-    const a = await upload(admin, "demo carpet catalog.txt", textCatalog, "text/plain");
+    const a = await upload(admin, "demo carpet catalog.txt", textCatalog);
     assert.equal(a.statusCode, 200, a.body);
     assert.equal(a.json().catalog.sender, "Demo-地毯厂-小王");
     const b = (await upload(admin, "demo scan 扫描版.pdf", scan)).json().catalog;

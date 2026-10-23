@@ -29,6 +29,7 @@ import {
   matchSender,
   recognizeSenders,
   renameCategory,
+  sameSender,
   senderKey,
   setCatalogLogger,
   stopCatalogQueue,
@@ -53,9 +54,19 @@ const itemColumns = {
   createdAt: catalogs.createdAt,
 };
 
+/** Кусок загрузки — не больше (клиент шлёт по 8 МБ; у nginx для /crm/ лимит тела 30 МБ). */
+const MAX_CHUNK = 16 * 1024 * 1024;
+
+/** Недокачанный файл каталога. */
+function partialPath(id: string): string {
+  if (!/^[0-9a-f]{32}$/.test(id)) throw new HttpError(404, "Загрузка не найдена");
+  return storagePath(`partial/${id}`);
+}
+
 /** Группа на проверке: файлы одного отправителя (без отправителя — одной компании, иначе файл отдельно). */
-function groupKey(c: { id: number; sender: string | null; result: CatalogResult | null }): string {
-  if (c.sender) return `s:${senderKey(c.sender)}`;
+function groupKey(c: { id: number; sender: string | null; result: CatalogResult | null }, senders: string[]): string {
+  // Почти одинаковые имена одного контакта (со скриншотов) — одной группой, по самому длинному.
+  if (c.sender) return `s:${senderKey(senders.filter((s) => sameSender(s, c.sender!)).sort((a, b) => b.length - a.length)[0] ?? c.sender)}`;
   const core = companyCore(c.result?.company);
   return core.length >= 4 ? `c:${core}` : `f:${c.id}`;
 }
@@ -80,11 +91,13 @@ export async function catalogRoutes(app: FastifyInstance): Promise<void> {
       knownCategories(db),
     ]);
     const groups = new Map<string, { key: string; sender: string | null; chat: string | null; catalogIds: number[]; results: CatalogResult[] }>();
-    for (const c of items) {
-      if (c.status !== "review" && c.status !== "failed") continue;
-      const key = groupKey(c);
+    const inReview = items.filter((c) => c.status === "review" || c.status === "failed");
+    const reviewSenders = [...new Set(inReview.map((c) => c.sender).filter((s): s is string => Boolean(s)))];
+    for (const c of inReview) {
+      const key = groupKey(c, reviewSenders);
       const g = groups.get(key) ?? { key, sender: c.sender, chat: c.chat, catalogIds: [], results: [] };
       g.catalogIds.push(c.id);
+      if (c.sender && c.sender.length > (g.sender?.length ?? 0)) g.sender = c.sender;
       if (c.result) g.results.push(c.result);
       groups.set(key, g);
     }
@@ -115,45 +128,76 @@ export async function catalogRoutes(app: FastifyInstance): Promise<void> {
     return { exists: files.map((f) => have.has(`${String(f.name ?? "").slice(0, 200)}\n${Number(f.size)}`)) };
   });
 
-  /** Один файл каталога (multipart, поле file) → в очередь разбора. Тот же файл (sha256) второй раз не берём. */
-  app.post("/catalogs", async (request) => {
+  /**
+   * Загрузка кусками (обрыв связи не страшен): начать → куски по ≤ 16 МБ (PUT с offset) → завершить.
+   * Недокачанный файл лежит в partial/<id>; id — от пользователя, имени, размера и даты файла, поэтому, выбрав
+   * ту же папку после обрыва или закрытия браузера, загрузка продолжается с того же места.
+   */
+  app.post("/catalogs/uploads", async (request) => {
     const user = requireAdmin(request);
-    const file = await request.file({ limits: { fileSize: config.maxCatalogBytes, files: 1 } });
-    if (!file) throw new HttpError(400, "Файл не передан");
-    const filename = path.basename(file.filename || "file").slice(0, 200) || "file";
-    const id = crypto.randomUUID();
-    const key = `${new Date().toISOString().slice(0, 7)}/${id}`;
-    const target = storagePath(key);
-    await fs.promises.mkdir(path.dirname(target), { recursive: true });
-    const hash = crypto.createHash("sha256");
-    const hasher = new Transform({
-      transform(chunk, _enc, done) {
-        hash.update(chunk);
-        done(null, chunk);
+    const input = body<{ name?: string; size?: number; lastModified?: number }>(request);
+    const name = path.basename(String(input.name ?? "")).slice(0, 200);
+    const size = Number(input.size);
+    if (!name || !Number.isInteger(size) || size <= 0) throw new HttpError(400, "Нет имени или размера файла");
+    if (size > config.maxCatalogBytes) throw new HttpError(413, `Файл больше ${Math.round(config.maxCatalogBytes / 1024 / 1024)} МБ`);
+    const id = crypto.createHash("sha256").update(`${user.id}\n${name}\n${size}\n${Number(input.lastModified) || 0}`).digest("hex").slice(0, 32);
+    const file = partialPath(id);
+    await fs.promises.mkdir(path.dirname(file), { recursive: true });
+    await (await fs.promises.open(file, "a")).close();
+    const offset = (await fs.promises.stat(file)).size;
+    return { id, offset: Math.min(offset, size) };
+  });
+
+  // Кусок файла — сырым телом; лимит считаем сами (поток в обход bodyLimit).
+  app.addContentTypeParser("application/octet-stream", (_request, payload, done) => done(null, payload));
+
+  app.put("/catalogs/uploads/:id", async (request, reply) => {
+    requireAdmin(request);
+    const file = partialPath((request.params as { id: string }).id);
+    const offset = Number((request.query as { offset?: string }).offset);
+    const current = await fs.promises.stat(file).then((st) => st.size, () => -1);
+    if (current < 0) throw new HttpError(404, "Загрузка не начата");
+    // Кусок не с того места (повтор после обрыва) — говорим, откуда продолжать.
+    if (offset !== current) return reply.code(409).send({ error: "Не то место файла", offset: current });
+    if (current + Number(request.headers["content-length"] ?? 0) > config.maxCatalogBytes) throw new HttpError(413, "Файл больше лимита");
+    let received = 0;
+    const limiter = new Transform({
+      transform(chunk: Buffer, _enc, next) {
+        received += chunk.length;
+        next(received > MAX_CHUNK ? new HttpError(413, "Кусок больше 16 МБ") : null, chunk);
       },
     });
-    try {
-      await pipeline(file.file, hasher, fs.createWriteStream(target));
-    } catch (error) {
-      await fs.promises.rm(target, { force: true });
-      throw error;
-    }
-    if (file.file.truncated) {
-      await fs.promises.rm(target, { force: true });
-      throw new HttpError(413, `Файл больше ${Math.round(config.maxCatalogBytes / 1024 / 1024)} МБ`);
-    }
+    // Оборвалось посреди куска — записанное остаётся, следующий запрос продолжит с фактического размера.
+    await pipeline(request.body as NodeJS.ReadableStream, limiter, fs.createWriteStream(file, { flags: "a" }));
+    return { offset: (await fs.promises.stat(file)).size };
+  });
+
+  /** Файл докачан → в каталоги и очередь разбора. Тот же файл (sha256) второй раз не берём. */
+  app.post("/catalogs/uploads/:id/finish", async (request) => {
+    const user = requireAdmin(request);
+    const file = partialPath((request.params as { id: string }).id);
+    const input = body<{ name?: string; size?: number; type?: string }>(request);
+    const filename = path.basename(String(input.name ?? "")).slice(0, 200) || "file";
+    const size = await fs.promises.stat(file).then((st) => st.size, () => -1);
+    if (size < 0) throw new HttpError(404, "Загрузка не найдена — начните заново");
+    if (size !== Number(input.size)) throw new HttpError(409, `Файл докачан не полностью (${size} из ${input.size} байт)`);
+    const hash = crypto.createHash("sha256");
+    for await (const chunk of fs.createReadStream(file)) hash.update(chunk as Buffer);
     const sha256 = hash.digest("hex");
     const [same] = await db.select(itemColumns).from(catalogs).where(eq(catalogs.sha256, sha256)).limit(1);
     if (same) {
-      await fs.promises.rm(target, { force: true });
+      await fs.promises.rm(file, { force: true });
       return { catalog: same, duplicate: true };
     }
-    const { size } = await fs.promises.stat(target);
+    const id = crypto.randomUUID();
+    const key = `${new Date().toISOString().slice(0, 7)}/${id}`;
+    await fs.promises.mkdir(path.dirname(storagePath(key)), { recursive: true });
+    await fs.promises.rename(file, storagePath(key));
     const rows = await db.select({ filename: catalogSenders.filename, size: catalogSenders.size, sender: catalogSenders.sender, chat: catalogSenders.chat }).from(catalogSenders);
     const from = matchSender({ filename, size }, rows);
     const catalog = await db.transaction(async (tx) => {
       const [created] = await tx.insert(catalogs).values({ filename, size, sha256, sender: from?.sender ?? null, chat: from?.chat ?? null, createdBy: user.id }).returning({ id: catalogs.id });
-      await tx.insert(attachments).values({ id, ownerType: "catalog", ownerId: created.id, filename, mime: catalogMime(filename, file.mimetype), size, storageKey: key, label: "catalog", createdBy: user.id });
+      await tx.insert(attachments).values({ id, ownerType: "catalog", ownerId: created.id, filename, mime: catalogMime(filename, String(input.type ?? "")), size, storageKey: key, label: "catalog", createdBy: user.id });
       await tx.update(catalogs).set({ attachmentId: id }).where(eq(catalogs.id, created.id));
       const [row] = await tx.select(itemColumns).from(catalogs).where(eq(catalogs.id, created.id));
       return row;

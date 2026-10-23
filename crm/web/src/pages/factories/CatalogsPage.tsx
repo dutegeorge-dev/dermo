@@ -12,14 +12,84 @@ import { CATALOG_STATUSES, type CatalogStatus, normCategory } from "../../../../
 import { IconCheck, IconFile, IconHistory, IconTrash, IconUpload, IconX } from "../../components/Icons.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { ErrorBox, PageHeader, Spinner } from "../../components/ui.tsx";
-import { api, apiUpload, errorMessage, fileUrl } from "../../lib/api.ts";
+import { api, ApiError, apiUpload, errorMessage, fileUrl } from "../../lib/api.ts";
 import { formatSize } from "../../lib/format.ts";
 import type { CatalogGroup, CatalogItem, CatalogsData } from "../../lib/types.ts";
 
 /** Правки группы на экране проверки (до подтверждения). */
 type Edit = { selected: boolean; nameRu: string; categories: string[]; useMatch: boolean };
 
-type UploadState = { total: number; done: number; skipped: number; duplicates: number; errors: string[]; current: string; part: number; running: boolean };
+type UploadState = {
+  total: number;
+  done: number;
+  skipped: number;
+  duplicates: number;
+  errors: string[];
+  current: string;
+  part: number;
+  /** Нет связи — через сколько секунд повтор. */
+  wait: number | null;
+  running: boolean;
+};
+
+/** Файл уходит кусками: оборвалась связь — докачивается с того же места. */
+const CHUNK = 8 * 1024 * 1024;
+
+/** Повторяемые ошибки: нет связи, сервер перезапускается или перегружен. */
+const retryable = (e: unknown) => e instanceof ApiError && (e.status === 0 || e.status === 429 || e.status >= 500);
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(t), reject(new ApiError(-1, "Загрузка остановлена"))), { once: true });
+  });
+}
+
+/** Запрос с повторами: пропала связь — ждём (1, 2, 4… до 30 с) и повторяем, всего ≈ 15 минут. */
+async function withRetry<T>(fn: () => Promise<T>, signal: AbortSignal, onWait: (seconds: number | null) => void): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const result = await fn();
+      onWait(null);
+      return result;
+    } catch (e) {
+      if (!retryable(e) || attempt >= 35 || signal.aborted) throw e;
+      const delay = Math.min(30, 2 ** Math.min(attempt, 5));
+      onWait(delay);
+      await sleep(delay * 1000, signal);
+    }
+  }
+}
+
+/** Загрузить файл кусками (сервер помнит, сколько принял: после обрыва или закрытия браузера — продолжение). */
+async function sendFile(file: File, signal: AbortSignal, onProgress: (part: number) => void, onWait: (seconds: number | null) => void): Promise<{ duplicate: boolean }> {
+  const start = await withRetry(
+    () => api<{ id: string; offset: number }>("/catalogs/uploads", { method: "POST", body: { name: file.name, size: file.size, lastModified: file.lastModified } }),
+    signal,
+    onWait,
+  );
+  let offset = start.offset;
+  while (offset < file.size) {
+    const from = offset;
+    const length = Math.min(CHUNK, file.size - from);
+    try {
+      const put = () =>
+        apiUpload<{ offset: number }>(`/catalogs/uploads/${start.id}?offset=${from}`, file.slice(from, from + length), {
+          method: "PUT",
+          signal,
+          onProgress: (p) => onProgress((from + p * length) / file.size),
+        });
+      offset = (await withRetry(put, signal, onWait)).offset;
+    } catch (e) {
+      // Сервер успел принять часть куска до обрыва — продолжаем с его места.
+      const at = e instanceof ApiError && e.status === 409 ? (e.data as { offset?: unknown } | null)?.offset : undefined;
+      if (typeof at !== "number") throw e;
+      offset = at;
+    }
+    onProgress(offset / file.size);
+  }
+  return withRetry(() => api<{ duplicate: boolean }>(`/catalogs/uploads/${start.id}/finish`, { method: "POST", body: { name: file.name, size: file.size, type: file.type } }), signal, onWait);
+}
 
 /** Служебные файлы из папки WeChat / Windows / macOS — не каталоги. */
 const isJunk = (f: File) => /^(\.|~\$|thumbs\.db$|desktop\.ini$)/i.test(f.name) || f.size === 0;
@@ -65,9 +135,14 @@ export function CatalogsPage() {
     if (!files.length) return;
     setMessage(null);
     setError(null);
-    const state: UploadState = { total: files.length, done: 0, skipped: 0, duplicates: 0, errors: [], current: "", part: 0, running: true };
+    const state: UploadState = { total: files.length, done: 0, skipped: 0, duplicates: 0, errors: [], current: "", part: 0, wait: null, running: true };
     setUpload({ ...state });
     abort.current = new AbortController();
+    const signal = abort.current.signal;
+    // Пока идёт загрузка: компьютер не засыпает (где браузер умеет), закрыть вкладку — с предупреждением.
+    const lock = await navigator.wakeLock?.request("screen").catch(() => null);
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
     try {
       // Уже загруженные (имя + размер) не шлём — можно спокойно загрузить ту же папку ещё раз.
       const exists: boolean[] = [];
@@ -76,7 +151,7 @@ export function CatalogsPage() {
         exists.push(...(await api<{ exists: boolean[] }>("/catalogs/check", { method: "POST", body: { files: chunk.map((f) => ({ name: f.name, size: f.size })) } })).exists);
       }
       for (const [i, file] of files.entries()) {
-        if (abort.current.signal.aborted) break;
+        if (signal.aborted) break;
         if (exists[i]) {
           state.skipped++;
           state.done++;
@@ -86,15 +161,25 @@ export function CatalogsPage() {
         state.current = file.name;
         state.part = 0;
         setUpload({ ...state });
-        const form = new FormData();
-        form.append("file", file, file.name);
         try {
-          const r = await apiUpload<{ duplicate: boolean }>("/catalogs", form, (part) => setUpload({ ...state, part }), abort.current.signal);
+          const r = await sendFile(
+            file,
+            signal,
+            (part) => {
+              state.part = part;
+              setUpload({ ...state });
+            },
+            (wait) => {
+              state.wait = wait;
+              setUpload({ ...state });
+            },
+          );
           if (r.duplicate) state.duplicates++;
         } catch (e) {
-          if (abort.current.signal.aborted) break;
+          if (signal.aborted) break;
           state.errors.push(`${file.name}: ${errorMessage(e)}`);
         }
+        state.wait = null;
         state.done++;
         setUpload({ ...state });
         if (state.done % 5 === 0) void refresh();
@@ -102,8 +187,11 @@ export function CatalogsPage() {
     } catch (e) {
       setError(e);
     } finally {
+      window.removeEventListener("beforeunload", warn);
+      void lock?.release().catch(() => {});
       state.running = false;
       state.current = "";
+      state.wait = null;
       setUpload({ ...state });
       void refresh();
     }
@@ -220,7 +308,8 @@ export function CatalogsPage() {
         </div>
         <p className="mt-2 text-xs muted">
           Каталоги — PDF (и сканы), Word, Excel, PowerPoint, картинки. Скриншоты окна «Файлы» WeChat (13–15 файлов на экран) — чтобы знать, какой контакт прислал
-          каталог; их можно загрузить до или после файлов. Ту же папку можно загрузить ещё раз — уже загруженные файлы пропустятся.
+          каталог; их можно загрузить до или после файлов. Файлы уходят кусками: пропала связь — загрузка подождёт и продолжится сама. Закрыли браузер — выберите ту же папку
+          ещё раз: загруженное пропустится, недокачанное докачается.
         </p>
         {upload && (
           <div className="mt-2 text-sm">
@@ -233,6 +322,7 @@ export function CatalogsPage() {
                 · {upload.current} — {Math.round(upload.part * 100)} %
               </span>
             )}
+            {upload.wait !== null && <span className="text-amber-700 dark:text-amber-400"> · нет связи, повтор через {upload.wait} с — загрузка продолжится с того же места</span>}
             {upload.errors.length > 0 && (
               <ul className="mt-1 list-disc pl-5 text-xs text-red-700 dark:text-red-400">
                 {upload.errors.map((e) => (

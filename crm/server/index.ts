@@ -8,7 +8,7 @@ import fs from "node:fs";
 import { buildApp } from "./app.ts";
 import { config } from "./config.ts";
 import { pool } from "./db/client.ts";
-import { kickCatalogQueue, resetCatalogQueue } from "./lib/catalogs.ts";
+import { kickCatalogQueue, resetCatalogQueue, sweepPartialUploads } from "./lib/catalogs.ts";
 import { purgeExpiredSessions } from "./lib/session.ts";
 
 const app = await buildApp({ logger: true });
@@ -20,6 +20,7 @@ await fs.promises.mkdir(config.uploadDir, { recursive: true });
 
 const sweep = setInterval(() => {
   purgeExpiredSessions().catch((error) => app.log.error(error, "Не удалось удалить старые сессии"));
+  sweepPartialUploads().catch((error) => app.log.error(error, "Не удалось удалить брошенные загрузки каталогов"));
 }, 6 * 60 * 60 * 1000);
 sweep.unref();
 

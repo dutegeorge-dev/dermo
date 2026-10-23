@@ -352,6 +352,17 @@ export async function stopCatalogQueue(): Promise<void> {
   if (active) await new Promise<void>((resolve) => idle.push(resolve));
 }
 
+/** Недокачанные файлы, брошенные больше недели назад, — удалить. */
+export async function sweepPartialUploads(): Promise<void> {
+  const dir = path.join(config.uploadDir, "partial");
+  const names = await fs.promises.readdir(dir).catch(() => []);
+  for (const name of names) {
+    const file = path.join(dir, name);
+    const st = await fs.promises.stat(file).catch(() => null);
+    if (st && Date.now() - st.mtimeMs > 7 * 24 * 60 * 60 * 1000) await fs.promises.rm(file, { force: true });
+  }
+}
+
 /** Дождаться, пока очередь опустеет (тесты). */
 export function catalogQueueIdle(): Promise<void> {
   return active ? new Promise<void>((resolve) => idle.push(resolve)) : Promise.resolve();
@@ -567,6 +578,18 @@ export const companyCore = (s: string | null | undefined) =>
     .trim();
 export const senderKey = (s: string) => s.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
 
+/**
+ * Тот же контакт: имя совпадает или одно — начало другого почти целиком (ИИ на одном из скриншотов потерял
+ * последний иероглиф: «Leah Lee 18375803260» и «Leah Lee 18375803260李»).
+ */
+export function sameSender(a: string, b: string): boolean {
+  const x = senderKey(a);
+  const y = senderKey(b);
+  if (x === y) return true;
+  const [short, long] = x.length < y.length ? [x, y] : [y, x];
+  return short.length >= 6 && long.startsWith(short) && short.length / long.length >= 0.8;
+}
+
 type Group = { sender: string | null; results: CatalogResult[] };
 
 /** Подходящая фабрика для группы каталогов (один отправитель): уже присланные им каталоги, имя WeChat, телефон, WeChat ID, сайт, почта, название. */
@@ -581,16 +604,16 @@ export async function suggestFactories(tx: DbOrTx, groups: Group[]): Promise<(Fa
     .select({ sender: catalogs.sender, factoryId: catalogs.factoryId })
     .from(catalogs)
     .where(and(eq(catalogs.status, "done"), sql`${catalogs.sender} is not null`, sql`${catalogs.factoryId} is not null`));
-  const bySender = new Map(done.map((d) => [senderKey(d.sender!), d.factoryId!]));
+
   const tail = (d: string) => d.slice(-9);
   const phonesOf = list.map((f) => ({ f, phones: [...digitRuns(f.phone), ...digitRuns(f.name)].map(tail) }));
   const pick = (f: (typeof list)[number], reason: string): FactoryMatch => ({ id: f.id, name: f.name, nameRu: f.nameRu, reason });
 
   return groups.map(({ sender, results }) => {
     if (sender) {
-      const known = byId.get(bySender.get(senderKey(sender)) ?? 0);
+      const known = byId.get(done.find((d) => sameSender(d.sender!, sender))?.factoryId ?? 0);
       if (known) return pick(known, "этот контакт уже присылал каталог");
-      const byName = list.find((f) => senderKey(f.name) === senderKey(sender));
+      const byName = list.find((f) => sameSender(f.name, sender));
       if (byName) return pick(byName, "имя в WeChat");
     }
     const phones = new Set([...digitRuns(sender), ...results.flatMap((r) => digitRuns(r.phone))].map(tail));
@@ -630,7 +653,7 @@ export async function confirmCatalogs(tx: DbOrTx, user: AuthUser, group: Confirm
   const first = (k: keyof Omit<CatalogResult, "categories">) => results.map((r) => r[k].trim()).find(Boolean) ?? null;
   const known = (await knownCategories(tx)).map((k) => k.c);
   const categories = normalizeCategories(group.categories ?? results.flatMap((r) => r.categories), known);
-  const sender = rows.map((r) => r.sender).find(Boolean) ?? null;
+  const sender = rows.map((r) => r.sender ?? "").sort((a, b) => b.length - a.length)[0] || null;
   const phone = first("phone") ?? digitRuns(sender).find((d) => d.length >= 11) ?? null;
   const nameRu = group.nameRu?.trim() || first("nameRu");
 
