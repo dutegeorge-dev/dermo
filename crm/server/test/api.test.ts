@@ -1536,3 +1536,181 @@ describe("ИИ-разбор: стороны и тип счёта", () => {
     assert.ok(d.warnings.some((w) => /не распознано/.test(w)));
   });
 });
+
+describe("Каталоги фабрик из рассылки", () => {
+  const boundary = "----crmcatalog";
+  const upload = (s: Session, name: string, content: Buffer | string, type = "application/octet-stream") =>
+    app.inject({
+      method: "POST",
+      url: `${API}/catalogs`,
+      headers: { cookie: s.cookie, "x-csrf-token": s.csrf, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: ${type}\r\n\r\n`),
+        Buffer.isBuffer(content) ? content : Buffer.from(content),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]),
+    });
+
+  /** Простой PDF: страницы с текстом (Helvetica) или только с рисунком (как скан без текстового слоя). */
+  function demoPdf(pages: string[]): Buffer {
+    const objs: string[] = [];
+    const kids: number[] = [];
+    objs[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+    objs[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+    let n = 4;
+    for (const text of pages) {
+      const stream = text ? `BT /F1 10 Tf 40 780 Td 12 TL ${text.split("\n").map((l) => `(${l}) '`).join(" ")} ET` : "0.2 0.4 0.8 rg 50 50 500 700 re f";
+      objs[n] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+      objs[n + 1] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${n} 0 R >>`;
+      kids.push(n + 1);
+      n += 2;
+    }
+    objs[2] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
+    let out = "%PDF-1.4\n";
+    const offsets: number[] = [];
+    for (let i = 1; i < objs.length; i++) {
+      offsets[i] = Buffer.byteLength(out);
+      out += `${i} 0 obj\n${objs[i]}\nendobj\n`;
+    }
+    const xref = Buffer.byteLength(out);
+    out += `xref\n0 ${objs.length}\n0000000000 65535 f \n${offsets.slice(1).map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}`;
+    out += `trailer\n<< /Size ${objs.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    return Buffer.from(out, "latin1");
+  }
+
+  const settle = async (s: Session) => {
+    const { catalogQueueIdle } = await import("../lib/catalogs.ts");
+    for (let i = 0; i < 100; i++) {
+      await catalogQueueIdle();
+      const data = (await call(s, "GET", "/catalogs")).json();
+      if (!data.counts.queued && !data.counts.processing) return data;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error("очередь каталогов не разобралась");
+  };
+
+  test("сопоставление со скриншотами, выбор страниц, категории, схема ответа", async () => {
+    const { matchSender, sizeMatches, pickPages, sampleText, normalizeCategories, companyCore, CATALOG_SCHEMA } = await import("../lib/catalogs.ts");
+    assert.ok(sizeMatches(Math.round(12.8 * 1024 * 1024), "12.8M"));
+    assert.ok(sizeMatches(12_800_000, "12.8M"));
+    assert.ok(!sizeMatches(13_500_000, "12.8M"));
+    assert.ok(sizeMatches(512 * 1024, "512K"));
+    const rows = [
+      { filename: "2026 Green Valley Gym Series.pdf", size: "55.9M", sender: "Leah Lee 18375803260李", chat: "Leah Lee 18375803260李" },
+      { filename: "产品名录（新）(1).pdf", size: "56.7M", sender: "净水器、配件", chat: "净水器、配件" },
+      { filename: "目录.pdf", size: "2.1M", sender: "A-地板厂-小王", chat: null },
+      { filename: "目录.pdf", size: "2.1M", sender: "B-地毯厂-小李", chat: null },
+      { filename: "Catalog--Paint Vinyl Wallpaper.pdf", size: "95.0M", sender: "Las fugas", chat: "Las fugas" },
+    ];
+    const mb = (v: number) => Math.round(v * 1024 * 1024);
+    assert.equal(matchSender({ filename: "2026 Green Valley Gym Series.pdf", size: mb(55.9) }, rows)?.sender, "Leah Lee 18375803260李");
+    assert.equal(matchSender({ filename: "产品名录(新)(1).pdf", size: mb(56.7) }, rows)?.sender, "净水器、配件", "полуширинные скобки");
+    assert.equal(matchSender({ filename: "产品名录(新).pdf", size: mb(56.7) }, rows)?.sender, "净水器、配件", "без «(1)»");
+    assert.equal(matchSender({ filename: "目录.pdf", size: mb(2.1) }, rows), null, "два отправителя — не угадываем");
+    assert.equal(matchSender({ filename: "Catalog--Paint Vinyl Wallpapr.pdf", size: mb(95) }, rows)?.sender, "Las fugas", "ИИ ошибся в букве");
+    assert.equal(matchSender({ filename: "2026 Green Valley Gym Series.pdf", size: mb(20) }, rows)?.sender, undefined, "другой размер — другой файл… или нет совпадения");
+    assert.deepEqual(pickPages(6, 6), [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(pickPages(100, 6), [1, 2, 14, 39, 63, 88]);
+    const text = sampleText(Array.from({ length: 100 }, (_, i) => `Раздел ${i + 1} ${"x".repeat(1000)}`));
+    assert.ok(text.length <= 8000 + 2000 && text.includes("Раздел 1 ") && text.includes("Раздел 100") === false && /Раздел [5-9]\d /.test(text), "понемногу с разных страниц");
+    assert.deepEqual(normalizeCategories(["Ковролин", " SPC-ламинат ", "ковролин", "Ковёр"], ["ковролин", "spc ламинат", "ковер"]), ["ковролин", "spc ламинат", "ковер"]);
+    assert.equal(companyCore("Dezhou Chengda Nonwoven Products Co., Ltd."), "dezhou chengda nonwoven products");
+    const unions = JSON.stringify(CATALOG_SCHEMA).match(/"type":\[/g)?.length ?? 0;
+    assert.ok(unions <= 16);
+  });
+
+  test("загрузка → разбор → проверка → фабрики; повтор и дубли; только админ", async () => {
+    const admin = await adminSession();
+    const ivan = await login("ivan", "managerpass", "10.0.0.41");
+    assert.equal((await call(ivan, "GET", "/catalogs")).statusCode, 403);
+    assert.equal((await upload(ivan, "x.pdf", "x")).statusCode, 403);
+
+    // Строки «со скриншота» до загрузки файлов: отправитель подхватывается при загрузке.
+    const { db: tdb } = await import("../db/client.ts");
+    const { catalogSenders } = await import("../db/schema.ts");
+    const textCatalog = `DEMO CARPET FACTORY CO., LTD.\nTel: +86 18300000001\n${"Plain carpet, velour carpet, jacquard exhibition carpet, polyester. ".repeat(12)}`;
+    const scan = demoPdf(["", "", ""]);
+    const textPdf = demoPdf(["DEMO NONWOVEN PRODUCTS CO LTD", ["Exhibition carpet catalog", ...Array.from({ length: 12 }, () => "Needle punched velour carpet for exhibitions and hotels")].join("\n")]);
+    await tdb.insert(catalogSenders).values([
+      { filename: "demo carpet catalog.txt", size: `${(Buffer.byteLength(textCatalog) / 1024).toFixed(1)}K`, sender: "Demo-地毯厂-小王", chat: "Demo-地毯厂-小王" },
+      { filename: "demo scan 扫描版.pdf", size: `${(scan.length / 1024).toFixed(1)}K`, sender: "Demo-地毯厂-小王", chat: "Demo-地毯厂-小王" },
+    ]);
+    // Фабрика с таким именем WeChat уже есть (завёл менеджер) — каталог её найдёт.
+    const known = (await call(ivan, "POST", "/factories", { name: "Demo Wallpaper 13800000002", categories: ["обои"] })).json().factory;
+
+    const a = await upload(admin, "demo carpet catalog.txt", textCatalog, "text/plain");
+    assert.equal(a.statusCode, 200, a.body);
+    assert.equal(a.json().catalog.sender, "Demo-地毯厂-小王");
+    const b = (await upload(admin, "demo scan 扫描版.pdf", scan)).json().catalog;
+    const c = (await upload(admin, "wallpaper.pdf", textPdf)).json().catalog;
+    assert.equal(b.sender, "Demo-地毯厂-小王");
+    assert.equal(c.sender, null);
+    const again = (await upload(admin, "копия.txt", textCatalog)).json();
+    assert.equal(again.duplicate, true, "тот же файл второй раз не берём");
+    const check = (await call(admin, "POST", "/catalogs/check", { files: [{ name: "wallpaper.pdf", size: textPdf.length }, { name: "wallpaper.pdf", size: 1 }] })).json();
+    assert.deepEqual(check.exists, [true, false]);
+
+    const data = await settle(admin);
+    const byId = new Map(data.items.map((i: { id: number }) => [i.id, i]));
+    const ia = byId.get(a.json().catalog.id) as { status: string; method: string; note: string };
+    const ib = byId.get(b.id) as { status: string; method: string; pages: number };
+    const ic = byId.get(c.id) as { method: string; pages: number };
+    assert.equal(ia.status, "review");
+    assert.equal(ia.method, "text");
+    assert.match(ia.note, /ИИ не подключён/);
+    assert.equal(ib.method, "images", "скан — страницами-картинками");
+    assert.equal(ib.pages, 3);
+    assert.equal(ic.method, "text");
+    assert.equal(ic.pages, 2);
+
+    // Отправителя третьего файла указали вручную — по имени WeChat нашлась фабрика менеджера.
+    assert.equal((await call(admin, "PATCH", `/catalogs/${c.id}`, { sender: "Demo Wallpaper 13800000002" })).statusCode, 200);
+    const review = (await call(admin, "GET", "/catalogs")).json();
+    const carpet = review.groups.find((g: { sender: string }) => g.sender === "Demo-地毯厂-小王");
+    assert.deepEqual([...carpet.catalogIds].sort(), [a.json().catalog.id, b.id].sort(), "файлы одного контакта — одной группой");
+    assert.equal(carpet.match, null);
+    const wall = review.groups.find((g: { sender: string }) => g.sender === "Demo Wallpaper 13800000002");
+    assert.equal(wall.match.id, known.id);
+    assert.equal(wall.match.reason, "имя в WeChat");
+
+    const confirmed = (
+      await call(admin, "POST", "/catalogs/confirm", {
+        groups: [
+          { catalogIds: carpet.catalogIds, factoryId: null, nameRu: "Demo — ковролин", categories: ["Ковролин", "ковролин"] },
+          { catalogIds: wall.catalogIds, factoryId: known.id, categories: ["обои", "Фотообои"] },
+        ],
+      })
+    ).json();
+    assert.deepEqual(confirmed, { created: 1, updated: 1, errors: [] });
+    const list = (await call(admin, "GET", "/factories?q=velour")).json().factories;
+    const made = list.find((f: { name: string }) => f.name === "Demo-地毯厂-小王");
+    assert.ok(made, "поиск по тексту каталога");
+    assert.deepEqual(made.categories, ["ковролин"]);
+    const card = (await call(admin, "GET", `/factories/${made.id}`)).json();
+    assert.equal(card.factory.nameRu, "Demo — ковролин");
+    assert.equal(card.files.length, 2);
+    assert.ok(card.files.every((f: { label: string }) => f.label === "catalog"));
+    assert.equal(card.factory.phone, null);
+    assert.deepEqual((await call(admin, "GET", `/factories/${known.id}`)).json().factory.categories, ["обои", "фотообои"]);
+    assert.ok(!(await call(ivan, "GET", "/factories")).json().factories.some((f: { id: number }) => f.id === made.id), "фабрику из каталогов видит только админ");
+    assert.equal((await call(admin, "POST", "/catalogs/confirm", { groups: [{ catalogIds: carpet.catalogIds, factoryId: null }] })).json().errors.length, 1, "второй раз не подтверждается");
+
+    // Новый каталог того же контакта — сразу к его фабрике.
+    const d = (await upload(admin, "demo new.txt", `${textCatalog} more`)).json().catalog;
+    await call(admin, "PATCH", `/catalogs/${d.id}`, { sender: "Demo-地毯厂-小王" });
+    const next = await settle(admin);
+    assert.equal(next.groups.find((g: { catalogIds: number[] }) => g.catalogIds.includes(d.id)).match.reason, "этот контакт уже присылал каталог");
+    assert.ok(next.categories.some((k: { c: string }) => k.c === "ковролин"));
+
+    // Категории: переименовать и слить.
+    assert.equal((await call(admin, "POST", "/factories/categories/rename", { from: "фотообои", to: "Обои" })).json().factories, 1);
+    assert.deepEqual((await call(admin, "GET", `/factories/${known.id}`)).json().factory.categories, ["обои"]);
+    assert.equal((await call(ivan, "POST", "/factories/categories/rename", { from: "обои", to: "x" })).statusCode, 403);
+
+    // Удалить неподтверждённый — вместе с файлом.
+    const fileId = next.items.find((i: { id: number }) => i.id === d.id).attachmentId;
+    assert.equal((await call(admin, "DELETE", `/catalogs/${d.id}`)).statusCode, 200);
+    assert.equal((await call(admin, "GET", `/files/${fileId}`)).statusCode, 404);
+    assert.equal((await call(admin, "DELETE", `/catalogs/${a.json().catalog.id}`)).statusCode, 404, "подтверждённый не удаляется");
+  });
+});

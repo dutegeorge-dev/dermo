@@ -87,3 +87,26 @@ export async function apiDownload(path: string, options: { method?: Method; form
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+/** Загрузка большого файла с прогрессом (fetch его не показывает): ответ — JSON, как у api(). */
+export function apiUpload<T>(path: string, form: FormData, onProgress?: (part: number) => void, signal?: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API}${path}`);
+    xhr.withCredentials = true;
+    if (csrfToken) xhr.setRequestHeader("x-csrf-token", csrfToken);
+    xhr.responseType = "json";
+    if (onProgress) xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    signal?.addEventListener("abort", () => xhr.abort());
+    xhr.onerror = () => reject(new ApiError(0, "Нет связи с сервером. Проверьте интернет и повторите."));
+    xhr.onabort = () => reject(new ApiError(0, "Загрузка остановлена"));
+    xhr.onload = () => {
+      const data = xhr.response as { error?: string } | null;
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data as T);
+      if (xhr.status === 401) onUnauthorized?.();
+      // nginx отвечает 413 своей HTML-страницей — без JSON.
+      reject(new ApiError(xhr.status, data?.error ?? (xhr.status === 413 ? "Файл слишком большой для сервера (nginx client_max_body_size)" : `Ошибка ${xhr.status}`)));
+    };
+    xhr.send(form);
+  });
+}

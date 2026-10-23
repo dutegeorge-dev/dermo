@@ -18,6 +18,7 @@ import { aiRoutes } from "./routes/ai.ts";
 import { auditRoutes } from "./routes/audit.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { calcRoutes } from "./routes/calc.ts";
+import { catalogRoutes } from "./routes/catalogs.ts";
 import { cargoRoutes } from "./routes/cargo.ts";
 import { callRoutes } from "./routes/calls.ts";
 import { counterpartyRoutes } from "./routes/counterparties.ts";
@@ -141,6 +142,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
       await api.register(orderRoutes);
       await api.register(productRoutes);
       await api.register(factoryRoutes);
+      await api.register(catalogRoutes);
       await api.register(quoteRoutes);
       await api.register(paymentRoutes);
       await api.register(estimateRoutes);

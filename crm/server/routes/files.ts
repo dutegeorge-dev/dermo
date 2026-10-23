@@ -26,7 +26,7 @@ import { parseShipmentNumber } from "../lib/shipments.ts";
 /** Эти типы безопасно показывать прямо в браузере; остальное — только скачиванием. */
 const INLINE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"]);
 
-function storagePath(key: string): string {
+export function storagePath(key: string): string {
   const full = path.resolve(config.uploadDir, key);
   if (!full.startsWith(path.resolve(config.uploadDir) + path.sep)) throw new HttpError(400, "Некорректный путь");
   return full;

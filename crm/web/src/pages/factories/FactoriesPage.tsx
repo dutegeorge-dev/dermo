@@ -7,7 +7,7 @@ import { Link } from "react-router";
 import { FACTORY_STATUSES } from "../../../../shared/factories.ts";
 import { formatMoney } from "../../../../shared/documents.ts";
 import { FactoryStatusChip } from "../../components/factories/common.tsx";
-import { IconFactory, IconPlus, IconSearch } from "../../components/Icons.tsx";
+import { IconFactory, IconPlus, IconSearch, IconUpload } from "../../components/Icons.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { EmptyState, ErrorBox, PageHeader, Spinner } from "../../components/ui.tsx";
 import { api, fileUrl } from "../../lib/api.ts";
@@ -37,9 +37,16 @@ export function FactoriesPage() {
         title="Фабрики"
         meta={user?.role === "admin" ? "Заводы из WeChat: кандидаты и поставщики" : "Фабрики, которые нашли вы, и поставщики компании"}
         actions={
-          <Link to="/factories/new" className="btn btn-primary">
-            <IconPlus /> Добавить фабрику
-          </Link>
+          <>
+            {user?.role === "admin" && (
+              <Link to="/factories/catalogs" className="btn">
+                <IconUpload /> Каталоги из рассылки
+              </Link>
+            )}
+            <Link to="/factories/new" className="btn btn-primary">
+              <IconPlus /> Добавить фабрику
+            </Link>
+          </>
         }
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">

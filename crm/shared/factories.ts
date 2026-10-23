@@ -96,3 +96,32 @@ export const emptyOffer = (): Offer => ({
   conditions: "",
   quotedAt: null,
 });
+
+// ── Каталоги из рассылки ───────────────────────────────────────────────────
+
+export const CATALOG_STATUSES = {
+  queued: "В очереди",
+  processing: "Разбирается",
+  review: "На проверке",
+  done: "Готово",
+  failed: "Ошибка",
+} as const;
+export type CatalogStatus = keyof typeof CATALOG_STATUSES;
+
+/** Что ИИ понял по каталогу: кто это и какие категории товара делает (без параметров — их узнают в переписке). */
+export type CatalogResult = {
+  /** Название как в каталоге: «Dezhou Chengda Nonwoven Products Co., Ltd.». */
+  company: string;
+  /** Коротко по-русски: «Chengda — ковролин». */
+  nameRu: string;
+  phone: string;
+  wechatId: string;
+  email: string;
+  website: string;
+  location: string;
+  categories: string[];
+  notes: string;
+};
+
+/** Категория фабрики — строчными, без лишних пробелов. */
+export const normCategory = (c: string) => c.trim().replace(/\s+/g, " ").toLowerCase().slice(0, 60);

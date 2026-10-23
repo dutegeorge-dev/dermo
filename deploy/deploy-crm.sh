@@ -33,6 +33,8 @@ git fetch origin main
 git rebase --empty=drop -X theirs origin/main
 
 echo "→ 3/5 зависимости, сборка фронтенда, миграции"
+# poppler-utils (pdftotext, pdftoppm) — разбор каталогов фабрик, в том числе сканов.
+command -v pdftoppm >/dev/null 2>&1 || apt-get install -y poppler-utils || echo "! Не установился poppler-utils — сканы каталогов не будут разбираться: apt install poppler-utils"
 npm --prefix crm ci
 npm --prefix crm run build
 npm --prefix crm run db:migrate

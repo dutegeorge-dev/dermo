@@ -494,3 +494,39 @@ export type FactoryResponse = {
   foundBy: { id: number; name: string } | null;
   supplier: { id: number; name: string } | null;
 };
+
+export type CatalogItem = {
+  id: number;
+  filename: string;
+  size: number;
+  sender: string | null;
+  chat: string | null;
+  status: import("../../../shared/factories.ts").CatalogStatus;
+  method: "text" | "images" | "none" | null;
+  pages: number | null;
+  result: import("../../../shared/factories.ts").CatalogResult | null;
+  note: string | null;
+  attachmentId: string | null;
+  factoryId: number | null;
+  createdAt: string;
+  factoryName?: string;
+  factoryNameRu?: string | null;
+};
+
+export type CatalogGroup = {
+  key: string;
+  sender: string | null;
+  chat: string | null;
+  catalogIds: number[];
+  match: { id: number; name: string; nameRu: string | null; reason: string } | null;
+};
+
+export type CatalogsData = {
+  ai: boolean;
+  counts: Partial<Record<import("../../../shared/factories.ts").CatalogStatus, number>>;
+  items: CatalogItem[];
+  done: CatalogItem[];
+  groups: CatalogGroup[];
+  senders: string[];
+  categories: { c: string; n: number }[];
+};

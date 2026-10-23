@@ -157,8 +157,8 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now bars-crm
 curl -s http://127.0.0.1:3100/crm/api/health      # {"ok":true}
 
-# 6. nginx — в server{} для tlkbars.ru добавить блок location /crm/
-#    (он уже есть в deploy/nginx/tlkbars.live.conf и tlkbars.ru.conf):
+# 6. nginx — в server{} для tlkbars.ru добавить блоки location = /crm/api/catalogs и location /crm/
+#    (они уже есть в deploy/nginx/tlkbars.live.conf и tlkbars.ru.conf):
 sudo cp /etc/nginx/sites-available/tlkbars /etc/nginx/sites-available/tlkbars.bak
 sudo cp deploy/nginx/tlkbars.live.conf /etc/nginx/sites-available/tlkbars
 sudo nginx -t && sudo systemctl reload nginx
@@ -201,6 +201,8 @@ location ^~ /crm/ {
 - **Всё вместе:** `sudo bash deploy/deploy.sh` — пересобирает сайт и после этого делает то же для `/crm/` (если служба `bars-crm` установлена; до установки шаг пропускается).
 
 Если в обновлении менялись шаблоны сайта или `server/`, нужен полный `deploy.sh`.
+
+Каталоги фабрик (миграция 0015): `deploy-crm.sh` сам ставит `poppler-utils` (pdftotext / pdftoppm — сканы). В nginx нужен блок `location = /crm/api/catalogs` из `deploy/nginx/tlkbars.live.conf` (лимит тела 400 МБ — у общего `/crm/` 30 МБ); на живом сервере его вставить перед `location ^~ /crm/` и `sudo nginx -t && sudo systemctl reload nginx`.
 
 После обновления с документами (миграция 0003: `clients` → `counterparties`, документы, товары) один раз выполните `npm run crm:seed` — он заполнит «Реквизиты компании» для поручений, если они пусты (остальное `seed` не трогает).
 
@@ -309,6 +311,8 @@ sudo systemctl start bars-crm
 | `documents` | Документ любого типа (`type`, справочник — `shared/documents.ts`): `number`, `date`, `counterparty_id` (вторая сторона), `client_id` (клиент, к которому относится документ поставщика/подрядчика), `shipment_id` (сделка), `parent_id` (договор: поручение → договор комиссии, инвойс → контракт), `seq_no` (номер приложения в договоре), `currency`, `amount`, `status` (`draft`/`signed`/`cancelled`), `payment_status` (`unpaid`/`partial`/`paid`), `paid_amount`, `paid_at`, `valid_until`, `data` (jsonb: Incoterms, условия оплаты, смета поручения, статья расходов…), `notes`. Файлы — `attachments` с `owner_type='document'` и меткой `original`/`signed`/`payment` (документ об оплате)/`generated` (сформирован системой). `data.packing` — строки и итоги упаковочного листа |
 | `document_items` | Позиции документа: `product_id`, `name` (как в документе), `batch_no` («партийный номер» поручения), `hs_code`, `quantity`, `unit`, `price`, `amount` |
 | `factories` | База фабрик: `name` (как в WeChat), `name_ru`, `wechat_id`, `contact_name`, `phone`, `email`, `website`, `location` (место производства), `categories` text[], `status` (`new`/`contacted`/`samples`/`approved`/`rejected`), `profile` jsonb (анкета — `shared/factories.ts`), `notes`, `found_by` (кто нашёл — видит кандидата), `counterparty_id` (поставщик после договора; тогда фабрику видят все) |
+| `catalogs` | Каталоги из рассылки: `attachment_id` (файл: owner_type `catalog`, после подтверждения — `factory`), `filename`, `size`, `sha256` (дубли), `sender` / `chat` (контакт WeChat), `status` (`queued`/`processing`/`review`/`done`/`failed`), `method` (`text`/`images`/`none`), `pages`, `result` jsonb (компания, контакты, `categories` — `CatalogResult` в `shared/factories.ts`), `text` (для поиска), `note`, `usage`, `factory_id` |
+| `catalog_senders` | Строки со скриншотов окна «Файлы» WeChat: `filename`, `size` (как на экране — «12.8M»), `sender`, `chat` |
 | `product_offers` | Цены фабрик: `factory_id`, `product_id` (товар справочника — по названию без размера рулона и цвета), `name` (позиция с характеристиками), `price`, `currency`, `unit`, `moq`, `per_container` (единиц в 40HQ), `kg_per_unit`, `m3_per_unit`, `conditions`, `quoted_at` |
 | `freight_rates` | Ставки доставки: `transport` (rail/truck/sea/multimodal), `mode` (`container` / `cbm`), `container`, `origin`, `destination`, `rate`, `currency`, `kg_per_cbm`, `min_cbm`, `fee` + `fee_currency` (за отправку), `transit_days`, `etd`, `valid_until`, `quoted_at`, `carrier_name`, `notes` |
 | `estimates` | Раздел «Расчёт»: заявки клиентов на их товары — `title`, `client_name`, `scheme` (`commission` / `teu`), `request` (текст заявки), `params` / `result` (jsonb, `shared/estimate.ts`; `params.markup` — наличные сверху расчёта, только админам), `freight`, `rates`, `rates_date` |
@@ -405,6 +409,12 @@ sudo systemctl start bars-crm
 | `GET /factories/duplicates?wechatId&phone&name&except` | Дубли; чужого кандидата не раскрывает — только кто нашёл |
 | `GET/PATCH/DELETE /factories/:id` | Карточка (анкета, цены, файлы) / правка (offers — заменить целиком) / удаление (кандидата — нашедший или админ, поставщика — админ) |
 | `POST /factories/:id/files?label=photo\|catalog\|screenshot`, `POST /factories/:id/supplier` | Файл фабрики; «сделать поставщиком» |
+| `GET /catalogs` | Каталоги (только админ): файлы не в «Готово», группы на проверке по контакту с подходящей фабрикой (`match`), счётчики, отправители со скриншотов, категории |
+| `POST /catalogs` (multipart `file`, до `CRM_MAX_CATALOG_MB`), `POST /catalogs/check` `{files:[{name,size}]}` | Загрузить каталог в очередь разбора (тот же sha256 — `duplicate`); какие файлы уже загружены |
+| `POST /catalogs/senders` (multipart, скриншоты) | ИИ читает строки окна «Файлы» WeChat → `catalog_senders`, отправитель у каталогов без него |
+| `PATCH /catalogs/:id` `{sender}`, `POST /catalogs/:id/retry` (`all` — все с ошибкой), `DELETE /catalogs/:id` | Отправитель вручную; разобрать заново; удалить неподтверждённый с файлом |
+| `POST /catalogs/confirm` `{groups:[{catalogIds, factoryId, nameRu, categories}]}` | Группы → новая (`factoryId: null`) или найденная фабрика, файлы — в её карточку |
+| `POST /factories/categories/rename` `{from, to}` | Переименовать / слить категорию во всех фабриках (админ) |
 | `GET /products/:id/offers` | Цены фабрик на товар (с учётом доступа) и их фото |
 | `GET /products/unused`, `POST /products/unused/delete` (админ) | Пустые товары (без закупок, продаж, цен фабрик, расчётов): список / удалить |
 | `GET /products/duplicates`, `POST /products/merge` `{ids, name}` | Группы похожих товаров (одно название без варианта); объединить в первый (позиции и цены фабрик переходят) |
