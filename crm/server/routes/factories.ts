@@ -48,6 +48,7 @@ export async function factoryRoutes(app: FastifyInstance): Promise<void> {
           sql`exists (select 1 from unnest(${factories.categories}) c where c ilike ${l})`,
           sql`exists (select 1 from product_offers o left join products p on p.id = o.product_id
             where o.factory_id = ${factories.id} and (o.name ilike ${l} or p.name ilike ${l} or p.name_ru ilike ${l}))`,
+          sql`exists (select 1 from catalogs k where k.factory_id = ${factories.id} and k.text ilike ${l})`,
         ),
       );
     }

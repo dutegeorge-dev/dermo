@@ -16,6 +16,7 @@ import { SpaceLayout } from "./pages/kb/SpaceLayout.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
 import { CounterpartiesPage, CounterpartyPage } from "./pages/crm/CounterpartiesPage.tsx";
 import { ProductPage, ProductsPage } from "./pages/crm/ProductsPage.tsx";
+import { CatalogsPage } from "./pages/factories/CatalogsPage.tsx";
 import { FactoriesPage } from "./pages/factories/FactoriesPage.tsx";
 import { FactoryPage } from "./pages/factories/FactoryPage.tsx";
 import { FreightRatesPage } from "./pages/factories/FreightRatesPage.tsx";
@@ -97,6 +98,7 @@ const router = createBrowserRouter(
                 { path: "users", element: <UsersPage /> },
                 { path: "audit", element: <AuditPage /> },
                 { path: "settings", element: <SettingsPage /> },
+                { path: "factories/catalogs", element: <CatalogsPage /> },
               ],
             },
             { path: "*", element: <NotFoundPage /> },

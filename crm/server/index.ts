@@ -8,6 +8,7 @@ import fs from "node:fs";
 import { buildApp } from "./app.ts";
 import { config } from "./config.ts";
 import { pool } from "./db/client.ts";
+import { kickCatalogQueue, resetCatalogQueue, sweepPartialUploads } from "./lib/catalogs.ts";
 import { purgeExpiredSessions } from "./lib/session.ts";
 
 const app = await buildApp({ logger: true });
@@ -19,6 +20,7 @@ await fs.promises.mkdir(config.uploadDir, { recursive: true });
 
 const sweep = setInterval(() => {
   purgeExpiredSessions().catch((error) => app.log.error(error, "Не удалось удалить старые сессии"));
+  sweepPartialUploads().catch((error) => app.log.error(error, "Не удалось удалить брошенные загрузки каталогов"));
 }, 6 * 60 * 60 * 1000);
 sweep.unref();
 
@@ -32,3 +34,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 
 await app.listen({ host: config.host, port: config.port });
+
+// Каталоги фабрик: прерванные перезапуском разборы — снова в очередь, очередь — в работу.
+await resetCatalogQueue().catch((error) => app.log.error(error, "Каталоги: не удалось вернуть разборы в очередь"));
+kickCatalogQueue();

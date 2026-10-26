@@ -263,7 +263,40 @@
     пункт «Загрузить ДТ (ГТД) с отметкой о выпуске»: выполнен, когда у ДТ сделки есть файл (PDF выпущенной ДТ).
     ИИ: номер из графы A, дата — из номера (ДДММГГ), сумма — ИТОГО платежей (графа 47 / B), контейнер — из графы 31
     (по нему ДТ сама находит сделку).
-27. **Инструкция для новых сотрудников — в базе знаний (октябрь 2026).** Пространство «Компания» → «Инструкция: как
+27. **Каталоги фабрик из рассылки (октябрь 2026)** — раздел «Каталоги» (`/factories/catalogs`, только админ; кнопка
+    «Каталоги из рассылки» на странице «Фабрики»). Владелец разослал в WeChat «пришлите каталог» (~250 ответов, ~6 ГБ:
+    PDF, сканы 扫描版 по 100–200 МБ, Word). Решения владельца: **категории без групп** — конкретный товар (ковролин,
+    линолеум, SPC), «напольные покрытия» бесполезны (почти все фабрики такие); справочника категорий заранее нет —
+    **ИИ заводит их сам по ходу**, переиспользуя уже существующие (список в промпте), админ переименовывает / сливает
+    («Категории» внизу страницы, `renameCategory`). **Параметры товара по каталогу не разбираем** («никогда не узнаешь —
+    это пишут, шлют образцы»): ИИ определяет только компанию (название, контакты, город) и 1–5 категорий. **Сканы
+    разбираем** (для каталогов — да, в отличие от реквизитов): pdftotext первых 60 страниц, мало текста — 6 страниц
+    картинками через pdftoppm (1, 2 и равномерно по каталогу, 1000 px; ≈6 тыс. токенов). Файлы **хранятся на сервере**
+    целиком (attachments: `catalog` → после подтверждения `factory`, label catalog); текст — в `catalogs.text`, по нему
+    ищет поиск фабрик. **Кто прислал** — главное («какой конкретно контакт»): WeChat при сохранении файла отправителя
+    теряет, поэтому админ загружает скриншоты окна «Файлы» (Manage Files: имя файла, «отправитель | чат», размер) —
+    ИИ переписывает строки (`catalog_senders`), код сопоставляет с файлами по имени и размеру (`matchSender`: точно →
+    без «(1)» → обрезанное «…» → похожее; два разных отправителя — не угадываем); иначе отправителя вводят вручную.
+    Разбор — очередь в этом же процессе (`kickCatalogQueue`, 2 одновременно, `CRM_CATALOG_WORKERS`; прерванные
+    перезапуском — снова в очередь). Проверка — **группами по контакту**: категории, «коротко по-русски», новая фабрика
+    или найденная (`suggestFactories`: этот контакт уже присылал, имя WeChat, телефон из имени контакта или каталога,
+    WeChat ID, сайт, почта, название компании); уверенные (есть отправитель и категории) отмечены сразу — «Подтвердить
+    выбранные». Фабрики из каталогов видит **только админ** (found_by — загрузивший админ).
+    **Загрузка — кусками по 8 МБ с докачкой** (владелец: «без потери соединения через браузер 200 каталогов не
+    закину»): пропала связь — страница повторяет сама (1…30 с, ≈ 15 мин), сервер принял часть куска — 409 с offset,
+    продолжаем с него; закрыли браузер — та же папка ещё раз: загруженные (имя + размер) пропускаются, недокачанный
+    продолжается (`partial/<id>`, id от пользователя, имени, размера и даты файла). Пока грузится — wake lock и
+    предупреждение при закрытии вкладки. Куски проходят обычный лимит nginx `/crm/` (30 МБ) — nginx не трогаем.
+    Тот же файл (sha256) второй раз не берётся. Имена отправителя со скриншотов могут отличаться иероглифом
+    («…260» и «…260李») — `sameSender` считает их одним контактом. poppler-utils ставит `deploy-crm.sh` (с
+    `apt-get update` — на сервере без него пакет «не находился» и PDF не разбирались). PDF, отложенные без poppler,
+    — «Ошибка»; после установки при старте сервера `resetCatalogQueue` сам возвращает их в очередь.
+    **Скриншоты «Файлы» тоже в фоне** (`catalog_shots`): первая версия читала их сразу пачкой по 8 — шлюз ответил 502,
+    скриншоты пропали, владелец не понял, загрузились ли они. Теперь сохраняются сразу (attachments `catalog_shot`,
+    label — sha256: тот же скриншот второй раз не берётся), ИИ читает по одному, раньше каталогов; список со статусами
+    — «Скриншоты «Файлы»» на странице. Временные сбои шлюза (408/409/429/5xx, нет связи) очередь пережидает сама
+    (`createWithRetry`: 20 с, 1, 3, 5 мин), потом — «Ошибка» и «Повторить все с ошибкой» (и каталоги, и скриншоты).
+28. **Инструкция для новых сотрудников — в базе знаний (октябрь 2026).** Пространство «Компания» → «Инструкция: как
     работать в Ирбисе» + 11 подстраниц (вход и меню, сделки, ход сделки, документы, календарь, контрагенты, воронка,
     расчёт, товары / фабрики / ставки, база знаний, частые вопросы) со скриншотами. Источник — `crm/seed/guide/*.md`
     (простой Markdown) и `crm/seed/guide/img/*.png`; в базу кладёт `npm run kb:guide` (деплой — если её ещё нет;
@@ -360,6 +393,9 @@ crm/
                         renderContractDocx, nextContractNumber, contractMissing
       ai-rates.ts       ставки доставки из переписки / скриншота (recognizeRates)
       ai-factory.ts     карточка фабрики по скриншотам / фото / прайсам (recognizeFactory; сканы PDF не отправляем)
+      catalogs.ts       каталоги из рассылки: extractCatalog (pdftotext / pdftoppm / docx·xlsx·pptx), очередь разбора
+                        (kick/reset/stopCatalogQueue), ИИ — компания и категории, отправители со скриншотов «Файлы»
+                        (recognizeSenders, matchSender, applySenders), suggestFactories, confirmCatalogs, renameCategory
       payments.ts       галочки оплат ↔ оплата документов: flagDocuments, markFlagDocuments, paymentForNewDocument, syncPaymentFlags;
                         оплата на несколько счетов: applyAllocations (статусы из разнесения), shipmentPayments, paymentExplanation
       carrier-spec.ts   спецификация для перевозчика: specData (упаковочный лист + инвойс → строки по позициям),
@@ -374,6 +410,7 @@ crm/
       settings.ts call-script.ts text.ts
     routes/             auth users kb files calls search audit deals counterparties documents orders products settings shipments ai
                         factories (список, дубли, карточка, цены, «сделать поставщиком», GET /products/:id/offers);
+                        catalogs (только админ: /catalogs — загрузка, check, senders, retry, confirm; переименование категорий)
                         файлы фабрики — files.ts POST /factories/:id/files; ИИ — ai.ts POST /ai/recognize-factory, /ai/recognize-rates
                         quotes (ставки доставки CRUD, GET /cbr-rates, расчёты товара и КП /quotes/:id/kp.docx)
                         products (+ GET /products/duplicates, POST /products/merge)
@@ -394,6 +431,8 @@ crm/
                         shipments/ShipmentPage (карточка), shipments/CalendarPage (CalendarView), SettingsPage, Users, Audit,
                         factories/FactoriesPage (карточки с фото, фильтры анкеты), factories/FactoryPage (новая и карточка:
                         файлы → ИИ, дубли, анкета, цены; components/factories/common — OffersEditor, статус),
+                        factories/CatalogsPage (/factories/catalogs — загрузка каталогов и скриншотов, проверка группами по
+                        контакту, категории),
                         factories/FreightRatesPage (/freight-rates: ставки, «вставить из переписки»),
                         estimates/EstimatesPage (/estimates — список), estimates/EstimatePage (/estimates/new|:id — заявка → ИИ,
                         поля, итог справа, КП в Word),
@@ -435,6 +474,10 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   `factory`, label photo/catalog/screenshot. `freight_rates` (transport, mode container/cbm, container, origin,
   destination, rate, currency, kg_per_cbm, min_cbm, fee — за отправку, transit_days, etd, quoted_at),
   `product_quotes` (product_id, params / result / freight / rates jsonb — расчёт как был на момент сохранения).
+  `catalogs` (attachment_id, filename, size, sha256, sender / chat — контакт WeChat, status queued/processing/review/
+  done/failed, method text/images/none, pages, result jsonb — компания и категории, text, note, usage, factory_id),
+  `catalog_senders` (строки со скриншотов «Файлы» WeChat: filename, size как на экране, sender, chat),
+  `catalog_shots` (сами скриншоты: attachment_id, filename, status queued/processing/done/failed, rows, note).
 - **Документы:** `documents` (type, number, date, counterparty_id, client_id, **shipment_id**, parent_id (договор),
   seq_no, currency, amount, status, payment_status, paid_amount, paid_at, valid_until, data jsonb, notes),
   `document_items` (product_id, name, batch_no, hs_code, qty, unit, price, amount), `products`, `settings` (company).
@@ -442,7 +485,7 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   currency, note — что за не разнесённый остаток; файл — attachments owner_type `payment`), `payment_allocations`
   (payment_id, document_id, amount). Обычная оплата одного счёта сюда не пишется.
 
-**Миграции:** … **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).

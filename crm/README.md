@@ -203,6 +203,8 @@ location ^~ /crm/ {
 
 Если в обновлении менялись шаблоны сайта или `server/`, нужен полный `deploy.sh`.
 
+Каталоги фабрик (миграция 0015): `deploy-crm.sh` сам ставит `poppler-utils` (pdftotext / pdftoppm — сканы). nginx менять не нужно: файлы идут кусками по 8 МБ (лимит тела `/crm/` — 30 МБ).
+
 После обновления с документами (миграция 0003: `clients` → `counterparties`, документы, товары) один раз выполните `npm run crm:seed` — он заполнит «Реквизиты компании» для поручений, если они пусты (остальное `seed` не трогает).
 
 ### Проверка после деплоя
@@ -310,6 +312,9 @@ sudo systemctl start bars-crm
 | `documents` | Документ любого типа (`type`, справочник — `shared/documents.ts`): `number`, `date`, `counterparty_id` (вторая сторона), `client_id` (клиент, к которому относится документ поставщика/подрядчика), `shipment_id` (сделка), `parent_id` (договор: поручение → договор комиссии, инвойс → контракт), `seq_no` (номер приложения в договоре), `currency`, `amount`, `status` (`draft`/`signed`/`cancelled`), `payment_status` (`unpaid`/`partial`/`paid`), `paid_amount`, `paid_at`, `valid_until`, `data` (jsonb: Incoterms, условия оплаты, смета поручения, статья расходов…), `notes`. Файлы — `attachments` с `owner_type='document'` и меткой `original`/`signed`/`payment` (документ об оплате)/`generated` (сформирован системой). `data.packing` — строки и итоги упаковочного листа |
 | `document_items` | Позиции документа: `product_id`, `name` (как в документе), `batch_no` («партийный номер» поручения), `hs_code`, `quantity`, `unit`, `price`, `amount` |
 | `factories` | База фабрик: `name` (как в WeChat), `name_ru`, `wechat_id`, `contact_name`, `phone`, `email`, `website`, `location` (место производства), `categories` text[], `status` (`new`/`contacted`/`samples`/`approved`/`rejected`), `profile` jsonb (анкета — `shared/factories.ts`), `notes`, `found_by` (кто нашёл — видит кандидата), `counterparty_id` (поставщик после договора; тогда фабрику видят все) |
+| `catalogs` | Каталоги из рассылки: `attachment_id` (файл: owner_type `catalog`, после подтверждения — `factory`), `filename`, `size`, `sha256` (дубли), `sender` / `chat` (контакт WeChat), `status` (`queued`/`processing`/`review`/`done`/`failed`), `method` (`text`/`images`/`none`), `pages`, `result` jsonb (компания, контакты, `categories` — `CatalogResult` в `shared/factories.ts`), `text` (для поиска), `note`, `usage`, `factory_id` |
+| `catalog_senders` | Строки со скриншотов окна «Файлы» WeChat: `filename`, `size` (как на экране — «12.8M»), `sender`, `chat` |
+| `catalog_shots` | Скриншоты окна «Файлы» (файл — attachments `catalog_shot`, label — sha256): `filename`, `status` (`queued`/`processing`/`done`/`failed`), `rows` — сколько строк прочитано, `note` |
 | `product_offers` | Цены фабрик: `factory_id`, `product_id` (товар справочника — по названию без размера рулона и цвета), `name` (позиция с характеристиками), `price`, `currency`, `unit`, `moq`, `per_container` (единиц в 40HQ), `kg_per_unit`, `m3_per_unit`, `conditions`, `quoted_at` |
 | `freight_rates` | Ставки доставки: `transport` (rail/truck/sea/multimodal), `mode` (`container` / `cbm`), `container`, `origin`, `destination`, `rate`, `currency`, `kg_per_cbm`, `min_cbm`, `fee` + `fee_currency` (за отправку), `transit_days`, `etd`, `valid_until`, `quoted_at`, `carrier_name`, `notes` |
 | `estimates` | Раздел «Расчёт»: заявки клиентов на их товары — `title`, `client_name`, `scheme` (`commission` / `teu`), `request` (текст заявки), `params` / `result` (jsonb, `shared/estimate.ts`; `params.markup` — наличные сверху расчёта, только админам), `freight`, `rates`, `rates_date` |
@@ -406,6 +411,13 @@ sudo systemctl start bars-crm
 | `GET /factories/duplicates?wechatId&phone&name&except` | Дубли; чужого кандидата не раскрывает — только кто нашёл |
 | `GET/PATCH/DELETE /factories/:id` | Карточка (анкета, цены, файлы) / правка (offers — заменить целиком) / удаление (кандидата — нашедший или админ, поставщика — админ) |
 | `POST /factories/:id/files?label=photo\|catalog\|screenshot`, `POST /factories/:id/supplier` | Файл фабрики; «сделать поставщиком» |
+| `GET /catalogs` | Каталоги (только админ): файлы не в «Готово», группы на проверке по контакту с подходящей фабрикой (`match`), счётчики, отправители со скриншотов, категории |
+| `POST /catalogs/uploads` `{name, size, lastModified}` → `{id, offset}`; `PUT /catalogs/uploads/:id?offset=N` (тело — кусок ≤ 16 МБ, `application/octet-stream`; не то место — 409 с `offset`); `POST /catalogs/uploads/:id/finish` `{name, size, type}` | Загрузка каталога кусками с докачкой (до `CRM_MAX_CATALOG_MB`): недокачанное — `CRM_UPLOAD_DIR/partial/<id>` (id — от пользователя, имени, размера и даты файла; брошенное > 7 дней удаляется); после завершения — в очередь разбора (тот же sha256 — `duplicate`) |
+| `POST /catalogs/check` `{files:[{name,size}]}` | Какие файлы уже загружены (имя + размер) — повторная загрузка папки их пропускает |
+| `POST /catalogs/senders` (multipart, скриншоты) → `{saved, same, skipped}` | Сохранить скриншоты окна «Файлы» WeChat (тот же — `same`); ИИ читает их в фоне → `catalog_senders`, отправитель у каталогов без него |
+| `PATCH /catalogs/:id` `{sender}`, `POST /catalogs/:id/retry` (`all` — все с ошибкой, и скриншоты), `DELETE /catalogs/:id` | Отправитель вручную; разобрать заново; удалить неподтверждённый с файлом |
+| `POST /catalogs/confirm` `{groups:[{catalogIds, factoryId, nameRu, categories}]}` | Группы → новая (`factoryId: null`) или найденная фабрика, файлы — в её карточку |
+| `POST /factories/categories/rename` `{from, to}` | Переименовать / слить категорию во всех фабриках (админ) |
 | `GET /products/:id/offers` | Цены фабрик на товар (с учётом доступа) и их фото |
 | `GET /products/unused`, `POST /products/unused/delete` (админ) | Пустые товары (без закупок, продаж, цен фабрик, расчётов): список / удалить |
 | `GET /products/duplicates`, `POST /products/merge` `{ids, name}` | Группы похожих товаров (одно название без варианта); объединить в первый (позиции и цены фабрик переходят) |

@@ -96,6 +96,22 @@ export async function docxText(buffer: Buffer): Promise<string> {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+/** Текст слайдов PowerPoint (.pptx) по порядку — каталоги иногда присылают презентацией. */
+export async function pptxText(buffer: Buffer): Promise<string> {
+  const zip = await JSZip.loadAsync(buffer);
+  const slides = Object.keys(zip.files)
+    .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort((a, b) => Number(/(\d+)\.xml$/.exec(a)![1]) - Number(/(\d+)\.xml$/.exec(b)![1]));
+  if (!slides.length) throw new Error("not a pptx");
+  const out: string[] = [];
+  for (const [i, name] of slides.entries()) {
+    const xml = await zip.file(name)!.async("string");
+    const paras = [...xml.matchAll(/<a:p>[\s\S]*?<\/a:p>/g)].map((p) => runsText(p[0], "a:t").trim()).filter(Boolean);
+    out.push(`--- стр. ${i + 1}\n${paras.join("\n")}`);
+  }
+  return out.join("\n").trim();
+}
+
 function columnIndex(ref: string): number {
   const letters = /^[A-Z]+/.exec(ref)?.[0] ?? "A";
   let n = 0;

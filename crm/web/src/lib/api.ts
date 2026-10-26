@@ -19,6 +19,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Тело ответа с ошибкой (например, offset у 409 при загрузке кусками). */
+    readonly data?: unknown,
   ) {
     super(message);
   }
@@ -86,4 +88,32 @@ export async function apiDownload(path: string, options: { method?: Method; form
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** Отправка файла / куска файла с прогрессом (fetch его не показывает): ответ — JSON, как у api(). */
+export function apiUpload<T>(
+  path: string,
+  data: FormData | Blob,
+  options: { method?: "POST" | "PUT"; onProgress?: (part: number) => void; signal?: AbortSignal } = {},
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(options.method ?? "POST", `${API}${path}`);
+    xhr.withCredentials = true;
+    if (csrfToken) xhr.setRequestHeader("x-csrf-token", csrfToken);
+    if (data instanceof Blob && !(data instanceof File)) xhr.setRequestHeader("content-type", "application/octet-stream");
+    xhr.responseType = "json";
+    if (options.onProgress) xhr.upload.onprogress = (e) => e.lengthComputable && options.onProgress!(e.loaded / e.total);
+    options.signal?.addEventListener("abort", () => xhr.abort());
+    xhr.onerror = () => reject(new ApiError(0, "Нет связи с сервером"));
+    xhr.ontimeout = () => reject(new ApiError(0, "Нет связи с сервером"));
+    xhr.onabort = () => reject(new ApiError(-1, "Загрузка остановлена"));
+    xhr.onload = () => {
+      const res = xhr.response as ({ error?: string } & T) | null;
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(res as T);
+      if (xhr.status === 401) onUnauthorized?.();
+      reject(new ApiError(xhr.status, res?.error ?? (xhr.status === 413 ? "Слишком большой запрос для сервера" : `Ошибка ${xhr.status}`), res));
+    };
+    xhr.send(data);
+  });
 }

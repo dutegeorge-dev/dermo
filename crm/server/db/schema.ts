@@ -37,7 +37,7 @@ import type { SpecParams } from "../../shared/cargo.ts";
 import type { ShipmentCalc } from "../../shared/customs.ts";
 import type { ShipmentCash } from "../../shared/shipments.ts";
 import type { EstimateParams, EstimateResult } from "../../shared/estimate.ts";
-import type { FactoryProfile } from "../../shared/factories.ts";
+import type { CatalogResult, FactoryProfile } from "../../shared/factories.ts";
 import type { FreightRate, QuoteParams, QuoteResult } from "../../shared/quote.ts";
 
 /** Полнотекстовый индекс PostgreSQL. */
@@ -511,6 +511,73 @@ export const productOffers = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [index("product_offers_factory_idx").on(t.factoryId, t.position), index("product_offers_product_idx").on(t.productId)],
+);
+
+/**
+ * Каталоги фабрик из рассылки (lib/catalogs.ts): файл → очередь разбора (ИИ: компания и категории) → проверка
+ * админом → фабрика. Файл — attachments: сначала owner_type `catalog`, после подтверждения — `factory`, label catalog.
+ */
+export const catalogs = pgTable(
+  "catalogs",
+  {
+    id: serial("id").primaryKey(),
+    attachmentId: uuid("attachment_id").references(() => attachments.id, { onDelete: "set null" }),
+    filename: text("filename").notNull(),
+    size: integer("size").notNull(),
+    sha256: text("sha256"),
+    /** Контакт WeChat, приславший файл (со скриншота «Файлы» или вручную): «Leah Lee 18375803260李». */
+    sender: text("sender"),
+    chat: text("chat"),
+    /** queued → processing → review → done; failed — ошибка ИИ (можно повторить). */
+    status: text("status").notNull().default("queued"),
+    /** Как разобрали: text — текст файла, images — страницы картинками, none — не разбирали. */
+    method: text("method"),
+    pages: integer("pages"),
+    result: jsonb("result").$type<CatalogResult>(),
+    /** Текст каталога (что достал код) — для поиска фабрик по товару. */
+    text: text("text").notNull().default(""),
+    note: text("note"),
+    usage: jsonb("usage").$type<{ input: number; cacheRead: number; output: number }>(),
+    factoryId: integer("factory_id").references(() => factories.id, { onDelete: "cascade" }),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("catalogs_status_idx").on(t.status, t.id), index("catalogs_sha_idx").on(t.sha256), index("catalogs_factory_idx").on(t.factoryId)],
+);
+
+/** Скриншоты окна «Файлы» WeChat: хранятся и читаются ИИ в фоне, как каталоги (queued → processing → done / failed). */
+export const catalogShots = pgTable(
+  "catalog_shots",
+  {
+    id: serial("id").primaryKey(),
+    attachmentId: uuid("attachment_id").references(() => attachments.id, { onDelete: "set null" }),
+    filename: text("filename").notNull(),
+    status: text("status").notNull().default("queued"),
+    /** Сколько строк файлов прочитано. */
+    rows: integer("rows").notNull().default(0),
+    note: text("note"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("catalog_shots_status_idx").on(t.status, t.id)],
+);
+
+/** Строки со скриншотов окна «Файлы» WeChat: какой файл от кого (сопоставляются с каталогами по имени и размеру). */
+export const catalogSenders = pgTable(
+  "catalog_senders",
+  {
+    id: serial("id").primaryKey(),
+    filename: text("filename").notNull(),
+    /** Размер как на экране: «12.8M». */
+    size: text("size").notNull().default(""),
+    sender: text("sender").notNull(),
+    chat: text("chat"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("catalog_senders_filename_idx").on(t.filename)],
 );
 
 /** Ставки доставки от перевозчиков (shared/quote.ts → FreightRate): для расчёта цены товара для клиента. */

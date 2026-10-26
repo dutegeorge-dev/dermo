@@ -67,6 +67,10 @@ export const config = {
     .filter(Boolean),
   uploadDir: path.resolve(CRM_ROOT, process.env.CRM_UPLOAD_DIR?.trim() || "uploads"),
   maxUploadBytes: envNumber("CRM_MAX_UPLOAD_MB", 25) * 1024 * 1024,
+  /** Каталоги фабрик бывают по 100–200 МБ (сканы) — свой лимит. */
+  maxCatalogBytes: envNumber("CRM_MAX_CATALOG_MB", 400) * 1024 * 1024,
+  /** Сколько каталогов разбирать одновременно (шлюз ИИ отдаёт 429 на 3–4 параллельных запроса). */
+  catalogWorkers: envNumber("CRM_CATALOG_WORKERS", 2),
   session: {
     cookieName: "bars_crm_session",
     ttlMs: envNumber("CRM_SESSION_DAYS", 30) * 24 * 60 * 60 * 1000,
