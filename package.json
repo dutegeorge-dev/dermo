@@ -29,6 +29,7 @@
     "crm:migrate": "npm --prefix crm run db:migrate",
     "crm:create-admin": "npm --prefix crm run create-admin --",
     "crm:seed": "npm --prefix crm run seed --",
+    "crm:guide": "npm --prefix crm run kb:guide --",
     "crm:tnved": "npm --prefix crm run tnved:update --",
     "crm:test": "npm --prefix crm test"
   },
