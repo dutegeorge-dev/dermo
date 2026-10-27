@@ -109,6 +109,7 @@ function markupParams(input: unknown): EstimateMarkup | null {
     mode: String(m.mode) in MARKUP_MODES ? (String(m.mode) as MarkupMode) : "manual",
     goodsCash: num(m.goodsCash),
     targetUnitPrice: num(m.targetUnitPrice),
+    targetUnitPrices: Array.isArray(m.targetUnitPrices) ? m.targetUnitPrices.slice(0, 100).map((v) => num(v)) : [],
     targetUnitCurrency: cur(m.targetUnitCurrency, DEFAULT_MARKUP.targetUnitCurrency),
     margin: num(m.margin),
   };

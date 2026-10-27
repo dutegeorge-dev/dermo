@@ -1317,6 +1317,21 @@ describe("Раздел «Расчёт»: заявка клиента на его
     r = computeMarkup({ ...saved.params, markup: { ...markup, mode: "unit", targetUnitPrice: 3000 } }, saved.result, rates)!;
     assert.deepEqual([r.goodsCash, r.items[0].clientPrice, r.unitClient], [1250, 22.5, 37.5]);
 
+    // Две позиции — у каждой своя целевая цена (всё вместе); общая — тем, у кого своей нет.
+    // Товар A $1000 (100 шт), B $1000 (50 шт); доставка клиенту $1500 делится по стоимости — по $750.
+    const two = {
+      ...saved.params,
+      items: [
+        { name: "A", hsCode: null, quantity: 100, unit: "шт", amount: 1000, vat10: false },
+        { name: "B", hsCode: null, quantity: 50, unit: "шт", amount: 1000, vat10: false },
+      ],
+      currency: "USD",
+      markup: { ...markup, mode: "unit", targetUnitCurrency: "USD", targetUnitPrice: 30, targetUnitPrices: [null, 50] },
+    };
+    r = computeMarkup(two, { ...saved.result, goodsRub: 160000, totalRub: 256000 }, rates)!;
+    assert.deepEqual(r.items.map((i) => [i.clientPrice, i.unitClient]), [[22.5, 30], [35, 50]], "A: 30×100 − 750 → $22,50; B: 50×50 − 750 → $35");
+    assert.equal(r.totalClient, 5500);
+
     // Менеджер наличных не видит и не стирает их при сохранении.
     const petr = await login("petr", "managerpass", "10.0.0.41");
     const asPetr = (await call(petr, "GET", `/estimates/${id}`)).json().estimate;

@@ -93,6 +93,8 @@ export type EstimateMarkup = {
   goodsCash: number | null;
   /** Целевая цена для клиента за единицу (всё вместе: товар + доставка). */
   targetUnitPrice: number | null;
+  /** Своя целевая цена у позиции (по номеру строки в items); пусто — общая targetUnitPrice. */
+  targetUnitPrices?: (number | null)[];
   targetUnitCurrency: string;
   /** Желаемая маржа (наличные за товар + за доставку), в currency. */
   margin: number | null;
@@ -327,7 +329,14 @@ export function estimateUnits(p: EstimateParams, q: EstimateResult, rates: Recor
 
 // ── Наличные сверху расчёта и таблица клиенту (только админы) ─────────────────
 
-export type MarkupItem = EstimateItem & { costAmount: number; clientPrice: number | null; clientAmount: number };
+export type MarkupItem = EstimateItem & {
+  costAmount: number;
+  clientPrice: number | null;
+  clientAmount: number;
+  /** Доля доставки для клиента и цена за единицу всё вместе (товар + доставка). */
+  deliveryShare: number;
+  unitClient: number | null;
+};
 
 export type MarkupResult = {
   currency: string;
@@ -375,25 +384,45 @@ export function computeMarkup(p: EstimateParams, q: EstimateResult, rates: Recor
 
   const units = [...new Set(items.map((i) => i.unit))];
   const totalQuantity = units.length === 1 ? items.reduce((s, i) => s + (i.quantity ?? 0), 0) : null;
-  let planned = 0;
-  if (m.mode === "manual") planned = m.goodsCash ?? 0;
-  else if (m.mode === "margin") planned = (m.margin ?? 0) - deliveryCash;
-  else {
-    if (!totalQuantity) warnings.push(units.length > 1 ? "Целевая цена за единицу — только когда у всех товаров одна единица" : "Укажите количество товара");
-    else if (!m.targetUnitPrice) warnings.push("Укажите целевую цену за единицу");
-    else {
-      const targetRub = m.targetUnitCurrency === "RUB" ? m.targetUnitPrice : m.targetUnitPrice * (rates[m.targetUnitCurrency] ?? 0);
-      planned = toCur(targetRub * totalQuantity) - deliveryClient - goodsCost;
-    }
+  const share = (n: number) => (goodsCost ? costs[n] / goodsCost : 1 / items.length);
+  const ceilCent = (v: number) => Math.ceil(v * 100 - 1e-9) / 100;
+  // Сколько на товар клиенту по каждой позиции (в валюте таблицы).
+  let goodsTargets: number[];
+  if (m.mode === "unit") {
+    // Целевая цена за единицу (всё вместе) — у каждой позиции своя или общая: товар клиенту = цена × кол-во − её доля доставки.
+    const index = items.map((i) => p.items.indexOf(i));
+    goodsTargets = items.map((i, n) => {
+      const price = m.targetUnitPrices?.[index[n]] ?? m.targetUnitPrice;
+      if (!i.quantity) {
+        warnings.push(`${i.variant || i.name || "Товар"}: укажите количество`);
+        return costs[n];
+      }
+      if (!price) {
+        warnings.push(`${i.variant || i.name || "Товар"}: укажите целевую цену за единицу`);
+        return costs[n];
+      }
+      const priceRub = m.targetUnitCurrency === "RUB" ? price : price * (rates[m.targetUnitCurrency] ?? 0);
+      return toCur(priceRub * i.quantity) - deliveryClient * share(n);
+    });
+  } else {
+    const planned = m.mode === "manual" ? (m.goodsCash ?? 0) : (m.margin ?? 0) - deliveryCash;
+    goodsTargets = items.map((_, n) => costs[n] + planned * share(n));
   }
-  if (planned < 0) warnings.push("Наличные за товар получаются меньше нуля — цена для клиента ниже нашей себестоимости");
+  if (goodsTargets.some((t, n) => t < costs[n] - 0.005)) warnings.push("Наличные за товар получаются меньше нуля — цена для клиента ниже нашей себестоимости");
 
   const out: MarkupItem[] = items.map((i, n) => {
-    const share = goodsCost ? costs[n] / goodsCost : 1 / items.length;
-    const target = costs[n] + planned * share;
+    const target = goodsTargets[n];
     // Цена — вверх до копеек / центов: маржа не меньше заданной.
-    const clientPrice = i.quantity ? Math.ceil((target / i.quantity) * 100 - 1e-9) / 100 : null;
-    return { ...i, costAmount: costs[n], clientPrice, clientAmount: clientPrice !== null ? r2(clientPrice * i.quantity!) : r2(target) };
+    const clientPrice = i.quantity ? ceilCent(target / i.quantity) : null;
+    const deliveryShare = r2(deliveryClient * share(n));
+    return {
+      ...i,
+      costAmount: costs[n],
+      clientPrice,
+      clientAmount: clientPrice !== null ? r2(clientPrice * i.quantity!) : r2(target),
+      deliveryShare,
+      unitClient: clientPrice !== null ? r2(clientPrice + deliveryShare / i.quantity!) : null,
+    };
   });
   const goodsClient = r2(out.reduce((s, i) => s + i.clientAmount, 0));
   const goodsCash = r2(goodsClient - goodsCost);

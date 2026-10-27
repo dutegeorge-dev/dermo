@@ -41,6 +41,8 @@ export function ClientMarkup({ p, res, rates, onChange }: { p: EstimateParams; r
   }
 
   const unit = r?.unit ?? "ед.";
+  // Позиции, как их считает computeMarkup (с названием или суммой) — с номером строки в items.
+  const rows = p.items.map((item, index) => ({ item, index })).filter(({ item }) => item.name.trim() || item.amount);
   return (
     <section className="panel space-y-4 p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -88,7 +90,7 @@ export function ClientMarkup({ p, res, rates, onChange }: { p: EstimateParams; r
         {m.mode === "unit" && (
           <>
             <label className="block">
-              <span className="label">Цена для клиента за 1 {unit} (всё вместе)</span>
+              <span className="label">{rows.length > 1 ? "Общая цена за единицу (всем позициям без своей)" : `Цена для клиента за 1 ${unit} (всё вместе)`}</span>
               <NumInput value={m.targetUnitPrice} onChange={(v) => set({ targetUnitPrice: v })} placeholder="150" />
             </label>
             <label className="block">
@@ -108,6 +110,50 @@ export function ClientMarkup({ p, res, rates, onChange }: { p: EstimateParams; r
         )}
       </div>
 
+      {m.mode === "unit" && rows.length > 1 && (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead>
+              <tr className="text-left text-xs muted">
+                <th className="pb-1 font-medium">Позиция</th>
+                <th className="pb-1 text-right font-medium">Кол-во</th>
+                <th className="w-40 pb-1 font-medium">Цена клиенту за ед. (всё вместе), {m.targetUnitCurrency}</th>
+                <th className="pb-1 text-right font-medium">Товар за ед.</th>
+                <th className="pb-1 text-right font-medium">Всё вместе за ед.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ item, index }, n) => {
+                const res = r?.items[n];
+                return (
+                  <tr key={index} className="border-t border-slate-100 dark:border-neutral-800">
+                    <td className="py-1 pr-2">
+                      {item.variant || item.name}
+                      {item.variant && item.name && <span className="block text-[11px] muted">{item.name}</span>}
+                    </td>
+                    <td className="whitespace-nowrap py-1 pr-2 text-right tabular-nums">{item.quantity !== null ? `${item.quantity.toLocaleString("ru-RU")} ${item.unit}` : "—"}</td>
+                    <td className="py-1 pr-2">
+                      <NumInput
+                        className="input py-1"
+                        value={m.targetUnitPrices?.[index] ?? null}
+                        placeholder={m.targetUnitPrice !== null ? String(m.targetUnitPrice) : "цена"}
+                        onChange={(v) => {
+                          const list = [...(m.targetUnitPrices ?? [])];
+                          while (list.length <= index) list.push(null);
+                          list[index] = v;
+                          set({ targetUnitPrices: list });
+                        }}
+                      />
+                    </td>
+                    <td className="whitespace-nowrap py-1 pr-2 text-right tabular-nums">{money(res?.clientPrice)}</td>
+                    <td className="whitespace-nowrap py-1 text-right tabular-nums">{money(res?.unitClient)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       {r && <Proposal r={r} money={money} rates={rates} />}
       {r && <ClientTable p={p} r={r} />}
     </section>
@@ -131,8 +177,9 @@ function Proposal({ r, money, rates }: { r: MarkupResult; money: (n: number | nu
         {cell("Наличные за товар", money(r.goodsCash), `товар клиенту ${money(r.goodsClient)}`)}
         {cell("Маржа наличными", money(r.margin))}
         {cell("Итого клиенту", money(r.totalClient))}
-        {r.unitClient !== null && cell(`За 1 ${r.unit} всё вместе`, money(r.unitClient), rubUnit !== null ? formatMoney(rubUnit, "RUB") : undefined)}
-        {r.items.length > 0 && r.items[0].clientPrice !== null && cell(`Цена товара за 1 ${r.items[0].unit}`, money(r.items[0].clientPrice), r.items.length > 1 ? "первая позиция" : undefined)}
+        {r.items.length === 1 && r.unitClient !== null && cell(`За 1 ${r.unit} всё вместе`, money(r.unitClient), rubUnit !== null ? formatMoney(rubUnit, "RUB") : undefined)}
+        {r.items.length === 1 && r.items[0].clientPrice !== null && cell(`Цена товара за 1 ${r.items[0].unit}`, money(r.items[0].clientPrice))}
+        {r.items.length > 1 && r.unitClient !== null && cell(`В среднем за 1 ${r.unit} всё вместе`, money(r.unitClient), rubUnit !== null ? formatMoney(rubUnit, "RUB") : undefined)}
       </div>
       {r.warnings.length > 0 && (
         <ul className="mt-2 list-disc pl-4 text-[11px] text-amber-800 dark:text-amber-300">
