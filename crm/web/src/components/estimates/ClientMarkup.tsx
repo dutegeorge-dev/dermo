@@ -219,7 +219,7 @@ function ClientTable({ p, r }: { p: EstimateParams; r: MarkupResult }) {
   const hasPackages = r.items.some((i) => i.packages);
   const hasVariant = r.items.some((i) => i.variant);
   const title = p.title || [...new Set(r.items.map((i) => i.name))].join(", ");
-  const cols = 1 + labels.length + (hasPackages ? 1 : 0) + 3;
+  const cols = 1 + labels.length + (hasPackages ? 1 : 0) + 4;
   const container = containerTitle(p.containerType);
   const total = (f: (i: (typeof r.items)[number]) => number | null | undefined) => r.items.reduce((s, i) => s + (f(i) ?? 0), 0);
   const B = "border border-slate-400 px-2 py-1";
@@ -252,6 +252,7 @@ function ClientTable({ p, r }: { p: EstimateParams; r: MarkupResult }) {
               {hasPackages && <td className={H}>Всего, {packUnit}</td>}
               <td className={H}>Кол-во{units.length === 1 ? `, ${units[0]}` : ""}</td>
               <td className={H}>Цена за {units.length === 1 ? units[0] : "ед."}</td>
+              <td className={H}>Цена за {units.length === 1 ? units[0] : "ед."} с доставкой</td>
               <td className={H}>Стоимость</td>
             </tr>
             {container && (
@@ -266,6 +267,8 @@ function ClientTable({ p, r }: { p: EstimateParams; r: MarkupResult }) {
                 {hasPackages && <td className={`${B} font-semibold`}>{num(i.packages)}</td>}
                 <td className={B}>{i.quantity !== null ? `${num(i.quantity)} ${i.unit}` : ""}</td>
                 <td className={B}>{sym(i.clientPrice, true)}</td>
+                {/* С доставкой — заданная целевая цена, иначе посчитанная (товар + доля доставки). */}
+                <td className={`${B} font-semibold`}>{sym(i.targetUnit ?? i.unitClient, true)}</td>
                 <td className={B}>{sym(i.clientAmount)}</td>
               </tr>
             ))}
@@ -274,6 +277,7 @@ function ClientTable({ p, r }: { p: EstimateParams; r: MarkupResult }) {
               {labels.map((l) => <td key={l} className={B}>{num(total((i) => i.breakdown?.find((b) => b.label === l)?.packages))}</td>)}
               {hasPackages && <td className={B}>{num(total((i) => i.packages))}</td>}
               <td className={B}>{units.length === 1 ? `${num(total((i) => i.quantity))} ${units[0]}` : ""}</td>
+              <td className={B} />
               <td className={B} />
               <td className={B}>{sym(r.goodsClient)}</td>
             </tr>

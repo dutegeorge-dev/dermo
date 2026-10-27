@@ -1331,6 +1331,7 @@ describe("Раздел «Расчёт»: заявка клиента на его
     r = computeMarkup(two, { ...saved.result, goodsRub: 160000, totalRub: 256000 }, rates)!;
     assert.deepEqual(r.items.map((i) => [i.clientPrice, i.unitClient]), [[22.5, 30], [35, 50]], "A: 30×100 − 750 → $22,50; B: 50×50 − 750 → $35");
     assert.equal(r.totalClient, 5500);
+    assert.deepEqual(r.items.map((i) => i.targetUnit), [30, 50], "в таблице клиенту — цена за штуку с доставкой, как задана");
 
     // Менеджер наличных не видит и не стирает их при сохранении.
     const petr = await login("petr", "managerpass", "10.0.0.41");

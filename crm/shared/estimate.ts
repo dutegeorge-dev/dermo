@@ -336,6 +336,8 @@ export type MarkupItem = EstimateItem & {
   /** Доля доставки для клиента и цена за единицу всё вместе (товар + доставка). */
   deliveryShare: number;
   unitClient: number | null;
+  /** Целевая цена за единицу (всё вместе), заданная для позиции, в валюте таблицы. */
+  targetUnit: number | null;
 };
 
 export type MarkupResult = {
@@ -388,6 +390,7 @@ export function computeMarkup(p: EstimateParams, q: EstimateResult, rates: Recor
   const ceilCent = (v: number) => Math.ceil(v * 100 - 1e-9) / 100;
   // Сколько на товар клиенту по каждой позиции (в валюте таблицы).
   let goodsTargets: number[];
+  const targetUnits: (number | null)[] = items.map(() => null);
   if (m.mode === "unit") {
     // Целевая цена за единицу (всё вместе) — у каждой позиции своя или общая: товар клиенту = цена × кол-во − её доля доставки.
     const index = items.map((i) => p.items.indexOf(i));
@@ -402,6 +405,7 @@ export function computeMarkup(p: EstimateParams, q: EstimateResult, rates: Recor
         return costs[n];
       }
       const priceRub = m.targetUnitCurrency === "RUB" ? price : price * (rates[m.targetUnitCurrency] ?? 0);
+      targetUnits[n] = r2(toCur(priceRub));
       return toCur(priceRub * i.quantity) - deliveryClient * share(n);
     });
   } else {
@@ -422,6 +426,7 @@ export function computeMarkup(p: EstimateParams, q: EstimateResult, rates: Recor
       clientAmount: clientPrice !== null ? r2(clientPrice * i.quantity!) : r2(target),
       deliveryShare,
       unitClient: clientPrice !== null ? r2(clientPrice + deliveryShare / i.quantity!) : null,
+      targetUnit: targetUnits[n],
     };
   });
   const goodsClient = r2(out.reduce((s, i) => s + i.clientAmount, 0));
