@@ -217,7 +217,7 @@ curl -s  https://tlkbars.ru/robots.txt | grep crm          # Disallow: /crm/
 
 ## Бэкапы
 
-- `crm/scripts/backup.sh` — `pg_dump` в формате custom + архив каталога вложений, в `/var/backups/bars-crm/`, хранение 14 дней (`CRM_BACKUP_DIR`, `CRM_BACKUP_KEEP_DAYS` меняют путь и срок).
+- `crm/scripts/backup.sh` — `pg_dump` в формате custom + архив каталога вложений, в `/var/backups/bars-crm/`. Дампы базы хранятся 14 дней (`CRM_BACKUP_DIR`, `CRM_BACKUP_KEEP_DAYS`), **архивов вложений — только 2 последних** (`CRM_BACKUP_UPLOADS_KEEP`): вложений бывает несколько ГБ (каталоги фабрик). Недокачанное (`partial/`) не архивируется; не хватает места на архив (+1 ГБ запаса) — архив вложений пропускается с предупреждением, дамп базы делается всегда. С облаком локальный архив вложений после выгрузки удаляется.
 - `/etc/cron.d/bars-crm-backup` — каждый день в 00:40 по времени сервера (03:40 МСК при UTC), лог — `/var/log/bars-crm-backup.log`.
 - Если задан `CRM_BACKUP_RCLONE_REMOTE`, копия сразу уходит в облако (хранение `CRM_BACKUP_CLOUD_KEEP_DAYS`, по умолчанию 30 дней), размер облачной копии сверяется с локальной.
 - Если бэкап не удался (дамп, архив, выгрузка) — сообщение в Telegram при заданных `CRM_BACKUP_TELEGRAM_TOKEN` и `CRM_BACKUP_TELEGRAM_CHAT`, и ненулевой код в логе.
