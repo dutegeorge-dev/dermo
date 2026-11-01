@@ -88,6 +88,12 @@ export const config = {
     /** Дешёвая модель по умолчанию: разбор документов и чат укладываются в неё. */
     model: process.env.CRM_AI_MODEL?.trim() || "claude-haiku-5-5",
   },
+  /** Бот заявок в Telegram: без токена выключен. */
+  telegram: {
+    token: process.env.CRM_TELEGRAM_BOT_TOKEN?.trim() || undefined,
+    /** Адрес Bot API (свой прокси / локальный сервер Bot API, если api.telegram.org недоступен). */
+    apiUrl: (process.env.CRM_TELEGRAM_API_URL?.trim() || "https://api.telegram.org").replace(/\/$/, ""),
+  },
   loginLimit: {
     /** Неудачных попыток на один логин за окно. */
     perLogin: envNumber("CRM_LOGIN_LIMIT_PER_LOGIN", 5),

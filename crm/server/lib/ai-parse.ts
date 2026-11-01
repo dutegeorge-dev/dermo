@@ -300,10 +300,10 @@ const isDate = (s: string | null | undefined): s is string => !!s && /^\d{4}-\d{
 const num = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : null);
 const text = (s: unknown, max: number) => (typeof s === "string" && s.trim() ? s.trim().slice(0, max) : null);
 
-type CpRow = { id: number; role: string; name: string; fullName: string | null; inn: string | null; regNumber: string | null };
+export type CpRow = { id: number; role: string; name: string; fullName: string | null; inn: string | null; regNumber: string | null };
 
 /** Контрагент: ИНН → рег. номер → название (точно, затем одно входит в другое). */
-function matchCounterparty(rows: CpRow[], role: string | null, c: { name?: string | null; fullName?: string | null; inn?: string | null; regNumber?: string | null }): CpRow | null {
+export function matchCounterparty(rows: CpRow[], role: string | null, c: { name?: string | null; fullName?: string | null; inn?: string | null; regNumber?: string | null }): CpRow | null {
   const inn = (c.inn ?? "").replace(/\D/g, "");
   if (inn.length === 10 || inn.length === 12) {
     const hit = rows.find((r) => r.inn === inn);

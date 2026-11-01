@@ -27,6 +27,22 @@ export type FieldSpec = {
 
 export const PRIORITIES = { low: "Низкий", medium: "Средний", high: "Высокий", urgent: "Срочный" } as const;
 export const COMPANY_KINDS = { ooo: "ООО", ip: "ИП", foreign: "Иностранная компания", other: "Другое" } as const;
+/**
+ * Типы заявок — бот заявок (Telegram) ставит тип меткой лида. Порядок — как в подсказке модели.
+ */
+export const REQUEST_TYPES = {
+  turnkey: "Закупка под ключ",
+  supply: "Поставка",
+  teu: "Доставка и таможня (ТЭУ)",
+  agent: "Выкуп в КНР / агент",
+  search: "Поиск товара / фабрики",
+  other: "Другое",
+} as const;
+export type RequestType = keyof typeof REQUEST_TYPES;
+
+/** Откуда пришёл лид (deals.source). */
+export const DEAL_SOURCES: Record<string, string> = { manual: "вручную", site: "заявка с сайта", telegram: "Telegram-бот заявок" };
+
 export const MESSENGERS = { telegram: "Telegram", whatsapp: "WhatsApp", max: "Макс", wechat: "WeChat", other: "Другой" } as const;
 
 /**

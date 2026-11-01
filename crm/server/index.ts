@@ -10,6 +10,7 @@ import { config } from "./config.ts";
 import { pool } from "./db/client.ts";
 import { kickCatalogQueue, resetCatalogQueue, sweepPartialUploads } from "./lib/catalogs.ts";
 import { purgeExpiredSessions } from "./lib/session.ts";
+import { startTelegramBot } from "./lib/telegram-bot.ts";
 
 const app = await buildApp({ logger: true });
 
@@ -24,9 +25,12 @@ const sweep = setInterval(() => {
 }, 6 * 60 * 60 * 1000);
 sweep.unref();
 
+let stopBot = () => {};
+
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, async () => {
     app.log.info(`${signal}: останавливаемся`);
+    stopBot();
     await app.close();
     await pool.end();
     process.exit(0);
@@ -38,3 +42,6 @@ await app.listen({ host: config.host, port: config.port });
 // Каталоги фабрик: прерванные перезапуском разборы — снова в очередь, очередь — в работу.
 await resetCatalogQueue().catch((error) => app.log.error(error, "Каталоги: не удалось вернуть разборы в очередь"));
 kickCatalogQueue();
+
+// Бот заявок в Telegram (если задан CRM_TELEGRAM_BOT_TOKEN).
+stopBot = startTelegramBot(app.log);

@@ -843,7 +843,8 @@ describe("Упаковочный лист, спецификация для пе�
   test("схемы ответа ИИ проходят ограничения API (≤16 объединений, enum без null-типа)", async () => {
     const { DRAFT_SCHEMA, HS_SCHEMA } = await import("../lib/ai-parse.ts");
     const { MAPPING_SCHEMA } = await import("../lib/carrier-spec.ts");
-    for (const schema of [DRAFT_SCHEMA, HS_SCHEMA, MAPPING_SCHEMA]) {
+    const { LEAD_REQUEST_SCHEMA } = await import("../lib/telegram-leads.ts");
+    for (const schema of [DRAFT_SCHEMA, HS_SCHEMA, MAPPING_SCHEMA, LEAD_REQUEST_SCHEMA]) {
       let unions = 0;
       const walk = (n: unknown) => {
         if (!n || typeof n !== "object") return;
@@ -1793,5 +1794,119 @@ describe("Каталоги фабрик из рассылки", () => {
     const [requeued] = await tdb.select({ status: catalogsTable.status, note: catalogsTable.note }).from(catalogsTable).where(eq(catalogsTable.id, late.id));
     assert.deepEqual(requeued, { status: "queued", note: null });
     await tdb.delete(catalogsTable).where(eq(catalogsTable.id, late.id));
+  });
+});
+
+describe("Бот заявок в Telegram", () => {
+  test("привязка, заявка → лид с клиентом и контактом, поиск клиента, дубль, отмена", async () => {
+    const { handleUpdate, createLinkCode } = await import("../lib/telegram-bot.ts");
+    const { leadDraft } = await import("../lib/telegram-leads.ts");
+    const { deals: dealsTable, counterparties: cpTable, contacts: contactsTable } = await import("../db/schema.ts");
+    const { eq } = await import("drizzle-orm");
+    const s = await adminSession();
+
+    // Без токена бот выключен.
+    assert.deepEqual((await call(s, "GET", "/auth/telegram")).json(), { enabled: false, bot: null, linked: false });
+    assert.equal((await call(s, "POST", "/auth/telegram/link")).statusCode, 503);
+
+    // Черновик модели чистит код: почта из mailto, ИНН — цифры, неизвестный тип → «Другое», мы — не клиент.
+    const raw = leadDraft({ type: "nonsense", email: "mailto:Petrov@Demo-Lab.test", inn: "77 0000 0001", companyName: "ООО «ТЛК БАРС»" });
+    assert.equal(raw.type, "other");
+    assert.equal(raw.email, "petrov@demo-lab.test");
+    assert.equal(raw.inn, "");
+    assert.equal(raw.companyName, "");
+
+    const sent: { method: string; params: Record<string, unknown> }[] = [];
+    let messageId = 100;
+    const api = async (method: string, params: Record<string, unknown> = {}) => {
+      sent.push({ method, params });
+      return method === "sendMessage" ? { message_id: ++messageId } : true;
+    };
+    const last = () => String(sent.at(-1)?.params.text ?? "");
+    const drafts: Record<string, Partial<Record<string, string>>> = {};
+    const parse = async (text: string) => ({ draft: leadDraft(drafts[text.split("\n")[0]] ?? {}), usage: null });
+    const deps = { api, parse, mergeMs: 0 };
+    const TG = 555_000_111;
+    const msg = (text: string, from = TG) => ({ update_id: 1, message: { message_id: 1, chat: { id: from, type: "private" }, from: { id: from }, text } });
+
+    // Чужой — отказ; код из профиля привязывает Telegram.
+    await handleUpdate(deps, msg("Здравствуйте, нужна доставка из Китая"));
+    assert.match(last(), /для сотрудников/);
+    await handleUpdate(deps, msg("/start WRONG123"));
+    assert.match(last(), /не подошёл/);
+    const { code } = createLinkCode(1);
+    await handleUpdate(deps, msg(`/start ${code}`));
+    assert.match(last(), /Telegram привязан/);
+    assert.equal((await call(s, "GET", "/auth/telegram")).json().linked, true);
+
+    // Заявка 1: новый клиент и контакт, тип — меткой, исполнитель — кто прислал.
+    const text1 = "Демо-заявка 1: ищем китайскую компанию-посредника\nВыкупить товар у производителя в КНР, CIP Москва, оплата в ВТБ Шанхай.\nС уважением, Петров Пётр, ООО «Демо Энерголаб»";
+    drafts["Демо-заявка 1: ищем китайскую компанию-посредника"] = {
+      title: "Выкуп товара в КНР через китайскую компанию, CIP Москва", product: "Посредник в КНР: выкуп и экспорт", type: "agent",
+      summary: "Нужна китайская компания-посредник.\nОплата в ВТБ Шанхай, CNY.", companyName: "ООО «Демо Энерголаб»", companyPhone: "8 800 000-00-00",
+      contactName: "Петров Пётр", position: "Менеджер по закупкам", phone: "+7 (495) 000-11-22", email: "mailto:petrov@demo-lab.test",
+    };
+    await handleUpdate(deps, msg(text1));
+    assert.ok(sent.some((c) => c.params.text === "⏳ Разбираю заявку…"));
+    const reply1 = sent.at(-1)!;
+    assert.equal(reply1.method, "editMessageText");
+    assert.match(last(), /✅ Лид <b>BARS-\d+<\/b>/);
+    assert.match(last(), /ООО «Демо Энерголаб»<\/b> \(новый\)/);
+    assert.match(last(), /Тип: Выкуп в КНР \/ агент/);
+    const undo1 = (reply1.params.reply_markup as { inline_keyboard: { callback_data: string }[][] }).inline_keyboard[0][0].callback_data;
+    const key1 = /BARS-\d+/.exec(last())![0];
+    const deal1 = (await call(s, "GET", `/deals/${key1}`)).json().deal;
+    assert.equal(deal1.source, "telegram");
+    assert.deepEqual(deal1.labels, ["Выкуп в КНР / агент"]);
+    assert.equal(deal1.assigneeId, 1);
+    assert.match(deal1.description, /Оплата в ВТБ Шанхай[\s\S]*Текст заявки \(прислал в Telegram: Админ\)[\s\S]*Демо-заявка 1/);
+    const [client] = await db.select().from(cpTable).where(eq(cpTable.id, deal1.clientId));
+    assert.equal(client.role, "client");
+    assert.equal(client.phone, "8 800 000-00-00");
+    const [contact] = await db.select().from(contactsTable).where(eq(contactsTable.id, deal1.contactId));
+    assert.deepEqual([contact.name, contact.email, contact.isPrimary], ["Петров Пётр", "petrov@demo-lab.test", true]);
+
+    // Тот же текст ещё раз — не дублируем.
+    await handleUpdate(deps, msg(text1));
+    assert.match(last(), new RegExp(`уже в воронке: <b>${key1}`));
+
+    // Заявка 2: другой человек с той же корпоративной почтой — тот же клиент, новый контакт.
+    const text2 = "Демо-заявка 2: нужна искусственная трава 35 мм\nДва контейнера, доставка в Казань. Иванова Анна";
+    drafts["Демо-заявка 2: нужна искусственная трава 35 мм"] = { title: "Искусственная трава 35 мм, 2 контейнера", type: "turnkey", companyName: "Энерголаб", contactName: "Иванова Анна", email: "ivanova@demo-lab.test" };
+    await handleUpdate(deps, msg(text2));
+    assert.match(last(), /уже в базе, нашёл по почте|уже в базе, нашёл по домену почты/);
+    const deal2 = (await call(s, "GET", `/deals/${/BARS-\d+/.exec(last())![0]}`)).json().deal;
+    assert.equal(deal2.clientId, deal1.clientId);
+    assert.notEqual(deal2.contactId, deal1.contactId);
+    const undo2 = (sent.at(-1)!.params.reply_markup as { inline_keyboard: { callback_data: string }[][] }).inline_keyboard[0][0].callback_data;
+
+    // Заявка 3: только телефон в другом формате — клиент и контакт найдены по телефону.
+    const text3 = "Демо-заявка 3: повторный заказ плинтуса\nПозвоните, 8 495 000 11 22";
+    drafts["Демо-заявка 3: повторный заказ плинтуса"] = { title: "Плинтус, повторный заказ", type: "turnkey", phone: "8 495 000 11 22" };
+    await handleUpdate(deps, msg(text3));
+    assert.match(last(), /нашёл по телефону/);
+    const deal3 = (await call(s, "GET", `/deals/${/BARS-\d+/.exec(last())![0]}`)).json().deal;
+    assert.deepEqual([deal3.clientId, deal3.contactId], [deal1.clientId, deal1.contactId]);
+    const undo3 = (sent.at(-1)!.params.reply_markup as { inline_keyboard: { callback_data: string }[][] }).inline_keyboard[0][0].callback_data;
+
+    // «Отменить»: чужой Telegram — нет доступа; свой — лид удалён, новые клиент / контакт — если больше не нужны.
+    const press = (data: string, from = TG) => handleUpdate(deps, { update_id: 2, callback_query: { id: "cb", from: { id: from }, data, message: { message_id: 7, chat: { id: from } } } });
+    await press(undo1, 999);
+    assert.equal(sent.at(-1)!.params.text, "Нет доступа");
+    await press(undo3);
+    assert.match(String(sent.at(-1)!.params.text), /Отменено: лид BARS-\d+ удалён\.$/);
+    await press(undo2);
+    assert.match(String(sent.at(-1)!.params.text), /удалены контакт «Иванова Анна»/);
+    await press(undo1);
+    assert.match(String(sent.at(-1)!.params.text), /удалены клиент «ООО «Демо Энерголаб»»/);
+    assert.equal((await db.select().from(cpTable).where(eq(cpTable.id, deal1.clientId))).length, 0);
+    assert.equal((await db.select().from(dealsTable).where(eq(dealsTable.source, "telegram"))).length, 0);
+    await press(undo1);
+    assert.equal(sent.at(-1)!.params.text, "Лид уже удалён");
+
+    // Отвязка из профиля — бот снова не пускает.
+    assert.equal((await call(s, "DELETE", "/auth/telegram")).statusCode, 200);
+    await handleUpdate(deps, msg(text2));
+    assert.match(last(), /для сотрудников/);
   });
 });

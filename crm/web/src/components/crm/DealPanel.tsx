@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
-import { DEAL_FIELDS, type DealField, MESSENGERS } from "../../../../shared/deal-fields.ts";
+import { DEAL_FIELDS, DEAL_SOURCES, type DealField, MESSENGERS } from "../../../../shared/deal-fields.ts";
 import { shipmentLabel, stageSpec } from "../../../../shared/shipments.ts";
 import { api, fileUrl } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
@@ -466,7 +466,7 @@ export function DealPanel({ dealKey, onClose }: { dealKey: string; onClose: () =
                   Создал{deal.createdByName ? ` ${deal.createdByName}` : "а система"} {formatDateTime(deal.createdAt)}
                   <br />
                   Изменена {formatRelative(deal.updatedAt)}
-                  {deal.source !== "manual" && <><br />Источник: {deal.source === "site" ? "заявка с сайта" : deal.source}</>}
+                  {deal.source !== "manual" && <><br />Источник: {DEAL_SOURCES[deal.source] ?? deal.source}</>}
                 </p>
               </aside>
             </div>

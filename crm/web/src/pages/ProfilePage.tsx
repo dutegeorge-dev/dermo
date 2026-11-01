@@ -1,5 +1,6 @@
-/** Профиль: имя, e-mail, смена пароля. */
+/** Профиль: имя, e-mail, смена пароля, привязка Telegram к боту заявок. */
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Content } from "../components/Layout.tsx";
@@ -90,7 +91,89 @@ export function ProfilePage() {
           {passState.ok && <p className="text-sm text-green-700 dark:text-green-400">Пароль изменён. Остальные сеансы завершены.</p>}
           <button type="submit" className="btn btn-primary">Сменить пароль</button>
         </form>
+
+        <TelegramBlock />
       </div>
     </Content>
+  );
+}
+
+type TelegramState = { enabled: boolean; bot: string | null; linked: boolean };
+
+/** Бот заявок: сотрудник привязывает свой Telegram и шлёт боту тексты заявок — они становятся лидами в воронке. */
+function TelegramBlock() {
+  const qc = useQueryClient();
+  const state = useQuery({ queryKey: ["telegram"], queryFn: () => api<TelegramState>("/auth/telegram") });
+  const [link, setLink] = useState<{ code: string; url: string | null; expiresInMin: number } | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const data = state.data;
+
+  return (
+    <section className="space-y-3 md:col-span-2">
+      <h2 className="text-sm font-semibold">Бот заявок в Telegram</h2>
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        Перешлите боту письмо или сообщение клиента — он заведёт лид в воронке: найдёт клиента в базе или создаст
+        нового, добавит контакт и определит тип заявки. Исполнитель — вы.
+      </p>
+      {state.isLoading && <p className="text-sm text-slate-500">Загрузка…</p>}
+      {data && !data.enabled && <p className="text-sm text-slate-500">Бот не подключён (нет токена на сервере).</p>}
+      {data?.enabled && data.linked && (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-green-700 dark:text-green-400">
+            ✓ Telegram привязан{data.bot && <> — пишите боту <a className="link" href={`https://t.me/${data.bot}`} target="_blank" rel="noreferrer">@{data.bot}</a></>}
+          </span>
+          <button
+            type="button"
+            className="btn"
+            onClick={async () => {
+              setError(null);
+              try {
+                await api("/auth/telegram", { method: "DELETE" });
+                setLink(null);
+                await qc.invalidateQueries({ queryKey: ["telegram"] });
+              } catch (e) {
+                setError(e);
+              }
+            }}
+          >
+            Отвязать
+          </button>
+        </div>
+      )}
+      {data?.enabled && !data.linked && (
+        <div className="space-y-2">
+          {!link ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={async () => {
+                setError(null);
+                try {
+                  setLink(await api("/auth/telegram/link", { method: "POST" }));
+                } catch (e) {
+                  setError(e);
+                }
+              }}
+            >
+              Привязать Telegram
+            </button>
+          ) : (
+            <div className="space-y-2 text-sm">
+              {link.url ? (
+                <p>
+                  <a className="btn btn-primary" href={link.url} target="_blank" rel="noreferrer">Открыть бота в Telegram</a>{" "}
+                  и нажмите «Старт». Или отправьте боту код <b className="font-mono">{link.code}</b>.
+                </p>
+              ) : (
+                <p>Отправьте боту код <b className="font-mono">{link.code}</b>.</p>
+              )}
+              <p className="text-slate-500">Код действует {link.expiresInMin} минут.</p>
+              <button type="button" className="btn" onClick={() => qc.invalidateQueries({ queryKey: ["telegram"] })}>Я привязал — проверить</button>
+            </div>
+          )}
+        </div>
+      )}
+      <ErrorBox error={error} />
+    </section>
   );
 }

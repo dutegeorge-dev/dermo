@@ -12,6 +12,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   bigserial,
   boolean,
   customType,
@@ -67,6 +68,8 @@ export const users = pgTable("users", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  /** Telegram-аккаунт сотрудника (user id в Telegram) — бот заявок принимает сообщения только от привязанных. */
+  telegramId: bigint("telegram_id", { mode: "number" }).unique(),
 });
 
 export const sessions = pgTable(

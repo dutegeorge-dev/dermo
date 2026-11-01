@@ -11,6 +11,7 @@ import { body, currentUser, HttpError } from "../lib/http.ts";
 import { getDummyHash, hashPassword, validatePassword, verifyPassword } from "../lib/password.ts";
 import { SlidingWindowLimiter } from "../lib/rate-limit.ts";
 import { createSession, destroySession, destroyUserSessions } from "../lib/session.ts";
+import { createLinkCode, telegramBotUsername, telegramEnabled } from "../lib/telegram-bot.ts";
 
 const ipLimiter = new SlidingWindowLimiter(config.loginLimit.perIp, config.loginLimit.windowMs);
 const loginLimiter = new SlidingWindowLimiter(config.loginLimit.perLogin, config.loginLimit.windowMs);
@@ -113,6 +114,27 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       summary: "Сменил свой пароль",
       ip: request.ip,
     });
+    return { ok: true };
+  });
+
+  /** Бот заявок в Telegram: включён ли, привязан ли Telegram сотрудника. */
+  app.get("/telegram", async (request) => {
+    const user = currentUser(request);
+    const [row] = await db.select({ telegramId: users.telegramId }).from(users).where(eq(users.id, user.id));
+    return { enabled: telegramEnabled(), bot: telegramBotUsername(), linked: Boolean(row?.telegramId) };
+  });
+
+  /** Код привязки: сотрудник открывает ссылку (или шлёт код боту) — Telegram связывается с его учёткой. */
+  app.post("/telegram/link", async (request) => {
+    const user = currentUser(request);
+    if (!telegramEnabled()) throw new HttpError(503, "Бот заявок не подключён: задайте CRM_TELEGRAM_BOT_TOKEN в crm/.env");
+    return createLinkCode(user.id);
+  });
+
+  app.delete("/telegram", async (request) => {
+    const user = currentUser(request);
+    await db.update(users).set({ telegramId: null, updatedAt: new Date() }).where(eq(users.id, user.id));
+    await audit(db, { userId: user.id, action: "update", entityType: "user", entityId: user.id, summary: "Отвязал Telegram от бота заявок", ip: request.ip });
     return { ok: true };
   });
 

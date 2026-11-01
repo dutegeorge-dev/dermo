@@ -120,6 +120,13 @@
       "when": 1792754099468,
       "tag": "0016_catalog_shots",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793550098912,
+      "tag": "0017_telegram_bot",
+      "breakpoints": true
     }
   ]
 }

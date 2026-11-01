@@ -143,6 +143,7 @@ nano crm/.env
 #   CRM_COOKIE_SECURE=true
 #   CRM_TRUST_PROXY=true
 #   ANTHROPIC_BASE_URL=…, ANTHROPIC_AUTH_TOKEN=…   # ИИ (необязательно)
+#   CRM_TELEGRAM_BOT_TOKEN=…                       # бот заявок (необязательно)
 sudo chown www-data:www-data crm/.env && sudo chmod 600 crm/.env
 
 # 4. Сборка, миграции, первый админ, данные
@@ -202,6 +203,12 @@ location ^~ /crm/ {
 - **Всё вместе:** `sudo bash deploy/deploy.sh` — пересобирает сайт и после этого делает то же для `/crm/` (если служба `bars-crm` установлена; до установки шаг пропускается).
 
 Если в обновлении менялись шаблоны сайта или `server/`, нужен полный `deploy.sh`.
+
+**Бот заявок в Telegram** (миграция 0017): создать бота у @BotFather (`/newbot`), токен — в `crm/.env`
+строкой `CRM_TELEGRAM_BOT_TOKEN=…`, затем `sudo systemctl restart bars-crm`. В журнале службы — «Бот заявок @… запущен».
+Бот опрашивает Telegram сам (long polling) — вебхук и nginx не нужны; один токен — один сервер (второй опрос получит
+409). Нужен ИИ (`ANTHROPIC_*`). Сотрудники привязываются в «Профиле» → «Привязать Telegram». Если api.telegram.org с
+сервера недоступен — `CRM_TELEGRAM_API_URL` (свой прокси / сервер Bot API).
 
 Каталоги фабрик (миграция 0015): `deploy-crm.sh` сам ставит `poppler-utils` (pdftotext / pdftoppm — сканы). nginx менять не нужно: файлы идут кусками по 8 МБ (лимит тела `/crm/` — 30 МБ).
 
@@ -291,7 +298,7 @@ sudo systemctl start bars-crm
 
 | Таблица | Назначение |
 |---|---|
-| `users` | Сотрудники: `login` (нижний регистр, уникальный), `name`, `email`, `role` (`admin`/`manager`), `password_hash` (argon2id), `is_active`, `last_login_at` |
+| `users` | Сотрудники: `login` (нижний регистр, уникальный), `name`, `email`, `role` (`admin`/`manager`), `password_hash` (argon2id), `is_active`, `last_login_at`, `telegram_id` (привязка к боту заявок, уникальный) |
 | `sessions` | `id` = SHA-256 токена, `user_id`, `csrf_token`, `expires_at`, `last_seen_at`, `ip`, `user_agent` |
 | `audit_log` | `user_id`, `action` (create/update/delete/move/restore/login/logout/import), `entity_type`, `entity_id`, `summary` (текст для журнала), `data` (jsonb: что было до удаления и т.п.), `ip`, `created_at` |
 | `kb_spaces` | Пространства: `key` (SALES, CUSTOMS…), `name`, `description`, `position` |
@@ -354,6 +361,7 @@ sudo systemctl start bars-crm
 | `POST /auth/login` `{login,password}` | Вход, ставит cookie, возвращает `{user, csrfToken}` |
 | `POST /auth/logout`, `GET /auth/me` | Выход; текущий пользователь и CSRF-токен |
 | `POST /auth/password`, `PATCH /auth/profile` | Смена своего пароля; имя и e-mail |
+| `GET /auth/telegram`, `POST /auth/telegram/link`, `DELETE /auth/telegram` | Бот заявок: `{enabled, bot, linked}`; код привязки `{code, url, expiresInMin}` (15 мин, 503 без токена); отвязать свой Telegram |
 | `GET/POST /users`, `PATCH /users/:id` | Пользователи (admin) |
 | `GET /users/directory` | Краткий список сотрудников (для выбора исполнителя) |
 | `GET/POST /kb/spaces`, `PATCH/DELETE /kb/spaces/:id`, `GET /kb/spaces/:key` | Пространства; дерево страниц |
