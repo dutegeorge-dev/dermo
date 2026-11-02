@@ -219,6 +219,10 @@ collections:
           - { label: "Блок «Нет команды в Китае?» — фото 1 (4:3)", name: "logistika-komanda-1-4x3", widget: "image", required: false }
           - { label: "Блок «Нет команды в Китае?» — фото 2 (4:3)", name: "logistika-komanda-2-4x3", widget: "image", required: false }
           - { label: "Блок «Нет команды в Китае?» — фото 3 (4:3)", name: "logistika-komanda-3-4x3", widget: "image", required: false }
+          - { label: "Шаг 1 «Проверяем товар» — блок «Как едет ваш груз» (4:5)", name: "logistika-shag-1-4x5", widget: "image", required: false }
+          - { label: "Шаг 2 «Наносим маркировку» — блок «Как едет ваш груз» (4:5)", name: "logistika-shag-2-4x5", widget: "image", required: false }
+          - { label: "Шаг 3 «Контролируем погрузку» — блок «Как едет ваш груз» (4:5)", name: "logistika-shag-3-4x5", widget: "image", required: false }
+          - { label: "Шаг 4 «Отправляем и оформляем» — блок «Как едет ваш груз» (4:5)", name: "logistika-shag-4-4x5", widget: "image", required: false }
       - name: "otpravki"
         label: "Галерея отправок (внизу «Логистики» и «Торговли»)"
         file: "photos/otpravki.json"
@@ -229,6 +233,20 @@ collections:
           - { label: "Отправка 4 — вертикальное фото (3:4)", name: "otpravki-4-3x4", widget: "image", required: false }
           - { label: "Отправка 5 — вертикальное фото (3:4)", name: "otpravki-5-3x4", widget: "image", required: false }
           - { label: "Отправка 6 — вертикальное фото (3:4)", name: "otpravki-6-3x4", widget: "image", required: false }
+          - { label: "Отправка 7 — вертикальное фото (3:4)", name: "otpravki-7-3x4", widget: "image", required: false }
+          - { label: "Отправка 8 — вертикальное фото (3:4)", name: "otpravki-8-3x4", widget: "image", required: false }
+          - { label: "Отправка 9 — вертикальное фото (3:4)", name: "otpravki-9-3x4", widget: "image", required: false }
+          - { label: "Отправка 10 — вертикальное фото (3:4)", name: "otpravki-10-3x4", widget: "image", required: false }
+          - { label: "Отправка 11 — вертикальное фото (3:4)", name: "otpravki-11-3x4", widget: "image", required: false }
+          - { label: "Отправка 12 — вертикальное фото (3:4)", name: "otpravki-12-3x4", widget: "image", required: false }
+          - { label: "Отправка 13 — вертикальное фото (3:4)", name: "otpravki-13-3x4", widget: "image", required: false }
+          - { label: "Отправка 14 — вертикальное фото (3:4)", name: "otpravki-14-3x4", widget: "image", required: false }
+          - { label: "Отправка 15 — вертикальное фото (3:4)", name: "otpravki-15-3x4", widget: "image", required: false }
+          - { label: "Отправка 16 — вертикальное фото (3:4)", name: "otpravki-16-3x4", widget: "image", required: false }
+          - { label: "Отправка 17 — вертикальное фото (3:4)", name: "otpravki-17-3x4", widget: "image", required: false }
+          - { label: "Отправка 18 — вертикальное фото (3:4)", name: "otpravki-18-3x4", widget: "image", required: false }
+          - { label: "Отправка 19 — вертикальное фото (3:4)", name: "otpravki-19-3x4", widget: "image", required: false }
+          - { label: "Отправка 20 — вертикальное фото (3:4)", name: "otpravki-20-3x4", widget: "image", required: false }
       - name: "kontakty"
         label: "Контакты"
         file: "photos/kontakty.json"

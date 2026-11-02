@@ -422,7 +422,7 @@ export interface Logistika {
     ctaPrimary: string;
     ctaSecondary: string;
   };
-  /** Шаги поставки на фото с отправок (только ru): photo — номер слота otpravki. */
+  /** Шаги поставки (только ru): photo — запасной слот otpravki, если нет logistika-shag-<N>. */
   process?: {
     title: string;
     lead: string;
@@ -481,8 +481,6 @@ export interface Logistika {
     /** Alt трёх фото ленты блока (только ru). */
     photoAlts?: string[];
   };
-  /** Строка результата на карточке кейса: адрес кейса → текст (только ru). */
-  caseResults?: Record<string, string>;
   examples: {
     title: string;
     items: LogiLink[];

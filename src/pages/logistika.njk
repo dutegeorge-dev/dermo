@@ -16,7 +16,7 @@ sitemap: true
     первый экран с формой (фото погрузки, 4 плашки) → «Как едет ваш груз»
     (шаги на реальных фото с отправок) → способы доставки → из чего
     складывается цена → цитата → с кем работаем → блок закупки (/torgovlya/) →
-    кейсы → фото с наших отправок → FAQ → контакты → финальный CTA.
+    кейсы → фото с наших отправок (карусель до 20 кадров) → FAQ → контакты → финальный CTA.
     Порядок блоков после второго — прежний (удалены только «Как чаще всего
     теряют деньги» и «Как устроена поставка»).
     Плюс закреплённая панель «Позвонить / Telegram / Рассчитать» на телефоне
@@ -61,11 +61,13 @@ sitemap: true
       <div>
         <h1 class="max-w-2xl text-[1.75rem] font-light leading-tight tracking-tight sm:text-4xl md:text-5xl">{{ L.hero.h1 }}</h1>
         <p class="mt-3 max-w-xl text-base leading-snug text-white md:mt-6 md:text-xl md:font-light md:leading-relaxed">{{ L.hero.subtitle }}</p>
-        {# Плашки: телефон — 2×2, десктоп — одна строка. #}
-        <ul class="mt-4 grid grid-cols-2 gap-2 md:mt-8 md:grid-cols-4 md:gap-3">
+        {# Плашки: столбик одинаковой ширины, каждая — ровно одна строка (без
+           переносов, которые давали разную высоту). На экранах уже 360 px
+           длинная плашка может перенестись. #}
+        <ul class="mt-4 grid gap-2 md:mt-8 md:max-w-md">
           {% for b in L.hero.badges %}
-            <li class="flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-2.5 py-2 text-[0.8125rem] font-medium leading-tight text-white md:flex-col md:items-start md:gap-2.5 md:p-3">
-              {{ icon(b.icon, "h-4 w-4 shrink-0 text-cyan md:h-5 md:w-5") }}
+            <li class="flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-[0.8125rem] font-medium leading-snug text-white sm:whitespace-nowrap md:text-sm">
+              {{ icon(b.icon, "h-4 w-4 shrink-0 text-cyan") }}
               <span>{{ b.text }}</span>
             </li>
           {% endfor %}
@@ -88,8 +90,9 @@ sitemap: true
   </section>
 
   {# ── 2. Как едет ваш груз — шаги поставки на реальных кадрах ─────────────
-     Не галерея, а короткий рассказ «что происходит с вашим грузом»: каждый
-     шаг — фото с наших отправок (те же слоты otpravki-<N>-3x4). Так реальные
+     Не галерея, а короткий рассказ «что происходит с вашим грузом»: у шага
+     своё фото (Decap: logistika-shag-<1..4>-4x5), пока его нет — кадр из
+     галереи отправок (otpravki-<photo>-3x4). Так реальные
      фото видны сразу под первым экраном, а полная галерея стоит ниже, перед
      FAQ. Телефон — лента со scroll-snap, с md — четыре колонки. Тап по фото
      открывает его на весь экран (лайтбокс). Первые два кадра попадают на
@@ -102,7 +105,9 @@ sitemap: true
       </div>
       <ol data-gallery class="snap-strip mt-6 md:mt-8 md:grid md:grid-cols-2 md:gap-5 lg:grid-cols-4">
         {% for st in L.process.steps %}
-          {% set alt = ("gallery.alt" + st.photo) | t(locale) %}
+          {% set ownSrc = "/assets/img/uploads/logistika-shag-" + loop.index + "-4x5.jpg" %}
+          {% set src = ownSrc if (ownSrc | photoExists) else "/assets/img/uploads/otpravki-" + st.photo + "-3x4.jpg" %}
+          {% set alt = st.title %}
           <li class="snap-strip-item md:w-auto">
             <button
               type="button"
@@ -110,10 +115,11 @@ sitemap: true
               class="group relative block w-full overflow-hidden rounded-xl border border-slate-200 bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2"
               aria-label="{{ alt }} — {{ 'gallery.zoom' | t(locale) }}"
             >
-              {% image "/assets/img/uploads/otpravki-" + st.photo + "-3x4.jpg", alt, "(min-width: 1024px) 17rem, (min-width: 768px) 45vw, 78vw", "aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105 md:aspect-[4/5]", ("eager" if loop.index <= 2 else "lazy") %}
+              {% image src, alt, "(min-width: 1024px) 17rem, (min-width: 768px) 45vw, 78vw", "aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105 md:aspect-[4/5]", ("eager" if loop.index <= 2 else "lazy") %}
               <span class="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white shadow" aria-hidden="true">{{ loop.index }}</span>
             </button>
-            <h3 class="mt-3 text-base font-semibold text-ink">{{ st.title }}</h3>
+            {# min-h на lg: заголовки в две строки не сдвигают текст соседей. #}
+            <h3 class="mt-3 text-base font-semibold leading-6 text-ink lg:min-h-[3rem]">{{ st.title }}</h3>
             <p class="mt-1 text-sm leading-snug text-muted">{{ st.text }}</p>
           </li>
         {% endfor %}
@@ -272,8 +278,8 @@ sitemap: true
   </section>
 
   {# ── 8. Кейсы ────────────────────────────────────────────────────────────
-     Карточка: фото, заголовок и одна строка результата (L.caseResults по
-     адресу кейса). Длинное описание — на странице кейса. Телефон — лента,
+     Карточка: фото и заголовок (итог уже в заголовке кейса), «Подробнее»
+     прижато к низу. Длинное описание — на странице кейса. Телефон — лента,
      с md — сетка в три колонки. #}
   {% set libItems = library.kejsy[locale] %}
   {% set caseItems = libItems if (libItems and libItems.length) else homeCases %}
@@ -289,7 +295,6 @@ sitemap: true
       <ul class="snap-strip mt-6 md:mt-8 md:grid md:grid-cols-3 md:gap-6">
         {% for item in caseItems %}
           {% if loop.index0 < 3 %}
-            {% set result = L.caseResults[item.url] or item.result %}
             <li class="snap-strip-item md:w-auto">
               <a
                 href="{{ item.url }}"
@@ -304,11 +309,6 @@ sitemap: true
                 {% endif %}
                 <div class="flex flex-1 flex-col p-5 md:p-6">
                   <h3 class="text-base font-medium leading-snug text-ink md:text-lg">{{ item.title }}</h3>
-                  {% if result %}
-                    <p class="mt-3 flex items-start gap-2 text-sm font-semibold text-cyan-dark">
-                      {{ icon("check", "mt-0.5 h-4 w-4 shrink-0") }}<span>{{ result }}</span>
-                    </p>
-                  {% endif %}
                   <span class="mt-auto inline-flex items-center gap-1.5 pt-4 text-sm font-medium text-cyan-dark transition-colors group-hover:text-cyan">
                     {{ "home.cases.more" | t(locale) }}
                     {{ icon("arrow-right", "h-4 w-4") }}
@@ -322,34 +322,51 @@ sitemap: true
     </div>
   </section>
 
-  {# ── 9. Фото с наших отправок — полная галерея ───────────────────────────
-     Телефон — горизонтальная лента со scroll-snap (одно фото целиком + край
-     следующего, без автопрокрутки), с md — сетка. Подпись — текст alt.
-     Тап открывает фото на весь экран (лайтбокс, assets/ts/gallery.ts). #}
+  {# ── 9. Фото с наших отправок — карусель до 20 кадров ─────────────────────
+     Слоты Decap «Фото → Отправки»: otpravki-<1..20>-3x4, выводятся только
+     загруженные. Свайп на телефоне, стрелки с md (assets/ts/slider.ts), без
+     автопрокрутки и без подписей (описание кадра — в alt). Тап открывает фото
+     на весь экран (лайтбокс assets/ts/gallery.ts). #}
   <section id="otpravki" class="scroll-mt-24 bg-surface-alt">
     <div class="container section">
-      <div class="max-w-2xl">
-        <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "gallery.title" | t(locale) }}</h2>
-        <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "gallery.lead" | t(locale) }}</p>
-      </div>
-      <ul data-gallery class="snap-strip mt-6 md:mt-8 md:grid md:grid-cols-3 md:gap-4 lg:grid-cols-6">
-        {% for n in range(1, 7) %}
-          {% set alt = ("gallery.alt" + n) | t(locale) %}
-          <li class="snap-strip-item md:w-auto">
-            <figure>
+      <div data-slider>
+        <div class="flex items-end justify-between gap-4">
+          <div class="max-w-2xl">
+            <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "gallery.title" | t(locale) }}</h2>
+            <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "gallery.lead" | t(locale) }}</p>
+          </div>
+          <div class="hidden shrink-0 gap-2 md:flex">
+            {% for dir in [["prev", "chevron-left", "Назад"], ["next", "chevron-right", "Вперёд"]] %}
               <button
                 type="button"
-                data-gallery-item
-                class="group block w-full overflow-hidden rounded-xl border border-slate-200 bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2"
-                aria-label="{{ alt }} — {{ 'gallery.zoom' | t(locale) }}"
+                data-slider-{{ dir[0] }}
+                aria-label="{{ dir[2] }}"
+                class="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-cyan/40 bg-white text-cyan-dark transition-colors hover:bg-cyan hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-cyan-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2"
               >
-                {% image "/assets/img/uploads/otpravki-" + n + "-3x4.jpg", alt, "(min-width: 1024px) 12rem, (min-width: 768px) 30vw, 78vw", "aspect-[3/4] w-full object-cover transition-transform duration-300 group-hover:scale-105" %}
+                {{ icon(dir[1], "h-5 w-5") }}
               </button>
-              <figcaption class="mt-2 text-sm leading-snug text-muted">{{ alt }}</figcaption>
-            </figure>
-          </li>
-        {% endfor %}
-      </ul>
+            {% endfor %}
+          </div>
+        </div>
+        <ul data-slider-track data-gallery class="scrollbar-none -mx-4 mt-6 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto scroll-smooth px-4 pb-1 sm:-mx-6 sm:scroll-px-6 sm:px-6 md:mx-0 md:mt-8 md:scroll-px-0 md:gap-4 md:px-0">
+          {% for n in range(1, 21) %}
+            {% set src = "/assets/img/uploads/otpravki-" + n + "-3x4.jpg" %}
+            {% if src | photoExists %}
+              {% set alt = ("gallery.alt" + n) | t(locale) if n <= 6 else ("gallery.title" | t(locale)) %}
+              <li data-slider-item class="w-[62%] shrink-0 snap-start sm:w-[38%] md:w-[calc((100%_-_3rem)/4)] lg:w-[calc((100%_-_5rem)/6)]">
+                <button
+                  type="button"
+                  data-gallery-item
+                  class="group block w-full overflow-hidden rounded-xl border border-slate-200 bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2"
+                  aria-label="{{ alt }} — {{ 'gallery.zoom' | t(locale) }}"
+                >
+                  {% image src, alt, "(min-width: 1024px) 12rem, (min-width: 768px) 24vw, 62vw", "aspect-[3/4] w-full object-cover transition-transform duration-300 group-hover:scale-105" %}
+                </button>
+              </li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      </div>
     </div>
   </section>
 
