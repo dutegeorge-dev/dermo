@@ -2,12 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type DragEvent, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 
 import { FLAGS, type FlagKey, MILESTONES, SHIPMENT_STAGES, stageSpec } from "../../../../shared/shipments.ts";
 import { Avatar } from "../../components/crm/common.tsx";
-import { IconBoard, IconCalendar, IconList, IconPlus, IconSearch } from "../../components/Icons.tsx";
-import { CalendarView } from "./CalendarPage.tsx";
+import { IconBoard, IconList, IconPlus, IconSearch } from "../../components/Icons.tsx";
 import { DueLabel, ShipmentStage, StageBar } from "../../components/shipments/common.tsx";
 import { emptyForm, formPayload, ShipmentForm, type ShipmentFormState } from "../../components/shipments/ShipmentForm.tsx";
 import { ConfirmDialog, EmptyState, ErrorBox, Modal, Spinner } from "../../components/ui.tsx";
@@ -16,12 +15,12 @@ import { useAuth } from "../../lib/auth.tsx";
 import type { Shipment } from "../../lib/types.ts";
 
 type Counts = { status: string; stage: number; n: number }[];
-type View = "board" | "table" | "calendar";
+type View = "board" | "table";
 
 function readView(): View {
   try {
     const v = localStorage.getItem("crm.shipments.view");
-    return v === "table" || v === "calendar" ? v : "board";
+    return v === "table" ? v : "board";
   } catch {
     return "board";
   }
@@ -271,11 +270,18 @@ function Table({ rows, status }: { rows: Shipment[]; status: string }) {
   );
 }
 
+/** Календарь стал отдельной страницей (кнопка в шапке) — старые ссылки «?view=calendar» ведут туда. */
 export function ShipmentsPage() {
+  const [params] = useSearchParams();
+  if (params.get("view") === "calendar") return <Navigate to="/calendar" replace />;
+  return <ShipmentsList />;
+}
+
+function ShipmentsList() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const viewParam = params.get("view");
-  const [view, setViewState] = useState<View>(() => (viewParam === "calendar" || viewParam === "table" || viewParam === "board" ? viewParam : readView()));
+  const [view, setViewState] = useState<View>(() => (viewParam === "table" || viewParam === "board" ? viewParam : readView()));
   const status = view === "board" ? "active" : (params.get("status") ?? "active");
   const stage = view === "board" ? "" : (params.get("stage") ?? "");
   const mine = params.get("mine") === "1";
@@ -338,14 +344,12 @@ export function ShipmentsPage() {
         <div className="inline-flex overflow-hidden rounded-md border border-slate-300 dark:border-neutral-700">
           {tab("board", "Доска", <IconBoard size={14} />)}
           {tab("table", "Список", <IconList size={14} />)}
-          {tab("calendar", "Календарь", <IconCalendar size={14} />)}
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
           <IconPlus size={14} /> Новая сделка
         </button>
       </div>
-      {view === "calendar" && <CalendarView />}
-      <div className={`mb-3 flex flex-wrap items-center gap-2 ${view === "calendar" ? "hidden" : ""}`}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="relative block w-full max-w-xs">
           <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input type="search" className="input pl-8" placeholder="Груз, контейнер, клиент, ТН ВЭД" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -379,8 +383,8 @@ export function ShipmentsPage() {
           </button>
         )}
       </div>
-      {isLoading && view !== "calendar" && <Spinner />}
-      {view !== "calendar" && <ErrorBox error={error} />}
+      {isLoading && <Spinner />}
+      <ErrorBox error={error} />
       {data && rows.length === 0 && view === "table" && (
         <EmptyState title={q || stage || status !== "active" ? "Ничего не найдено" : "Сделок в работе нет"}>Создайте сделку, когда клиент оплатил депозит.</EmptyState>
       )}

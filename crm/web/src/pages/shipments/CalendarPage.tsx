@@ -6,7 +6,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Link, Navigate } from "react-router";
+import { Link } from "react-router";
 
 import { CUSTOM_EVENT_TYPES } from "../../../../shared/calendar.ts";
 import { formatMoney } from "../../../../shared/documents.ts";
@@ -15,7 +15,8 @@ import { dateKey, DueLabel, EventDialog, today } from "../../components/shipment
 import { CustomEventDialog } from "../../components/calendar/CustomEventDialog.tsx";
 import { formatDay } from "../../components/docs/common.tsx";
 import { IconChevronLeft, IconChevronRight, IconPlus, IconSearch } from "../../components/Icons.tsx";
-import { EmptyState, ErrorBox, Spinner } from "../../components/ui.tsx";
+import { Content } from "../../components/Layout.tsx";
+import { EmptyState, ErrorBox, PageHeader, Spinner } from "../../components/ui.tsx";
 import { api } from "../../lib/api.ts";
 import type { CalendarEvent } from "../../lib/types.ts";
 
@@ -313,7 +314,7 @@ function MonthView({ events, onOpen, onAdd }: { events: CalendarEvent[]; onOpen:
   );
 }
 
-/** Календарь сделок — вид на странице «Сделки». */
+/** Календарь: виды «По неделям» и «Месяц», фильтры, свои события. */
 export function CalendarView() {
   const [view, setViewState] = useState<View>(readView);
   const [q, setQ] = useState("");
@@ -402,8 +403,13 @@ export function CalendarView() {
   );
 }
 
-/** Старый адрес /calendar — теперь вид «Календарь» в «Сделках». */
+/** Календарь — отдельная страница (кнопка в шапке): даты сделок и свои события. */
 export function CalendarPage() {
-  return <Navigate to="/shipments?view=calendar" replace />;
+  return (
+    <Content wide>
+      <PageHeader title="Календарь" meta="Даты сделок в работе и свои события: встречи, поездки, оплаты счетов, звонки, задачи" />
+      <CalendarView />
+    </Content>
+  );
 }
 

@@ -11,6 +11,7 @@ import { GlobalSearch } from "./GlobalSearch.tsx";
 import {
   IconBoard,
   IconCalculator,
+  IconCalendar,
   IconBook,
   IconBox,
   IconContainer,
@@ -178,6 +179,14 @@ export function Layout() {
           </button>
           <GlobalSearch />
           <span className="ml-auto" />
+          <NavLink
+            to="/calendar"
+            className={({ isActive }) => `btn shrink-0 ${isActive ? "bg-accent-soft text-accent dark:bg-accent/20 dark:text-accent-bright" : ""}`}
+            title="Календарь: даты сделок, встречи, поездки, оплаты"
+          >
+            <IconCalendar size={14} />
+            <span className="hidden sm:inline">Календарь</span>
+          </NavLink>
           <AiChat />
           <Link to="/documents/new" className="btn shrink-0" title="Загрузить документ: инвойс, договор, накладную…">
             <IconUpload size={14} />

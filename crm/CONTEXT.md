@@ -108,7 +108,9 @@
 6. **Номер контейнера обязателен** — но к моменту погрузки (на депозите его ещё нет).
 7. **Трекинга от перевозчиков нет.** Трекинг для клиента — «в будущем, не сейчас».
 8. **Календарь — главный инструмент.** Был отдельной страницей, владелец
-   попросил сделать третьим видом в «Сделках» (доска / список / календарь).
+   попросил сделать третьим видом в «Сделках» (доска / список / календарь), а в ноябре 2026 — **отдельной кнопкой
+   в шапке** («Календарь» рядом с «Спросить ИИ» и «Загрузить документ», страница `/calendar`); старые ссылки
+   `/shipments?view=calendar` ведут на `/calendar`.
    В клетке месяца крупно **действие** («₽ Оплатить остаток»), под ним груз —
    «приходится наводиться мышкой» было плохо.
    **Из календаря даты не меняются** (нажимали случайно): по событию — краткая сводка сделки (стороны, груз, даты,
@@ -464,7 +466,7 @@ crm/
     App.tsx             маршруты SPA       components/Layout.tsx — меню
     lib/                api.ts (fetch + CSRF), auth.tsx, types.ts (типы ответов API), format.ts, theme.ts
     pages/              kb/*, CallScriptPage, crm/DealsPage (воронка), crm/CounterpartiesPage, crm/ProductsPage,
-                        docs/DocumentsPage|DocumentPage|DocumentEditor, shipments/ShipmentsPage (доска/список/календарь),
+                        docs/DocumentsPage|DocumentPage|DocumentEditor, shipments/ShipmentsPage (доска/список), shipments/CalendarPage (/calendar — кнопка в шапке),
                         shipments/ShipmentPage (карточка), shipments/CalendarPage (CalendarView), SettingsPage, Users, Audit,
                         factories/FactoriesPage (карточки с фото, фильтры анкеты), factories/FactoryPage (новая и карточка:
                         файлы → ИИ, дубли, анкета, цены; components/factories/common — OffersEditor, статус),
