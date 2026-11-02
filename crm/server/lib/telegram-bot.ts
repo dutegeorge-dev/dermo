@@ -167,7 +167,7 @@ async function processRequest(deps: BotDeps, chatId: number, user: { id: number;
   };
   try {
     const { draft, usage } = await parse(text);
-    const result = await db.transaction((tx) => createLeadFromDraft(tx, user.id, draft, text, user.name));
+    const result = await db.transaction((tx) => createLeadFromDraft(tx, user.id, draft, text, { source: "telegram", by: user.name }));
     deps.log?.info(JSON.stringify({ ai: "telegram-lead", deal: result.deal.key, usage }));
     await reply(resultText(result, user.name), { reply_markup: { inline_keyboard: [[{ text: "↩️ Отменить", callback_data: undoData(result) }]] } });
   } catch (error) {

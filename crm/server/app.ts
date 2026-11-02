@@ -17,6 +17,7 @@ import { loadSession, safeEqual } from "./lib/session.ts";
 import { aiRoutes } from "./routes/ai.ts";
 import { auditRoutes } from "./routes/audit.ts";
 import { authRoutes } from "./routes/auth.ts";
+import { intakeRoutes } from "./routes/intake.ts";
 import { calcRoutes } from "./routes/calc.ts";
 import { catalogRoutes } from "./routes/catalogs.ts";
 import { cargoRoutes } from "./routes/cargo.ts";
@@ -40,7 +41,8 @@ import { userRoutes } from "./routes/users.ts";
 const API_PREFIX = `${config.basePath}/api`;
 
 /** Маршруты API, доступные без входа. */
-const PUBLIC_API = new Set([`${API_PREFIX}/auth/login`, `${API_PREFIX}/health`]);
+/** Без сессии: вход, проверка здоровья, импорт заявок (у него своя проверка — токен в заголовке). */
+const PUBLIC_API = new Set([`${API_PREFIX}/auth/login`, `${API_PREFIX}/health`, `${API_PREFIX}/intake/leads`]);
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -151,6 +153,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
       await api.register(calcRoutes);
       await api.register(cargoRoutes);
       await api.register(aiRoutes, { prefix: "/ai" });
+      await api.register(intakeRoutes);
     },
     { prefix: API_PREFIX },
   );

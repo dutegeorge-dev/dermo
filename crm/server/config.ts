@@ -94,6 +94,8 @@ export const config = {
     /** Адрес Bot API (свой прокси / локальный сервер Bot API, если api.telegram.org недоступен). */
     apiUrl: (process.env.CRM_TELEGRAM_API_URL?.trim() || "https://api.telegram.org").replace(/\/$/, ""),
   },
+  /** Импорт заявок (POST /intake/leads): секрет из .env; короче 24 символов — выключен. */
+  intakeToken: (process.env.CRM_INTAKE_TOKEN?.trim().length ?? 0) >= 24 ? process.env.CRM_INTAKE_TOKEN!.trim() : undefined,
   loginLimit: {
     /** Неудачных попыток на один логин за окно. */
     perLogin: envNumber("CRM_LOGIN_LIMIT_PER_LOGIN", 5),

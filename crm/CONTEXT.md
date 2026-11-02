@@ -330,6 +330,12 @@
     контакт, если их создал этот же запрос и на них больше ничего не ссылается (отменить может прислававший или админ).
     Работает в процессе `bars-crm` long polling'ом (`telegram-bot.ts`, offset — в `settings.telegram_offset`), без
     вебхука и nginx; токен — `CRM_TELEGRAM_BOT_TOKEN`.
+    **Тип «Сертификация»** добавлен по заявкам на декларации / сертификаты с испытаниями образцов.
+    **Импорт заявок по токену** (`routes/intake.ts`, `POST /intake/leads`, `Authorization: Bearer CRM_INTAKE_TOKEN`):
+    ИИ-шлюз лёг надолго — владелец попросил, чтобы заявки мог вносить Claude из своей сессии. Принимает уже
+    разобранные заявки (поля LeadDraft + `text`, необязательно `stage` — ключ этапа воронки, `assignee` — логин),
+    заводит лиды тем же `createLeadFromDraft` (`source: intake`), дубли за 7 дней пропускает; `dryRun: true` —
+    в транзакции с откатом: видно, кого нашёл бы, ничего не пишет. Без токена (или короче 24 символов) — 404.
 
 Стиль работы с владельцем: пишет по-русски коротко и эмоционально, присылает
 скриншоты со стрелками. Любит, когда сначала коротко согласовали, потом сделали;
@@ -430,6 +436,7 @@ crm/
       file-text.ts      текст из PDF (pdfjs-dist, строки по координатам), .docx / .xlsx (jszip) для модели
       telegram-leads.ts бот заявок: разбор письма моделью (LEAD_REQUEST_SCHEMA, leadDraft), клиент и контакт кодом
                         (findClient: ИНН / почта / телефон / домен / название), createLeadFromDraft, findDuplicateLead, undoLead
+      (routes/intake.ts — импорт разобранных заявок по токену CRM_INTAKE_TOKEN, dryRun)
       telegram-bot.ts   бот заявок: long polling (startTelegramBot из index.ts), привязка кодом (createLinkCode), handleUpdate
                         (склейка кусков, очередь по чату, ответ с «Отменить»); маршруты — auth.ts /auth/telegram
       settings.ts call-script.ts text.ts
@@ -634,6 +641,7 @@ E2E-проверка интерфейса: Playwright с Chromium из `/opt/pw-
 
 ## 11. Прод и деплой
 
+- **Рабочий адрес Ирбиса — `https://datapoint-sync.ru/crm/`** (ноябрь 2026; на `tlkbars.ru/crm/` — старая копия).
 - Репозиторий на сервере: `/var/www/tlkbars/repo`; БД PostgreSQL локально; вложения
   `/var/lib/bars-crm/uploads`; бэкапы `/var/backups/bars-crm` (14 дней) + rclone-облако, cron 00:40 UTC.
 - Обновление только CRM (сайт не пересобирается):

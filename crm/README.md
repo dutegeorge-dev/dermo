@@ -210,6 +210,9 @@ location ^~ /crm/ {
 409). Нужен ИИ (`ANTHROPIC_*`). Сотрудники привязываются в «Профиле» → «Привязать Telegram». Если api.telegram.org с
 сервера недоступен — `CRM_TELEGRAM_API_URL` (свой прокси / сервер Bot API).
 
+**Импорт заявок по токену:** в `crm/.env` строка `CRM_INTAKE_TOKEN=<openssl rand -hex 24>`, затем
+`systemctl restart bars-crm`. Проверка: `curl -X POST https://<адрес>/crm/api/intake/leads` → 401 (без токена в .env — 404).
+
 Каталоги фабрик (миграция 0015): `deploy-crm.sh` сам ставит `poppler-utils` (pdftotext / pdftoppm — сканы). nginx менять не нужно: файлы идут кусками по 8 МБ (лимит тела `/crm/` — 30 МБ).
 
 После обновления с документами (миграция 0003: `clients` → `counterparties`, документы, товары) один раз выполните `npm run crm:seed` — он заполнит «Реквизиты компании» для поручений, если они пусты (остальное `seed` не трогает).
@@ -361,6 +364,7 @@ sudo systemctl start bars-crm
 | `POST /auth/login` `{login,password}` | Вход, ставит cookie, возвращает `{user, csrfToken}` |
 | `POST /auth/logout`, `GET /auth/me` | Выход; текущий пользователь и CSRF-токен |
 | `POST /auth/password`, `PATCH /auth/profile` | Смена своего пароля; имя и e-mail |
+| `POST /intake/leads` `{leads:[{text, title, product, type, summary, companyName, inn, …, contactName, phone, email, stage?}], assignee?, dryRun?}` | Импорт разобранных заявок без сессии, заголовок `Authorization: Bearer <CRM_INTAKE_TOKEN>` (нет токена — 404). Ответ — по каждой: `created` / `would_create` (dryRun) / `duplicate` / `error`, клиент (новый / найден по …), контакт |
 | `GET /auth/telegram`, `POST /auth/telegram/link`, `DELETE /auth/telegram` | Бот заявок: `{enabled, bot, linked}`; код привязки `{code, url, expiresInMin}` (15 мин, 503 без токена); отвязать свой Telegram |
 | `GET/POST /users`, `PATCH /users/:id` | Пользователи (admin) |
 | `GET /users/directory` | Краткий список сотрудников (для выбора исполнителя) |

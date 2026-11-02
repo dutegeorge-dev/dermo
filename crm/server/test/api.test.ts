@@ -25,6 +25,7 @@ process.env.CRM_TRUST_PROXY = "false";
 process.env.ANTHROPIC_API_KEY = "";
 process.env.ANTHROPIC_AUTH_TOKEN = "";
 process.env.CRM_RATES_FIXED = JSON.stringify({ USD: 80, EUR: 90, CNY: 11 });
+process.env.CRM_INTAKE_TOKEN = "test-intake-token-0123456789abcdef";
 
 const { config, CRM_ROOT } = await import("../config.ts");
 const { db, pool } = await import("../db/client.ts");
@@ -1859,7 +1860,7 @@ describe("Бот заявок в Telegram", () => {
     assert.equal(deal1.source, "telegram");
     assert.deepEqual(deal1.labels, ["Выкуп в КНР / агент"]);
     assert.equal(deal1.assigneeId, 1);
-    assert.match(deal1.description, /Оплата в ВТБ Шанхай[\s\S]*Текст заявки \(прислал в Telegram: Админ\)[\s\S]*Демо-заявка 1/);
+    assert.match(deal1.description, /Оплата в ВТБ Шанхай[\s\S]*Текст заявки \(Telegram, Админ\)[\s\S]*Демо-заявка 1/);
     const [client] = await db.select().from(cpTable).where(eq(cpTable.id, deal1.clientId));
     assert.equal(client.role, "client");
     assert.equal(client.phone, "8 800 000-00-00");
@@ -1908,5 +1909,36 @@ describe("Бот заявок в Telegram", () => {
     assert.equal((await call(s, "DELETE", "/auth/telegram")).statusCode, 200);
     await handleUpdate(deps, msg(text2));
     assert.match(last(), /для сотрудников/);
+  });
+});
+
+describe("Импорт заявок по токену", () => {
+  test("токен, пробный режим без записи, создание, этап, дубль", async () => {
+    const post = (payload: unknown, token = "test-intake-token-0123456789abcdef") =>
+      app.inject({ method: "POST", url: `${API}/intake/leads`, headers: { authorization: `Bearer ${token}` }, payload: payload as object });
+    const text = "Демо-импорт: сертификация ручных кофемолок для Ozon\nНужны образцы из Китая, испытания и декларация.";
+    const lead = { text, title: "Сертификация ручных кофемолок (Ozon)", type: "certification", summary: "Образцы из Китая, испытания, декларация.", contactName: "Демо Покупатель", messenger: "telegram", messengerHandle: "@demo_buyer", stage: "offer" };
+
+    assert.equal((await post({ leads: [lead] }, "wrong-token-wrong-token-wrong")).statusCode, 401);
+    assert.equal((await post({ leads: [] })).statusCode, 400);
+
+    const dry = await post({ dryRun: true, leads: [lead] });
+    assert.equal(dry.statusCode, 200, dry.body);
+    assert.equal(dry.json().results[0].status, "would_create");
+    const { deals: dealsTable } = await import("../db/schema.ts");
+    const { eq } = await import("drizzle-orm");
+    assert.equal((await db.select().from(dealsTable).where(eq(dealsTable.source, "intake"))).length, 0, "пробный режим ничего не пишет");
+
+    const res = (await post({ assignee: "admin", leads: [lead] })).json();
+    assert.equal(res.results[0].status, "created");
+    const created = res.results[0].lead;
+    assert.equal(created.client.isNew, true);
+    assert.equal(created.client.name, "Демо Покупатель");
+    const s = await adminSession();
+    const deal = (await call(s, "GET", `/deals/${created.deal.key}`)).json().deal;
+    assert.deepEqual([deal.source, deal.statusKey, deal.labels[0], deal.assigneeId], ["intake", "offer", "Сертификация", 1]);
+    assert.match(deal.description, /Текст заявки \(импорт заявок, Админ\)/);
+
+    assert.equal((await post({ leads: [lead] })).json().results[0].status, "duplicate");
   });
 });

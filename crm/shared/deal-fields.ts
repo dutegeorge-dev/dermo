@@ -36,12 +36,13 @@ export const REQUEST_TYPES = {
   teu: "Доставка и таможня (ТЭУ)",
   agent: "Выкуп в КНР / агент",
   search: "Поиск товара / фабрики",
+  certification: "Сертификация",
   other: "Другое",
 } as const;
 export type RequestType = keyof typeof REQUEST_TYPES;
 
 /** Откуда пришёл лид (deals.source). */
-export const DEAL_SOURCES: Record<string, string> = { manual: "вручную", site: "заявка с сайта", telegram: "Telegram-бот заявок" };
+export const DEAL_SOURCES: Record<string, string> = { manual: "вручную", site: "заявка с сайта", telegram: "Telegram-бот заявок", intake: "импорт заявок" };
 
 export const MESSENGERS = { telegram: "Telegram", whatsapp: "WhatsApp", max: "Макс", wechat: "WeChat", other: "Другой" } as const;
 

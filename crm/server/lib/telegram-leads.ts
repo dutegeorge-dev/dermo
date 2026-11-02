@@ -5,7 +5,7 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { and, asc, count, eq, gt, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
 
 import { REQUEST_TYPES, type RequestType } from "../../shared/deal-fields.ts";
 import type { DbOrTx } from "../db/client.ts";
@@ -68,6 +68,7 @@ const LEAD_PROMPT = `Ты разбираешь входящую заявку к�
   teu — товар клиент покупает сам, от нас — только перевозка, таможенное оформление, ТЭУ;
   agent — нужен посредник / платёжный агент в Китае: выкупить у китайского производителя внутри КНР, оплатить поставщику, выступить экспортёром или продавцом по контракту;
   search — найти товар или фабрику, подобрать производителя, узнать цены;
+  certification — сертификаты / декларации соответствия, испытания образцов, разрешительные документы (без закупки партии);
   other — не про закупку и доставку (сотрудничество, реклама, вакансии, спам).
 - summary — суть для менеджера по-русски, 2–5 коротких строк через перевод строки: что просят, условия (Incoterms, валюта, банк, сроки, объёмы), на какие вопросы клиент ждёт ответа.
 - Компания клиента: companyName — коротко, как пишут в документах («ООО «Пример»», «ИП Иванова И.И.»); companyFullName — полное, если есть; companyKind — ooo (ООО, АО и др. юрлица РФ), ip (ИП), foreign (иностранная), other; inn — ИНН, если указан; country — страна, если не Россия; companyPhone — общий телефон компании (многоканальный, 8 800), companyEmail — общий ящик (info@, sales@), website — сайт.
@@ -222,7 +223,12 @@ export type LeadResult = {
 };
 
 /** Черновик заявки → клиент (найденный или новый), контакт, лид. Всё — в одной транзакции. */
-export async function createLeadFromDraft(tx: DbOrTx, userId: number, d: LeadDraft, text: string, senderName: string): Promise<LeadResult> {
+/** Откуда заявка: бот (Telegram) или импорт (POST /intake/leads) — для источника, заметок и описания. */
+export type LeadOrigin = { source: "telegram" | "intake"; by: string; statusKey?: string };
+
+const originLabel = (o: LeadOrigin) => (o.source === "telegram" ? `Telegram, ${o.by}` : `импорт заявок, ${o.by}`);
+
+export async function createLeadFromDraft(tx: DbOrTx, userId: number, d: LeadDraft, text: string, origin: LeadOrigin): Promise<LeadResult> {
   let client: LeadResult["client"] = null;
   const found = await findClient(tx, d);
   if (found) {
@@ -251,7 +257,7 @@ export async function createLeadFromDraft(tx: DbOrTx, userId: number, d: LeadDra
         phone: d.companyPhone.slice(0, 60) || null,
         email: d.companyEmail || null,
         website: d.website.slice(0, 200) || null,
-        notes: `Создан ботом заявок (Telegram, ${senderName})`,
+        notes: `Создан из заявки (${originLabel(origin)})`,
         createdBy: userId,
       })
       .returning({ id: counterparties.id, name: counterparties.name });
@@ -292,17 +298,22 @@ export async function createLeadFromDraft(tx: DbOrTx, userId: number, d: LeadDra
     }
   }
 
-  const title = (d.title || text.split("\n").find((l) => l.trim())?.trim() || "Заявка из Telegram").slice(0, 300);
-  const description = [d.summary, `———\nТекст заявки (прислал в Telegram: ${senderName}):\n${text}`].filter(Boolean).join("\n\n").slice(0, 20_000);
-  const deal = await createDeal(tx, userId, {
-    title,
-    clientId: client?.id ?? null,
-    contactId: contact?.id ?? null,
-    product: d.product.slice(0, 500) || null,
-    labels: [REQUEST_TYPES[d.type]],
-    description,
-    source: "telegram",
-  });
+  const title = (d.title || text.split("\n").find((l) => l.trim())?.trim() || "Заявка").slice(0, 300);
+  const description = [d.summary, `———\nТекст заявки (${originLabel(origin)}):\n${text}`].filter(Boolean).join("\n\n").slice(0, 20_000);
+  const deal = await createDeal(
+    tx,
+    userId,
+    {
+      title,
+      clientId: client?.id ?? null,
+      contactId: contact?.id ?? null,
+      product: d.product.slice(0, 500) || null,
+      labels: [REQUEST_TYPES[d.type]],
+      description,
+      source: origin.source,
+    },
+    { statusKey: origin.statusKey },
+  );
   const [stage] = await tx.execute<{ name: string }>(sql`select s.name from deal_statuses s join deals d on d.status_key = s.key where d.id = ${deal.id}`).then((r) => r.rows);
   return { deal: { id: deal.id, key: deal.key, title: deal.title, stage: stage?.name ?? "" }, type: d.type, client, contact };
 }
@@ -312,7 +323,7 @@ export async function findDuplicateLead(tx: DbOrTx, text: string): Promise<{ key
   const [row] = await tx
     .select({ key: deals.key, title: deals.title })
     .from(deals)
-    .where(and(eq(deals.source, "telegram"), gt(deals.createdAt, sql`now() - interval '7 days'`), sql`position(${text} in ${deals.description}) > 0`))
+    .where(and(inArray(deals.source, ["telegram", "intake"]), gt(deals.createdAt, sql`now() - interval '7 days'`), sql`position(${text} in ${deals.description}) > 0`))
     .limit(1);
   return row ? { key: row.key!, title: row.title } : null;
 }
