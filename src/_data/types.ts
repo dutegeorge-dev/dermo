@@ -422,6 +422,13 @@ export interface Logistika {
     ctaPrimary: string;
     ctaSecondary: string;
   };
+  /** Шаги поставки на фото с отправок (только ru): photo — номер слота otpravki. */
+  process?: {
+    title: string;
+    lead: string;
+    steps: { photo: number; title: string; text: string }[];
+    more: string;
+  };
   methods: {
     title: string;
     items: LogiMethod[];
