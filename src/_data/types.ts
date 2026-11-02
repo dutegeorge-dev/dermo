@@ -417,6 +417,8 @@ export interface Logistika {
   hero: {
     h1: string;
     subtitle: string;
+    /** Плашки под подзаголовком (только ru-версия страницы). */
+    badges?: { icon: string; text: string }[];
     ctaPrimary: string;
     ctaSecondary: string;
   };
@@ -449,6 +451,8 @@ export interface Logistika {
     intro: string;
     structureTitle: string;
     structure: LogiCostItem[];
+    /** Строка под списком статей (только ru). */
+    contractNote?: string;
     needTitle: string;
     need: string;
   };
@@ -467,7 +471,11 @@ export interface Logistika {
     servicesTitle: string;
     services: LogiCard[];
     cta: string;
+    /** Alt трёх фото ленты блока (только ru). */
+    photoAlts?: string[];
   };
+  /** Строка результата на карточке кейса: адрес кейса → текст (только ru). */
+  caseResults?: Record<string, string>;
   examples: {
     title: string;
     items: LogiLink[];
@@ -485,6 +493,8 @@ export interface Logistika {
     emailLabel: string;
   };
   finalCta: { title: string; subtitle: string; button: string };
+  /** Подписи закреплённой панели на телефоне (только ru). */
+  mobileCta?: { aria: string; call: string; telegram: string; calc: string };
 }
 
 /** Карточка сотрудника в слайдере команды (имя и фото — плейсхолдеры). */

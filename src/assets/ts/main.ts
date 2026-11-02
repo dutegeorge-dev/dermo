@@ -20,6 +20,10 @@ import { initToc } from "./toc";
 // Лайтбокс галереи отправок (/logistika/, /torgovlya/) — см. ./gallery.ts.
 import { initGallery } from "./gallery";
 
+// Закреплённая панель «Позвонить / Telegram / Рассчитать» (/logistika/,
+// телефон) — см. ./mobile-cta.ts.
+import { initMobileCta } from "./mobile-cta";
+
 // Калькулятор доставки и таможенных платежей (/calculator/) — см. ./calculator.ts.
 import { initCalculator } from "./calculator";
 
@@ -141,6 +145,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initCalculator();
   initContactGoals();
   initGallery();
+  initMobileCta();
 });
 
 export {};

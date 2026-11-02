@@ -162,22 +162,10 @@ function loadPhotoOverrides(): Record<string, string> {
 }
 
 /**
- * eleventy-img: оптимизированная картинка (AVIF + WebP + исходный формат),
- * srcset, lazy-loading и width/height (защита от сдвига layout — CLS).
- * Источник — путь от корня сайта (например /assets/img/uploads/foo.jpg),
- * который резолвится в файл внутри src/. Если для плейсхолдера в админке задана
- * замена (photos/*.json) — берём её вместо исходного файла. Если файла нет —
- * возвращаем пустую строку (без падения сборки).
+ * Путь к файлу картинки на диске с учётом замены плейсхолдера фотографией,
+ * загруженной через админку (photos/*.json).
  */
-async function imageShortcode(
-  src: string,
-  alt = "",
-  sizes = "100vw",
-  className = "",
-): Promise<string> {
-  if (!src) return "";
-
-  // Замена плейсхолдера фотографией, загруженной через админку.
+function resolvePhotoPath(src: string): string {
   if (src.startsWith("/assets/img/uploads/")) {
     const key = path.basename(src).replace(/\.[^.]+$/, "");
     const override = loadPhotoOverrides()[key];
@@ -188,10 +176,29 @@ async function imageShortcode(
       if (fs.existsSync(overridePath)) src = override;
     }
   }
+  return src.startsWith("/") ? path.join("src", src.replace(/^\//, "")) : src;
+}
 
-  const inputPath = src.startsWith("/")
-    ? path.join("src", src.replace(/^\//, ""))
-    : src;
+/**
+ * eleventy-img: оптимизированная картинка (AVIF + WebP + исходный формат),
+ * srcset, lazy-loading и width/height (защита от сдвига layout — CLS).
+ * Источник — путь от корня сайта (например /assets/img/uploads/foo.jpg),
+ * который резолвится в файл внутри src/. Если для плейсхолдера в админке задана
+ * замена (photos/*.json) — берём её вместо исходного файла. Если файла нет —
+ * возвращаем пустую строку (без падения сборки).
+ * loading: "lazy" по умолчанию; "eager" — для картинок первого экрана (грузятся
+ * сразу и с fetchpriority="high"), лениво их грузить нельзя — это LCP.
+ */
+async function imageShortcode(
+  src: string,
+  alt = "",
+  sizes = "100vw",
+  className = "",
+  loading: "lazy" | "eager" = "lazy",
+): Promise<string> {
+  if (!src) return "";
+
+  const inputPath = resolvePhotoPath(src);
   if (!fs.existsSync(inputPath)) return "";
 
   const metadata = await Image(inputPath, {
@@ -205,8 +212,9 @@ async function imageShortcode(
   return Image.generateHTML(metadata, {
     alt,
     sizes,
-    loading: "lazy",
+    loading,
     decoding: "async",
+    ...(loading === "eager" ? { fetchpriority: "high" } : {}),
     ...(className ? { class: className } : {}),
   });
 }
@@ -254,6 +262,12 @@ export default function (eleventyConfig: EleventyConfig) {
   // eleventy-img: единый шорткод вставки оптимизированных фото по всему сайту.
   // {% image "путь", "alt", "sizes", "css-классы" %}
   eleventyConfig.addNunjucksAsyncShortcode("image", imageShortcode);
+
+  // Есть ли файл картинки (с учётом замены через админку) — чтобы не выводить
+  // пустые слоты: {% if "/assets/img/uploads/x.jpg" | photoExists %}.
+  eleventyConfig.addFilter("photoExists", (src: string) =>
+    Boolean(src) && fs.existsSync(resolvePhotoPath(src)),
+  );
 
   // CSS и JS собираются вне 11ty (postcss/esbuild) прямо в _site —
   // следим за изменениями, чтобы browsersync перезагружал страницу.

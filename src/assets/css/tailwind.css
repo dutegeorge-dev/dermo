@@ -304,6 +304,71 @@
   .has-mega[data-open="true"] .mega-caret {
     transform: rotate(180deg);
   }
+
+  /* Горизонтальная лента со свайпом (/logistika/: фото отправок, кейсы, фото
+     блока закупки). До md — flex-лента со scroll-snap: видна одна карточка
+     целиком и край следующей; лента выходит под поля контейнера, чтобы край
+     был виден, а вся страница по горизонтали не прокручивалась. С md —
+     обычная сетка (классы md:grid … на самом элементе). */
+  .snap-strip {
+    @apply -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1;
+    scroll-padding-inline: 1rem;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .snap-strip::-webkit-scrollbar {
+    display: none;
+  }
+  .snap-strip-item {
+    @apply w-[78%] shrink-0 snap-start;
+  }
+  @screen sm {
+    .snap-strip {
+      @apply -mx-6 px-6;
+      scroll-padding-inline: 1.5rem;
+    }
+    .snap-strip-item {
+      @apply w-[45%];
+    }
+  }
+  @screen md {
+    .snap-strip {
+      @apply mx-0 overflow-visible p-0;
+    }
+  }
+
+  /* Закреплённая панель «Позвонить / Telegram / Рассчитать» (/logistika/, до
+     md). Спрятана сдвигом вниз; visibility убирает ссылки из Tab-порядка.
+     Высота 56 px + отступ под «домашнюю полоску» iPhone. Логика — mobile-cta.ts. */
+  .mobile-cta {
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: translateY(100%);
+    visibility: hidden;
+    transition:
+      transform 0.2s ease-out,
+      visibility 0.2s;
+  }
+  .mobile-cta.is-visible {
+    transform: none;
+    visibility: visible;
+  }
+  @media (max-width: 767.98px) {
+    /* Нижний отступ страницы на высоту панели — не перекрывает подвал.
+       Отступ у самого подвала, чтобы под ним не было полосы другого цвета. */
+    html.has-mobile-cta footer {
+      padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+    }
+    /* Баннер cookies поднимается над панелью, пока она видна. */
+    html.mobile-cta-on [data-cookie-banner] {
+      bottom: calc(3.5rem + env(safe-area-inset-bottom));
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-cta {
+      transition: none;
+    }
+  }
 }
 
 @layer utilities {
