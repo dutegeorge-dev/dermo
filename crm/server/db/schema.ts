@@ -896,3 +896,28 @@ export const estimates = pgTable(
   (t) => [index("estimates_created_idx").on(t.createdAt)],
 );
 
+/** Свои события календаря (shared/calendar.ts): встречи, поездки, оплаты счетов, звонки, задачи. */
+export const calendarEvents = pgTable(
+  "calendar_events",
+  {
+    id: serial("id").primaryKey(),
+    type: text("type").notNull().default("other"),
+    title: text("title").notNull(),
+    date: date("date").notNull(),
+    time: text("time"),
+    endDate: date("end_date"),
+    notes: text("notes").notNull().default(""),
+    amount: numeric("amount", { precision: 16, scale: 2 }),
+    currency: text("currency"),
+    shipmentId: integer("shipment_id").references(() => shipments.id, { onDelete: "set null" }),
+    counterpartyId: integer("counterparty_id").references(() => counterparties.id, { onDelete: "set null" }),
+    assigneeId: integer("assignee_id").references(() => users.id, { onDelete: "set null" }),
+    done: boolean("done").notNull().default(false),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("calendar_events_date_idx").on(t.date)],
+);
+

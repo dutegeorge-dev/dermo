@@ -113,6 +113,10 @@
    «приходится наводиться мышкой» было плохо.
    **Из календаря даты не меняются** (нажимали случайно): по событию — краткая сводка сделки (стороны, груз, даты,
    что не отмечено, чего не хватает для таможни) и «Открыть сделку»; ни «Готово» в строке, ни перетаскивания.
+   **Свои события (ноябрь 2026)** — таблица `calendar_events`: встреча, поездка (с — по), оплата счёта (сумма,
+   валюта), звонок, задача, другое; с кем (контрагент), по сделке, ответственный, заметки, выполнено. «+ Событие» над
+   календарём или «+» в дне месяца; их правят, отмечают и удаляют прямо в календаре (удаляет автор, ответственный
+   или админ). В `GET /calendar` идут вместе с датами сделок (`kind: "custom"`, `custom`); оплаты — в «Только оплаты».
 9. **Карточка сделки — «всё сразу»**: деньги, товары с ТН ВЭД и ценами,
    сертификаты на товары, документы, ход сделки, все поля. «Ход сделки» —
    этапы простыми словами (что происходит, что сделать, чего ждём, что дальше),
@@ -448,6 +452,7 @@ crm/
                         products (+ GET /products/duplicates, POST /products/merge)
                         calc (GET/POST /shipments/:n/calc, kp.docx, GET /tnved)
                         cargo (GET/PUT /shipments/:n/spec, spec.xlsx, customs-pack[.zip])
+                        calendar (свои события календаря: POST/PATCH/DELETE /calendar/events; в GET /calendar — calendarCustomEvents)
                         payments (POST /payments, DELETE /payments/:id — оплата на несколько счетов; файл — files.ts POST /payments/:id/files)
                         estimates (раздел «Расчёт»: CRUD /estimates, POST /estimates/parse — ИИ по тексту заявки, /estimates/:id/kp.docx)
     cli/tnved.ts        npm run tnved:update [--if-empty] [--file]
@@ -517,7 +522,7 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   currency, note — что за не разнесённый остаток; файл — attachments owner_type `payment`), `payment_allocations`
   (payment_id, document_id, amount). Обычная оплата одного счёта сюда не пишется.
 
-**Миграции:** … **0017** `users.telegram_id` (бот заявок); **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0018** `calendar_events`; **0017** `users.telegram_id` (бот заявок); **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).

@@ -108,7 +108,7 @@ const TOOLS: Record<string, ToolSpec> = {
     },
   },
   calendar: {
-    description: "Календарь сделок в работе: плановые и фактические даты ключевых точек и флажки (оплаты остатка, фрахта, таможни). date null — дата не назначена (текущий этап). done — уже выполнено.",
+    description: "Календарь: даты сделок в работе (плановые и фактические ключевые точки, флажки — оплаты остатка, фрахта, таможни) и свои события сотрудников (custom: встречи, поездки, оплаты счетов, звонки, задачи — время, с кем, сумма, ответственный). date null — дата не назначена (текущий этап). done — уже выполнено.",
     properties: {
       from: { type: "string", description: "YYYY-MM-DD, включительно" },
       to: { type: "string", description: "YYYY-MM-DD, включительно" },
@@ -118,9 +118,13 @@ const TOOLS: Record<string, ToolSpec> = {
     shape: (d, i) => {
       const from = s(i.from);
       const to = s(i.to);
-      const events = (d as { events: { date: string | null; done: boolean; shipment: unknown }[] }).events
+      const events = (d as { events: { date: string | null; done: boolean; shipment: unknown; custom?: unknown }[] }).events
         .filter((e) => (i.includeDone || !e.done) && (!e.date || ((!from || e.date >= from) && (!to || e.date <= to))))
-        .map((e) => ({ ...pick(e, ["title", "date", "done", "payment"]), shipment: pick(e.shipment, ["number", "title", "containerNo", "client"]) }));
+        .map((e) => ({
+          ...pick(e, ["title", "date", "done", "payment"]),
+          ...(e.shipment ? { shipment: pick(e.shipment, ["number", "title", "containerNo", "client"]) } : {}),
+          ...(e.custom ? { custom: pick(e.custom, ["type", "time", "endDate", "counterpartyName", "shipmentNumber", "shipmentTitle", "amount", "currency", "assigneeName", "notes"]) } : {}),
+        }));
       return { events };
     },
   },

@@ -5,7 +5,7 @@ import { Link } from "react-router";
 
 import { daysBetween, FLAGS, type FlagKey, LAST_STAGE, MILESTONES, SHIPMENT_STAGES, stageSpec } from "../../../../shared/shipments.ts";
 import { api } from "../../lib/api.ts";
-import type { CalendarEvent, Shipment, ShipmentResponse } from "../../lib/types.ts";
+import type { Shipment, ShipmentCalendarEvent, ShipmentResponse } from "../../lib/types.ts";
 import { StageChip } from "../crm/common.tsx";
 import { formatDay } from "../docs/common.tsx";
 import { Modal } from "../ui.tsx";
@@ -94,7 +94,7 @@ export function useShipmentActions() {
  * Событие календаря — краткая сводка по сделке, без правки дат (из календаря нажимали случайно — владелец
  * попросил только смотреть). Отметить и перенести — в карточке сделки.
  */
-export function EventDialog({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
+export function EventDialog({ event, onClose }: { event: ShipmentCalendarEvent; onClose: () => void }) {
   const sh = event.shipment;
   const q = useQuery({ queryKey: ["shipment", sh.number], queryFn: () => api<ShipmentResponse>(`/shipments/${sh.number}`) });
   const full = q.data?.shipment;

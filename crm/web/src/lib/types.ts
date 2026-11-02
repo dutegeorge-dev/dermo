@@ -434,7 +434,8 @@ export type ShipmentEvent = {
   userName: string | null;
 };
 
-export type CalendarEvent = {
+/** Событие календаря по дате сделки. */
+export type ShipmentCalendarEvent = {
   id: string;
   kind: "milestone" | "flag";
   key: string;
@@ -445,6 +446,22 @@ export type CalendarEvent = {
   milestone: string | null;
   shipment: { number: number; label: string; title: string; stage: number; containerNo: string | null; client: string | null; carrier: string | null };
 };
+
+/** Своё событие календаря: встреча, поездка, оплата счёта, звонок, задача. */
+export type CustomCalendarEvent = {
+  id: string;
+  kind: "custom";
+  key: string;
+  title: string;
+  date: string;
+  done: boolean;
+  payment: boolean;
+  milestone: null;
+  shipment: null;
+  custom: import("../../../shared/calendar.ts").CustomEvent;
+};
+
+export type CalendarEvent = ShipmentCalendarEvent | CustomCalendarEvent;
 
 // ── База фабрик ────────────────────────────────────────────────────────────
 

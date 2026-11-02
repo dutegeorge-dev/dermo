@@ -1,15 +1,20 @@
 /**
  * Календарь сделок: что просрочено, что на этой неделе, на следующей и дальше.
- * Два вида — список по неделям и месяц (события можно перетаскивать на другой день).
+ * Два вида — список по неделям и месяц. Даты сделок только смотрим; свои события (встречи, поездки, оплаты счетов,
+ * звонки, задачи) добавляем, правим и отмечаем здесь же.
  */
 
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
 
+import { CUSTOM_EVENT_TYPES } from "../../../../shared/calendar.ts";
+import { formatMoney } from "../../../../shared/documents.ts";
 import { addDays, FLAGS, type FlagKey, milestoneSpec, stageSpec } from "../../../../shared/shipments.ts";
 import { dateKey, DueLabel, EventDialog, today } from "../../components/shipments/common.tsx";
-import { IconChevronLeft, IconChevronRight, IconSearch } from "../../components/Icons.tsx";
+import { CustomEventDialog } from "../../components/calendar/CustomEventDialog.tsx";
+import { formatDay } from "../../components/docs/common.tsx";
+import { IconChevronLeft, IconChevronRight, IconPlus, IconSearch } from "../../components/Icons.tsx";
 import { EmptyState, ErrorBox, Spinner } from "../../components/ui.tsx";
 import { api } from "../../lib/api.ts";
 import type { CalendarEvent } from "../../lib/types.ts";
@@ -39,52 +44,82 @@ function dayTitle(date: string): string {
   return date === today() ? `Сегодня, ${label}` : date === addDays(today(), 1) ? `Завтра, ${label}` : label;
 }
 
-/** Цвет события: оплаты — янтарный, остальное — цвет этапа ключевой даты. */
+/** Цвет события: оплаты — янтарный, свои события — по типу, остальное — цвет этапа ключевой даты. */
 function eventColor(e: CalendarEvent): string {
+  if (e.kind === "custom") return CUSTOM_EVENT_TYPES[e.custom.type].color;
   if (e.kind === "flag") return e.payment ? "#d97706" : "#64748b";
   return stageSpec(milestoneSpec(e.key)?.stage ?? 1).color;
 }
 
 function matches(e: CalendarEvent, q: string, onlyPayments: boolean): boolean {
-  if (onlyPayments && !(e.kind === "flag" && e.payment)) return false;
+  if (onlyPayments && !e.payment) return false;
   if (!q) return true;
-  const hay = [e.shipment.title, e.shipment.label, e.shipment.containerNo, e.shipment.client, e.shipment.carrier, e.title].join(" ").toLowerCase();
+  const hay = (
+    e.kind === "custom"
+      ? [e.title, e.custom.notes, e.custom.counterpartyName, e.custom.shipmentTitle, e.custom.assigneeName, CUSTOM_EVENT_TYPES[e.custom.type].label]
+      : [e.shipment.title, e.shipment.label, e.shipment.containerNo, e.shipment.client, e.shipment.carrier, e.title]
+  )
+    .join(" ")
+    .toLowerCase();
   return hay.includes(q.toLowerCase());
 }
 
 /** Коротко, что сделать: «Оплатить остаток», «Погрузка», «Выпуск». */
 function shortTitle(e: CalendarEvent): string {
+  if (e.kind === "custom") return `${e.custom.time ? `${e.custom.time} ` : ""}${e.title}`;
   return e.kind === "flag" ? (FLAGS[e.key as FlagKey]?.short ?? e.title) : (milestoneSpec(e.key)?.short ?? e.title);
 }
 
 /** Событие текущего этапа сделки (или флажок, который уже пора выполнить). */
 function isCurrent(e: CalendarEvent): boolean {
+  if (e.kind === "custom") return true;
   const stage = e.kind === "flag" ? FLAGS[e.key as FlagKey].stage : (milestoneSpec(e.key)?.stage ?? 0);
   return e.kind === "flag" ? stage <= e.shipment.stage : stage === e.shipment.stage;
 }
 
 function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: () => void }) {
-  const sh = event.shipment;
   return (
     <li className="flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-neutral-800/50">
       <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: eventColor(event) }} />
       <button type="button" className="min-w-0 flex-1 text-left" onClick={onOpen}>
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <span className="font-medium">{event.title}</span>
+          <span className="font-medium">{event.kind === "custom" ? shortTitle(event) : event.title}</span>
+          {event.kind === "custom" && (
+            <span className="rounded px-1.5 text-[11px] font-medium text-white" style={{ background: eventColor(event) }}>
+              {CUSTOM_EVENT_TYPES[event.custom.type].label.toLowerCase()}
+            </span>
+          )}
           {event.kind === "flag" && event.payment && (
             <span className="rounded bg-amber-100 px-1.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">оплата</span>
           )}
           <DueLabel date={event.date} />
+          {event.kind === "custom" && event.custom.endDate && <span className="text-xs muted">по {formatDay(event.custom.endDate)}</span>}
+          {event.kind === "custom" && event.custom.amount !== null && <span className="text-xs font-medium tabular-nums">{formatMoney(event.custom.amount, event.custom.currency)}</span>}
         </div>
         <div className="mt-0.5 truncate text-xs muted">
-          <span className="font-medium text-slate-700 dark:text-neutral-200">{sh.title}</span>
-          {sh.containerNo && <span className="ml-1.5 font-mono">{sh.containerNo}</span>}
-          {[sh.client, sh.carrier].filter(Boolean).map((x) => ` · ${x}`)}
+          {event.kind === "custom" ? (
+            [event.custom.counterpartyName, event.custom.shipmentTitle && `сделка «${event.custom.shipmentTitle}»`, event.custom.assigneeName, event.custom.notes].filter(Boolean).join(" · ") || "\u00a0"
+          ) : (
+            <>
+              <span className="font-medium text-slate-700 dark:text-neutral-200">{event.shipment.title}</span>
+              {event.shipment.containerNo && <span className="ml-1.5 font-mono">{event.shipment.containerNo}</span>}
+              {[event.shipment.client, event.shipment.carrier].filter(Boolean).map((x) => ` · ${x}`)}
+            </>
+          )}
         </div>
       </button>
     </li>
   );
 }
+
+/** Просрочено: дата прошла (у поездки — дата окончания). */
+const overdue = (e: CalendarEvent, t: string) => !!e.date && (e.kind === "custom" && e.custom.endDate ? e.custom.endDate : e.date) < t;
+
+/** Порядок внутри дня: невыполненные, затем свои события по времени, затем сделки по номеру. */
+const sortKey = (e: CalendarEvent) => (e.kind === "custom" ? `0 ${e.custom.time ?? "99:99"}` : `1 ${String(e.shipment.number).padStart(6, "0")}`);
+
+/** Подпись под событием в клетке месяца. */
+const subtitle = (e: CalendarEvent) => (e.kind === "custom" ? (e.custom.counterpartyName ?? e.custom.shipmentTitle ?? CUSTOM_EVENT_TYPES[e.custom.type].label) : e.shipment.title);
 
 function ListView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: CalendarEvent) => void }) {
   const t = today();
@@ -96,9 +131,9 @@ function ListView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Cal
   // дальние даты будущих этапов видны в виде «Месяц».
   const open = events.filter((e) => !e.done && (isCurrent(e) || (e.date !== null && e.date < afterNext)));
   const sections: { key: string; title: string; hint?: string; tone?: "red" | "amber"; items: CalendarEvent[]; byDay: boolean }[] = [
-    { key: "overdue", title: "Просрочено", tone: "red", items: open.filter((e) => e.date && e.date < t), byDay: false },
+    { key: "overdue", title: "Просрочено", tone: "red", items: open.filter((e) => overdue(e, t)), byDay: false },
     { key: "nodate", title: "Нет плановой даты", hint: "Текущий этап без даты — укажите, когда ждать", tone: "amber", items: open.filter((e) => !e.date), byDay: false },
-    { key: "week", title: "Эта неделя", items: open.filter((e) => e.date && e.date >= t && e.date < nextMonday), byDay: true },
+    { key: "week", title: "Эта неделя", items: open.filter((e) => e.date && !overdue(e, t) && e.date < nextMonday), byDay: true },
     { key: "next", title: "Следующая неделя", items: open.filter((e) => e.date && e.date >= nextMonday && e.date < afterNext), byDay: true },
     { key: "month", title: "Через 2–5 недель", items: open.filter((e) => e.date && e.date >= afterNext && e.date < monthEnd), byDay: true },
     { key: "later", title: "Позже", items: open.filter((e) => e.date && e.date >= monthEnd), byDay: false },
@@ -109,7 +144,7 @@ function ListView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Cal
       {sections
         .filter((s) => s.items.length > 0)
         .map((s) => {
-          const sorted = [...s.items].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || a.shipment.number - b.shipment.number);
+          const sorted = [...s.items].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || sortKey(a).localeCompare(sortKey(b)));
           const days = s.byDay ? [...new Set(sorted.map((e) => e.date!))] : [null];
           return (
             <section key={s.key} className="panel overflow-hidden">
@@ -146,7 +181,7 @@ function ListView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Cal
   );
 }
 
-function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: CalendarEvent) => void }) {
+function MonthView({ events, onOpen, onAdd }: { events: CalendarEvent[]; onOpen: (e: CalendarEvent) => void; onAdd: (date: string) => void }) {
   const [cursor, setCursor] = useState(() => today().slice(0, 7)); // YYYY-MM
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
@@ -163,11 +198,15 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
     const map = new Map<string, CalendarEvent[]>();
     for (const e of events) {
       if (!e.date || (e.done && !showDone)) continue;
-      const list = map.get(e.date) ?? [];
-      list.push(e);
-      map.set(e.date, list);
+      // Поездка на несколько дней — в каждом дне.
+      const last = e.kind === "custom" && e.custom.endDate ? e.custom.endDate : e.date;
+      for (let d = e.date, n = 0; d <= last && n < 62; d = addDays(d, 1), n++) {
+        const list = map.get(d) ?? [];
+        list.push(e);
+        map.set(d, list);
+      }
     }
-    for (const list of map.values()) list.sort((a, b) => Number(a.done) - Number(b.done) || a.shipment.number - b.shipment.number);
+    for (const list of map.values()) list.sort((a, b) => Number(a.done) - Number(b.done) || sortKey(a).localeCompare(sortKey(b)));
     return map;
   }, [events, showDone]);
   const moveMonth = (delta: number) => {
@@ -213,12 +252,17 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
             return (
               <div
                 key={day}
-                className={`min-h-[110px] min-w-0 border-slate-200 p-1 dark:border-neutral-800 ${i % 7 ? "border-l" : ""} ${i >= 7 ? "border-t" : ""} ${
+                className={`group min-h-[110px] min-w-0 border-slate-200 p-1 dark:border-neutral-800 ${i % 7 ? "border-l" : ""} ${i >= 7 ? "border-t" : ""} ${
                   inMonth ? "" : "bg-slate-50/70 dark:bg-neutral-950/40"
                 }`}
               >
-                <div className={`mb-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${isToday ? "bg-accent font-semibold text-white" : inMonth ? "" : "muted"}`}>
-                  {Number(day.slice(8))}
+                <div className="mb-0.5 flex items-center justify-between">
+                  <div className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${isToday ? "bg-accent font-semibold text-white" : inMonth ? "" : "muted"}`}>
+                    {Number(day.slice(8))}
+                  </div>
+                  <button type="button" className="rounded px-1 text-[13px] leading-none text-slate-400 opacity-0 hover:bg-slate-100 hover:text-accent group-hover:opacity-100 dark:hover:bg-neutral-800" title="Добавить событие на этот день" onClick={() => onAdd(day)}>
+                    +
+                  </button>
                 </div>
                 <div className="space-y-0.5">
                   {list.slice(0, limit).map((e) => {
@@ -232,13 +276,13 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
                           e.done ? "text-slate-400 dark:text-neutral-500" : "text-slate-800 dark:text-neutral-100"
                         } ${overdue ? "ring-1 ring-red-500" : ""}`}
                         style={{ background: e.done ? undefined : `${eventColor(e)}26`, borderLeft: `3px solid ${eventColor(e)}` }}
-                        title={`${e.title} — ${e.shipment.title} ${e.shipment.containerNo ?? ""} ${e.shipment.client ?? ""}`}
+                        title={e.kind === "custom" ? [e.title, e.custom.counterpartyName, e.custom.notes].filter(Boolean).join(" — ") : `${e.title} — ${e.shipment.title} ${e.shipment.containerNo ?? ""} ${e.shipment.client ?? ""}`}
                       >
                         <span className={`block font-semibold ${e.done ? "line-through" : ""}`}>
                           {e.done ? "✓ " : e.payment ? "₽ " : ""}
                           {shortTitle(e)}
                         </span>
-                        <span className="block truncate opacity-80">{e.shipment.title}</span>
+                        <span className="block truncate opacity-80">{subtitle(e)}</span>
                       </button>
                     );
                   })}
@@ -259,7 +303,7 @@ function MonthView({ events, onOpen }: { events: CalendarEvent[]; onOpen: (e: Ca
             <span key={e.id}>
               {i > 0 && ", "}
               <button type="button" className="underline" onClick={() => onOpen(e)}>
-                {e.shipment.title} — {e.title.toLowerCase()}
+                {subtitle(e)} — {e.title.toLowerCase()}
               </button>
             </span>
           ))}
@@ -275,6 +319,7 @@ export function CalendarView() {
   const [q, setQ] = useState("");
   const [onlyPayments, setOnlyPayments] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ["calendar"],
     queryFn: () => api<{ events: CalendarEvent[] }>("/calendar"),
@@ -295,7 +340,7 @@ export function CalendarView() {
   const nextMonday = addDays(mondayOf(t), 7);
   const open = events.filter((e) => !e.done);
   const stats = [
-    { label: "Просрочено", n: open.filter((e) => e.date && e.date < t).length, cls: "text-red-600 dark:text-red-400" },
+    { label: "Просрочено", n: open.filter((e) => overdue(e, t)).length, cls: "text-red-600 dark:text-red-400" },
     { label: "Эта неделя", n: open.filter((e) => e.date && e.date >= t && e.date < nextMonday).length, cls: "" },
     { label: "Следующая", n: open.filter((e) => e.date && e.date >= nextMonday && e.date < addDays(nextMonday, 7)).length, cls: "" },
     { label: "Оплаты до конца след. недели", n: open.filter((e) => e.payment && e.date && e.date < addDays(nextMonday, 7)).length, cls: "text-amber-700 dark:text-amber-400" },
@@ -334,17 +379,25 @@ export function CalendarView() {
           <input type="checkbox" checked={onlyPayments} onChange={(e) => setOnlyPayments(e.target.checked)} />
           Только оплаты
         </label>
+        <button type="button" className="btn btn-sm ml-auto" onClick={() => setAdding(today())} title="Встреча, поездка, оплата счёта, звонок, задача">
+          <IconPlus size={12} /> Событие
+        </button>
       </div>
       {isLoading && <Spinner />}
       <ErrorBox error={error} />
       {data && data.events.length === 0 && (
-        <EmptyState title="Сделок в работе нет">
-          Календарь заполняется из плановых дат сделок. <Link to="/shipments?new=1" className="link">Создать сделку</Link>
+        <EmptyState title="Событий нет">
+          Календарь заполняется из плановых дат сделок и ваших событий. <Link to="/shipments?new=1" className="link">Создать сделку</Link> или «+ Событие».
         </EmptyState>
       )}
-      {data && data.events.length > 0 && (view === "list" ? <ListView events={events} onOpen={(e) => setOpenId(e.id)} /> : <MonthView events={events} onOpen={(e) => setOpenId(e.id)} />)}
-      <p className="mt-3 text-xs muted">Нажмите на событие — краткая сводка по сделке. Отметить выполнение или перенести дату — в карточке сделки.</p>
-      {opened && <EventDialog key={opened.id + String(opened.date) + String(opened.done)} event={opened} onClose={() => setOpenId(null)} />}
+      {data && data.events.length > 0 && (view === "list" ? <ListView events={events} onOpen={(e) => setOpenId(e.id)} /> : <MonthView events={events} onOpen={(e) => setOpenId(e.id)} onAdd={setAdding} />)}
+      <p className="mt-3 text-xs muted">
+        Даты сделок — краткая сводка, отметить и перенести их — в карточке сделки. Свои события (встречи, поездки, оплаты счетов, звонки) — «+ Событие»
+        или «+» в дне месяца; их можно править, отмечать и удалять прямо здесь.
+      </p>
+      {opened && opened.kind !== "custom" && <EventDialog key={opened.id + String(opened.date) + String(opened.done)} event={opened} onClose={() => setOpenId(null)} />}
+      {opened && opened.kind === "custom" && <CustomEventDialog key={opened.id} event={opened.custom} onClose={() => setOpenId(null)} />}
+      {adding && <CustomEventDialog event={null} date={adding} onClose={() => setAdding(null)} />}
     </div>
   );
 }

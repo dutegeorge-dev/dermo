@@ -20,7 +20,9 @@ import {
   shipmentLabel,
   stageSpec,
 } from "../../shared/shipments.ts";
+import type { CustomEvent } from "../../shared/calendar.ts";
 import { CURRENCIES } from "../../shared/documents.ts";
+import { calendarCustomEvents } from "./calendar.ts";
 import { db, type DbOrTx } from "../db/client.ts";
 import { counterparties, documentItems, documents, estimates, products, shipmentEvents, shipmentParties, shipments, users } from "../db/schema.ts";
 import { conformityIdsForProducts } from "../lib/product-match.ts";
@@ -53,7 +55,7 @@ async function findShipment(tx: DbOrTx, raw: unknown) {
 
 export type CalendarEvent = {
   id: string;
-  kind: "milestone" | "flag";
+  kind: "milestone" | "flag" | "custom";
   key: string;
   title: string;
   date: string | null;
@@ -61,7 +63,9 @@ export type CalendarEvent = {
   payment: boolean;
   /** Ключевая дата, к которой привязан флажок (её и двигаем). */
   milestone: MilestoneKey | null;
-  shipment: { number: number; label: string; title: string; stage: number; containerNo: string | null; client: string | null; carrier: string | null };
+  shipment: { number: number; label: string; title: string; stage: number; containerNo: string | null; client: string | null; carrier: string | null } | null;
+  /** Своё событие (kind «custom»). */
+  custom?: CustomEvent;
 };
 
 /**
@@ -78,6 +82,11 @@ export function shipmentCash(input: Record<string, unknown>): ShipmentCash {
   };
   const c = String(input.currency ?? "USD").toUpperCase();
   return { currency: (CURRENCIES as readonly string[]).includes(c) ? c : "USD", goods: n(input.goods), delivery: n(input.delivery), note: typeof input.note === "string" ? input.note.slice(0, 500) : "" };
+}
+
+/** Своё событие → общий вид события календаря (kind «custom», данные — в custom). */
+function customToCalendar(e: CustomEvent): CalendarEvent {
+  return { id: `c:${e.id}`, kind: "custom", key: e.type, title: e.title, date: e.date, done: e.done, payment: e.type === "payment", milestone: null, shipment: null, custom: e };
 }
 
 export function calendarEvents(list: ShipmentDto[]): CalendarEvent[] {
@@ -463,8 +472,9 @@ export async function shipmentRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /** Календарь: события всех сделок в работе. Группировку по неделям делает интерфейс. */
+  /** Календарь: даты сделок в работе + свои события (встречи, поездки, оплаты…). */
   app.get("/calendar", async () => {
     const list = await listShipments(db, sql`s.status = 'active'`);
-    return { events: calendarEvents(list) };
+    return { events: [...calendarEvents(list), ...(await calendarCustomEvents(db)).map(customToCalendar)] };
   });
 }

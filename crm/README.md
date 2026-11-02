@@ -327,6 +327,7 @@ sudo systemctl start bars-crm
 | `catalog_shots` | Скриншоты окна «Файлы» (файл — attachments `catalog_shot`, label — sha256): `filename`, `status` (`queued`/`processing`/`done`/`failed`), `rows` — сколько строк прочитано, `note` |
 | `product_offers` | Цены фабрик: `factory_id`, `product_id` (товар справочника — по названию без размера рулона и цвета), `name` (позиция с характеристиками), `price`, `currency`, `unit`, `moq`, `per_container` (единиц в 40HQ), `kg_per_unit`, `m3_per_unit`, `conditions`, `quoted_at` |
 | `freight_rates` | Ставки доставки: `transport` (rail/truck/sea/multimodal), `mode` (`container` / `cbm`), `container`, `origin`, `destination`, `rate`, `currency`, `kg_per_cbm`, `min_cbm`, `fee` + `fee_currency` (за отправку), `transit_days`, `etd`, `valid_until`, `quoted_at`, `carrier_name`, `notes` |
+| `calendar_events` | Свои события календаря: `type` (meeting / trip / payment / call / task / other), `title`, `date`, `time`, `end_date` (поездка), `notes`, `amount` + `currency` (оплата), `shipment_id`, `counterparty_id`, `assignee_id`, `done`, `done_at` |
 | `estimates` | Раздел «Расчёт»: заявки клиентов на их товары — `title`, `client_name`, `scheme` (`commission` / `teu`), `request` (текст заявки), `params` / `result` (jsonb, `shared/estimate.ts`; `params.markup` — наличные сверху расчёта, только админам), `freight`, `rates`, `rates_date` |
 | `payments` | Оплата на несколько счетов (одна платёжка → несколько инвойсов, в т. ч. другой сделки): `shipment_id`, `counterparty_id` (получатель), `number`, `date`, `amount`, `currency`, `note` (что за не разнесённый остаток). Файл — `attachments` с `owner_type='payment'`. Обычная оплата одного счёта сюда не пишется |
 | `payment_allocations` | Разнесение оплаты: `payment_id`, `document_id`, `amount`. Статус оплаты таких документов считается из разнесения |
@@ -400,7 +401,8 @@ sudo systemctl start bars-crm
 | `POST /shipments/:number/flags/:key/proof` (multipart `file`) | Платёжка к галочке оплаты — файл `payment` к последнему инвойсу / счёту / ДТ этой оплаты |
 | `POST /shipments/:number/stage` `{stage}`, `POST /shipments/:number/status` `{status}` | Перенос на доске; закрыть / отменить / вернуть |
 | `POST/DELETE /shipments/:number/parties[/:id]`, `POST /shipments/:number/comments` | Подрядчики, комментарии |
-| `GET /calendar` | События календаря по сделкам в работе |
+| `GET /calendar` | События календаря: даты сделок в работе и свои события (`kind: "custom"`) |
+| `POST /calendar/events` `{type, title, date, time?, endDate?, notes?, amount?, currency?, shipmentId?, counterpartyId?, assigneeId?}`, `PATCH/DELETE /calendar/events/:id` (`done` — выполнено) | Свои события календаря: встреча, поездка, оплата, звонок, задача, другое |
 | `GET/POST /products`, `GET/PATCH/DELETE /products/:id`, `POST /products/:id/merge` | Товары (`hsCode` — 10 цифр, `vat10`); карточка со ставкой из ТН ВЭД; объединение дублей |
 | `GET /tnved?q=` | Справочник ТН ВЭД: по началу кода или словам; `parsed` — разобранная ставка |
 | `GET /shipments/:number/calc` | Расчёт сделки (или параметры по умолчанию), товары с кодами и ставками, таможенные платежи из поручения |

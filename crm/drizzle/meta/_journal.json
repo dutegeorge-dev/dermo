@@ -127,6 +127,13 @@
       "when": 1793550098912,
       "tag": "0017_telegram_bot",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793603854152,
+      "tag": "0018_calendar_events",
+      "breakpoints": true
     }
   ]
 }

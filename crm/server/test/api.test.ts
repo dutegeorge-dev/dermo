@@ -617,6 +617,38 @@ describe("Сделки (отгрузки) и календарь", () => {
     assert.equal(ours((await call(s, "GET", "/shipments")).json().shipments).length, 0);
     assert.equal(ours((await call(s, "GET", "/shipments?status=closed")).json().shipments).length, 1);
   });
+  test("свои события календаря: встреча, поездка, оплата — создать, изменить, выполнено, удалить", async () => {
+    const s = await adminSession();
+    // Ошибки ввода.
+    assert.equal((await call(s, "POST", "/calendar/events", { type: "meeting", title: "", date: "2026-11-10" })).statusCode, 400);
+    assert.equal((await call(s, "POST", "/calendar/events", { type: "meeting", title: "Встреча", date: "2026-11-10", time: "25:00" })).statusCode, 400);
+    assert.equal((await call(s, "POST", "/calendar/events", { type: "trip", title: "Поездка", date: "2026-11-10", endDate: "2026-11-01" })).statusCode, 400);
+
+    let res = await call(s, "POST", "/calendar/events", { type: "meeting", title: "Встреча с демо-клиентом", date: "2026-11-10", time: "14:30", notes: "образцы" });
+    assert.equal(res.statusCode, 200, res.body);
+    const meeting = res.json().event;
+    assert.deepEqual([meeting.type, meeting.time, meeting.done], ["meeting", "14:30", false]);
+    res = await call(s, "POST", "/calendar/events", { type: "payment", title: "Оплатить счёт СВХ", date: "2026-11-12", amount: "15 000,50", currency: "RUB" });
+    const payment = res.json().event;
+    assert.equal(payment.amount, 15000.5);
+    res = await call(s, "POST", "/calendar/events", { type: "trip", title: "Поездка на демо-фабрику", date: "2026-11-15", endDate: "2026-11-20" });
+    assert.equal(res.json().event.endDate, "2026-11-20");
+
+    const cal = (await call(s, "GET", "/calendar")).json().events as { id: string; kind: string; payment: boolean; custom?: { id: number } }[];
+    const mine = cal.filter((e) => e.kind === "custom");
+    assert.ok(mine.some((e) => e.id === `c:${meeting.id}`));
+    assert.equal(mine.find((e) => e.custom?.id === payment.id)?.payment, true, "оплата — в «Только оплаты»");
+
+    res = await call(s, "PATCH", `/calendar/events/${meeting.id}`, { time: "15:00", done: true });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.deepEqual([res.json().event.time, res.json().event.done], ["15:00", true]);
+
+    // Чужое событие менеджер не удаляет; автор / админ — да.
+    const ivan = await login("ivan", "managerpass", "10.0.0.51");
+    assert.equal((await call(ivan, "DELETE", `/calendar/events/${payment.id}`)).statusCode, 404);
+    assert.equal((await call(s, "DELETE", `/calendar/events/${payment.id}`)).statusCode, 200);
+    assert.ok(!((await call(s, "GET", "/calendar")).json().events as { id: string }[]).some((e) => e.id === `c:${payment.id}`));
+  });
 });
 
 describe("ИИ: разбор документов и чат", () => {
