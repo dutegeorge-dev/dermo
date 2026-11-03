@@ -100,8 +100,8 @@ sitemap: true
   <section id="kak-edet" class="scroll-mt-24 bg-surface">
     <div class="container section">
       <div class="max-w-2xl">
-        <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ L.process.title }}</h2>
-        <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ L.process.lead }}</p>
+        <h2 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ L.process.title }}</h2>
+        <p class="mt-3 text-base text-muted">{{ L.process.lead }}</p>
       </div>
       <ol data-gallery class="snap-strip mt-6 md:mt-8 md:grid md:grid-cols-2 md:gap-5 lg:grid-cols-4">
         {% for st in L.process.steps %}
@@ -119,8 +119,8 @@ sitemap: true
               <span class="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white shadow" aria-hidden="true">{{ loop.index }}</span>
             </button>
             {# min-h на lg: заголовки в две строки не сдвигают текст соседей. #}
-            <h3 class="mt-3 text-base font-semibold leading-6 text-ink lg:min-h-[3rem]">{{ st.title }}</h3>
-            <p class="mt-1 text-sm leading-snug text-muted">{{ st.text }}</p>
+            <h3 class="mt-3 text-base font-semibold text-ink lg:min-h-[3rem]">{{ st.title }}</h3>
+            <p class="mt-2 text-sm text-muted">{{ st.text }}</p>
           </li>
         {% endfor %}
       </ol>
@@ -141,9 +141,9 @@ sitemap: true
         {% for m in L.methods.items %}
           <a href="{{ m.url | localizedUrl(locale) }}" class="group flex flex-col rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-cyan md:p-6">
             {{ icon(m.icon, "h-7 w-7 text-cyan md:h-8 md:w-8") }}
-            <h3 class="mt-3 text-sm font-semibold leading-snug text-ink md:mt-4 md:text-base">{{ m.title }}</h3>
+            <h3 class="mt-3 text-base font-semibold text-ink md:mt-4">{{ m.title }}</h3>
             <p class="mt-1.5 text-lg font-semibold text-cyan md:mt-2 md:text-2xl">{{ m.time }}</p>
-            <p class="mt-1.5 flex-1 text-xs leading-snug text-muted md:mt-2 md:text-sm">{{ m.desc }}</p>
+            <p class="mt-2 flex-1 text-sm text-muted">{{ m.desc }}</p>
             <span class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-cyan-dark md:mt-4">
               {{ "home.cases.more" | t(locale) }}
               {{ icon("arrow-right", "h-4 w-4 transition-transform group-hover:translate-x-1") }}
@@ -173,7 +173,7 @@ sitemap: true
               </li>
             {% endfor %}
           </ul>
-          <p class="mt-5 flex items-start gap-3 border-t border-slate-200 pt-5 text-sm font-medium text-ink">
+          <p class="mt-5 flex items-start gap-3 border-t border-slate-200 pt-5 text-sm text-ink">
             {{ icon("receipt", "mt-0.5 h-5 w-5 shrink-0 text-cyan") }}
             <span>{{ L.cost.contractNote }}</span>
           </p>
@@ -286,7 +286,7 @@ sitemap: true
   <section id="kejsy" class="scroll-mt-24 bg-surface">
     <div class="container section">
       <div class="flex items-end justify-between gap-4">
-        <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "home.cases.title" | t(locale) }}</h2>
+        <h2 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ "home.cases.title" | t(locale) }}</h2>
         <a href="{{ '/kejsy/' | localizedUrl(locale) }}" class="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-cyan-dark transition-colors hover:text-cyan">
           {{ "home.cases.all" | t(locale) }}
           {{ icon("arrow-right", "h-4 w-4") }}
@@ -308,7 +308,7 @@ sitemap: true
                   </span>
                 {% endif %}
                 <div class="flex flex-1 flex-col p-5 md:p-6">
-                  <h3 class="text-base font-medium leading-snug text-ink md:text-lg">{{ item.title }}</h3>
+                  <h3 class="text-base font-semibold text-ink">{{ item.title }}</h3>
                   <span class="mt-auto inline-flex items-center gap-1.5 pt-4 text-sm font-medium text-cyan-dark transition-colors group-hover:text-cyan">
                     {{ "home.cases.more" | t(locale) }}
                     {{ icon("arrow-right", "h-4 w-4") }}
@@ -332,8 +332,8 @@ sitemap: true
       <div data-slider>
         <div class="flex items-end justify-between gap-4">
           <div class="max-w-2xl">
-            <h2 class="text-3xl font-light tracking-tight text-ink md:text-4xl">{{ "gallery.title" | t(locale) }}</h2>
-            <p class="mt-3 text-base leading-relaxed text-muted md:text-lg">{{ "gallery.lead" | t(locale) }}</p>
+            <h2 class="text-2xl font-semibold tracking-tight text-ink md:text-3xl">{{ "gallery.title" | t(locale) }}</h2>
+            <p class="mt-3 text-base text-muted">{{ "gallery.lead" | t(locale) }}</p>
           </div>
           <div class="hidden shrink-0 gap-2 md:flex">
             {% for dir in [["prev", "chevron-left", "Назад"], ["next", "chevron-right", "Вперёд"]] %}
