@@ -3,6 +3,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
+import { LEADGEN_PERMISSION } from "../../../shared/leadgen.ts";
 import { BASE } from "../lib/api.ts";
 import { useAuth } from "../lib/auth.tsx";
 import { useTheme } from "../lib/theme.ts";
@@ -28,6 +29,7 @@ import {
   IconMoon,
   IconPhone,
   IconSun,
+  IconTarget,
   IconUser,
   IconUsers,
   IconX,
@@ -111,6 +113,11 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         <NavItem to="/products" icon={<IconBox />}>
           Товары
         </NavItem>
+        {(user.role === "admin" || user.permissions?.includes(LEADGEN_PERMISSION)) && (
+          <NavItem to="/leadgen" icon={<IconTarget />}>
+            Лидогенерация
+          </NavItem>
+        )}
       </nav>
 
       <div className="space-y-0.5 border-t border-slate-200 px-2 py-2 dark:border-neutral-800">
