@@ -1,0 +1,47 @@
+# Воркер лидогенерации WB (раздел «Лидогенерация» в Ирбисе, каталог crm/).
+#
+# Выполняет задачи «Собрать базу на месяц» (lead_jobs): выдача WB → фильтры → DaData → Checko → отбор → раскладка.
+# Прогон идёт часами; остановка / перезапуск службы прогресс не теряет — задача продолжится с места остановки.
+# Ключи (DADATA_TOKEN, CHECKO_API_KEY, WB_PROXY) служба читает сама из crm/.env.
+#
+# Установка:
+#   sudo cp deploy/systemd/bars-crm-leadgen.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bars-crm-leadgen
+#   journalctl -u bars-crm-leadgen -f
+#
+# Пути — под раскладку «репозиторий в /var/www/tlkbars/repo» (как bars-crm.service).
+
+[Unit]
+Description=ТЛК БАРС — Ирбис: воркер лидогенерации WB
+Documentation=https://github.com/dutegeorge-dev/dermo/blob/main/crm/server/lib/leadgen/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/tlkbars/repo/crm
+ExecStart=/usr/bin/node --import tsx server/cli/leadgen-worker.ts
+Environment=NODE_ENV=production
+
+Restart=always
+RestartSec=10s
+# Дать текущему шагу закончиться и записать прогресс.
+TimeoutStopSec=30s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bars-crm-leadgen
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

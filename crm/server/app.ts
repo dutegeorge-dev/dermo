@@ -36,6 +36,7 @@ import { shipmentRoutes } from "./routes/shipments.ts";
 import { factoryRoutes } from "./routes/factories.ts";
 import { fileRoutes } from "./routes/files.ts";
 import { kbRoutes } from "./routes/kb.ts";
+import { leadgenRoutes } from "./routes/leadgen.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { userRoutes } from "./routes/users.ts";
 
@@ -156,6 +157,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
       await api.register(cargoRoutes);
       await api.register(aiRoutes, { prefix: "/ai" });
       await api.register(intakeRoutes);
+      await api.register(leadgenRoutes);
     },
     { prefix: API_PREFIX },
   );

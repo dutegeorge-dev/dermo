@@ -26,6 +26,10 @@ process.env.ANTHROPIC_API_KEY = "";
 process.env.ANTHROPIC_AUTH_TOKEN = "";
 process.env.CRM_RATES_FIXED = JSON.stringify({ USD: 80, EUR: 90, CNY: 11 });
 process.env.CRM_INTAKE_TOKEN = "test-intake-token-0123456789abcdef";
+// Лидогенерация: ключи-заглушки (в тестах источники вымышленные, в сеть ничего не уходит).
+process.env.DADATA_TOKEN = "test-dadata-token";
+process.env.CHECKO_API_KEY = "";
+process.env.WB_PROXY = "";
 
 const { config, CRM_ROOT } = await import("../config.ts");
 const { db, pool } = await import("../db/client.ts");
@@ -1972,5 +1976,253 @@ describe("Импорт заявок по токену", () => {
     assert.match(deal.description, /Текст заявки \(импорт заявок, Админ\)/);
 
     assert.equal((await post({ leads: [lead] })).json().results[0].status, "duplicate");
+  });
+});
+
+const lg = await import("../../shared/leadgen.ts");
+const { runJob } = await import("../lib/leadgen/job.ts");
+const { parseCheckoContacts, parseDadata } = await import("../lib/leadgen/registry.ts");
+const { extractContacts } = await import("../lib/leadgen/site.ts");
+const { parseProducts, parseCardCountry } = await import("../lib/leadgen/wb.ts");
+const { redact } = await import("../lib/leadgen/http.ts");
+const schema = await import("../db/schema.ts");
+const { eq } = await import("drizzle-orm");
+
+describe("Лидогенерация WB", () => {
+
+  /** Вымышленный ИНН с верными контрольными цифрами: 10 цифр — организация, 12 — ИП. */
+  const makeInn = (seed: number, ip = false) => {
+    const d = [...String((ip ? 77_0000_0000 : 7_7000_0000) + seed)].map(Number);
+    const ck = (w: number[]) => (w.reduce((s, k, i) => s + k * d[i], 0) % 11) % 10;
+    if (!ip) return [...d, ck([2, 4, 10, 3, 5, 9, 4, 6, 8])].join("");
+    d.push(ck([7, 2, 4, 10, 3, 5, 9, 4, 6, 8]));
+    d.push(ck([3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]));
+    return d.join("");
+  };
+  const lcg = (seed: number) => () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+
+  /**
+   * Вымышленный «WB» и реестры. Тип продавца — по последней цифре supplierId:
+   * 1 — иностранный (без ИНН), 2 — мало SKU, 3 — Китай 30 %, 4 — моложе года, 5 — ликвидируется, 6 — без контактов,
+   * 7 — email только с сайта, 8 — второй кабинет ИНН продавца sid−1, 0 — ИП, 9 и 0 — обычные (9 — email от WB).
+   */
+  type Call = { kind: string; arg: string };
+  function fakeWorld(categories: { id: number; queries: string[]; stopWords: string[] }[], hooks: { onCall?: (c: Call, n: number) => Promise<void> } = {}) {
+    const calls: Call[] = [];
+    const log = async (kind: string, arg: string) => {
+      const c = { kind, arg };
+      calls.push(c);
+      await hooks.onCall?.(c, calls.filter((x) => x.kind === kind).length);
+    };
+    const type = (sid: number) => sid % 10;
+    const innOf = (sid: number): string => (type(sid) === 1 ? "" : type(sid) === 8 ? innOf(sid - 1) : makeInn(sid, type(sid) === 0));
+    const make: import("../lib/leadgen/job.ts").MakeSources = () => ({
+      async search(query, page) {
+        await log("search", `${query}#${page}`);
+        const ci = categories.findIndex((c) => c.queries.includes(query));
+        if (ci < 0 || page > 3) return [];
+        const qi = categories[ci].queries.indexOf(query);
+        return Array.from({ length: 40 }, (_, k) => {
+          const sid = (ci + 1) * 1000 + ((qi * 37 + page * 13 + k * 7) % 200) + 1;
+          const stop = k % 9 === 0 && categories[ci].stopWords[0];
+          return { nm: sid * 1000 + 500 + ((qi * 3 + page + k) % 400), name: `${stop ? `${stop} ` : ""}Товар ${query} демо, 30 см`, brand: `DemoBrand${sid}`, supplierId: sid, supplier: "", feedbacks: 10 };
+        });
+      },
+      async sellerInfo(sid) {
+        await log("sellerInfo", String(sid));
+        return { supplierId: sid, name: `ООО «Демо ${sid}»`, fullName: "", inn: innOf(sid), ogrn: "", trademark: `DemoBrand${sid}`, address: "", emails: type(sid) === 9 ? [`WB${sid}@mail.ru`] : [], phones: [] };
+      },
+      async sellerCatalog(sid, page) {
+        await log("catalog", `${sid}#${page}`);
+        return { total: type(sid) === 2 ? 20 : 300, products: page > 1 ? [] : Array.from({ length: 100 }, (_, i) => ({ nm: sid * 1000 + i, name: `Товар ${i}`, brand: `DemoBrand${sid}`, supplierId: sid, supplier: "", feedbacks: 50 })) };
+      },
+      async sellerFeedbacks(sid) {
+        await log("feedbacks", String(sid));
+        return 5000;
+      },
+      async cardCountry(nm) {
+        const sid = Math.floor(nm / 1000);
+        return type(sid) === 3 ? (nm % 10 < 3 ? "Китай" : "Россия") : nm % 10 < 9 ? "Китай" : "Россия";
+      },
+      productUrl: (nm) => `https://www.wildberries.ru/catalog/${nm}/detail.aspx`,
+      async dadata(inn) {
+        await log("dadata", inn);
+        const sid = Number(inn.slice(inn.length === 12 ? 6 : 5, inn.length === 12 ? 11 : 9));
+        const t = type(sid);
+        return { kind: inn.length === 12 ? "ip" : "ul", legalName: `ООО «Демо ${sid}»`, ogrn: "1027700000000", status: t === 5 ? "LIQUIDATING" : "ACTIVE", regDate: t === 4 ? "2026-09-01" : "2019-05-10", managerName: "Демо Иван Петрович", managerPost: "Генеральный директор", okved: "47.91", address: "г. Москва", region: "г Москва" };
+      },
+      checko: async (inn) => {
+        await log("checko", inn);
+        const sid = Number(inn.slice(inn.length === 12 ? 6 : 5, inn.length === 12 ? 11 : 9));
+        const t = type(sid);
+        if (t === 6) return { phones: ["+7 (999) ***-**-12"], emails: [], sites: [] };
+        if (t === 7) return { phones: [], emails: [], sites: [`shop-${sid}.ru`] };
+        return { phones: [`8 (495) ${String(sid).padStart(3, "0").slice(-3)}-45-67`, "+7 (999) ***-**-12"], emails: [`Info@Seller${sid}.RU`, "x@bad.example"], sites: [] };
+      },
+      async site(url) {
+        await log("site", url);
+        return { phones: [], emails: [`sales@${new URL(url).hostname}`], sites: [] };
+      },
+      mx: async (domain) => !domain.endsWith("bad.example"),
+      counts: () => ({ wb: calls.filter((c) => ["search", "sellerInfo", "catalog", "feedbacks"].includes(c.kind)).length, dadata: calls.filter((c) => c.kind === "dadata").length, checko: calls.filter((c) => c.kind === "checko").length, site: calls.filter((c) => c.kind === "site").length }),
+    });
+    return { calls, make };
+  }
+
+  test("чистые функции: телефоны, email, ИНН, первая строка, раскладка, разбор ответов", () => {
+    assert.equal(lg.normalizePhone("8 (495) 123-45-67"), "+74951234567");
+    assert.equal(lg.normalizePhone("+7 999 123 45 67 доб. 12"), "+79991234567");
+    assert.equal(lg.normalizePhone("+7 (999) ***-**-12"), null, "маска — не телефон");
+    assert.equal(lg.normalizePhone("+86 138 0013 8000"), null);
+    assert.equal(lg.normalizeEmail(" Info@Example.RU. "), "info@example.ru");
+    assert.equal(lg.innKind(makeInn(12345)), "ul");
+    assert.equal(lg.innKind(makeInn(12345, true)), "ip");
+    assert.equal(lg.innKind("7700000001"), null);
+    assert.equal(lg.shortProduct("Сковорода антипригарная 28 см с крышкой, Tefal", "Tefal"), "сковорода антипригарная");
+    assert.match(lg.renderFirstLine(lg.TEMPLATE_PLAIN, { brand: "Demo", product: "гантели" }), /^Видел ваши гантели под брендом Demo на WB\./);
+    const days = lg.planDays(65, "2027-03-06", { ...lg.DEFAULT_LEADGEN_SETTINGS }); // суббота → с понедельника
+    assert.deepEqual([days[0], days[29], days[30], days[64]], ["2027-03-08", "2027-03-08", "2027-03-09", "2027-03-10"]);
+    assert.deepEqual(lg.interleave([[1, 2], [3], [4, 5, 6]]), [1, 3, 4, 2, 5, 6]);
+    assert.equal(redact("https://api.checko.ru/v2/company?key=SECRET&inn=1"), "https://api.checko.ru/v2/company?key=***&inn=1");
+
+    assert.deepEqual(parseProducts({ products: [{ id: 5, name: "a", brand: "b", supplierId: 7, feedbacks: 3 }], total: 9 }), { products: [{ nm: 5, name: "a", brand: "b", supplierId: 7, supplier: "", feedbacks: 3 }], total: 9 });
+    assert.equal(parseProducts({ data: { products: [{ id: 1, nmFeedbacks: 4 }] } }).products[0].feedbacks, 4);
+    assert.equal(parseCardCountry({ options: [{ name: "Страна производства", value: "Китай" }] }, "Страна производства"), "Китай");
+    const ck = parseCheckoContacts({ data: { Контакты: { Тел: ["+7 495 111-22-33"], Емэйл: ["a@b.ru"], ВебСайт: "b.ru" } }, meta: { status: "ok" } });
+    assert.deepEqual(ck, { phones: ["+7 495 111-22-33"], emails: ["a@b.ru"], sites: ["b.ru"] });
+    const dd = parseDadata({ suggestions: [{ value: "ООО «Демо»", data: { type: "LEGAL", ogrn: "1", state: { status: "ACTIVE", registration_date: Date.UTC(2020, 0, 15) }, management: { name: "Демо И.", post: "ДИРЕКТОР" }, okved: "47.91", address: { value: "г Москва", data: { region_with_type: "г Москва" } }, name: { short_with_opf: "ООО \"Демо\"" } } }] });
+    assert.deepEqual([dd?.kind, dd?.regDate, dd?.managerName, dd?.region], ["ul", "2020-01-15", "Демо И.", "г Москва"]);
+    const site = extractContacts(`<a href="tel:+7 (812) 555-66-77">звоните</a> <p>Почта: sales&#64;demo-shop.ru, logo@2x.png</p>`);
+    assert.deepEqual(site, { emails: ["sales@demo-shop.ru"], phones: ["+7 (812) 555-66-77"] });
+  });
+
+  test("доступ: только с правом «Лидогенерация»", async () => {
+    const admin = await adminSession();
+    const created = await call(admin, "POST", "/users", { login: "lgmanager", name: "Лид Менеджер", role: "manager", password: "managerpass" });
+    assert.equal(created.statusCode, 200, created.body);
+    const m = await login("lgmanager", "managerpass", "10.0.0.77");
+    assert.equal((await call(m, "GET", "/leadgen/categories")).statusCode, 403);
+    assert.equal((await call(admin, "PATCH", `/users/${created.json().user.id}`, { permissions: ["leadgen", "unknown"] })).json().user.permissions.join(), "leadgen");
+    const me = (await call(m, "GET", "/auth/me")).json().user;
+    assert.deepEqual(me.permissions, ["leadgen"]);
+    const cats = await call(m, "GET", "/leadgen/categories");
+    assert.equal(cats.statusCode, 200);
+    assert.equal(cats.json().categories.length, 6, "6 категорий засеяны миграцией");
+    assert.ok(cats.json().categories.every((c: { quota: number; queries: string[] }) => c.quota === 150 && c.queries.length >= 6));
+  });
+
+  test("сбор на месяц с остановками, повторный прогон, «Сегодня», статусы, повторы, итоги, экспорт", async () => {
+    const s = await adminSession();
+    const cats = (await call(s, "GET", "/leadgen/categories")).json().categories as { id: number; name: string; queries: string[]; stopWords: string[] }[];
+
+    // Задача 1 — тестовый прогон с квотой 10.
+    const started = await call(s, "POST", "/leadgen/jobs", { month: "2027-03", quota: 10 });
+    assert.equal(started.statusCode, 200, started.body);
+    const job1 = started.json().job.id as number;
+    assert.equal((await call(s, "POST", "/leadgen/jobs", { month: "2027-04" })).statusCode, 409, "второй сбор, пока первый не закончен, — нельзя");
+
+    // Останавливаем посреди сбора выдачи и посреди фильтров — продолжение не повторяет сделанного.
+    const stopAt = async (kind: string, n: number) => async (c: Call, count: number) => {
+      if (c.kind === kind && count === n) await call(s, "POST", `/leadgen/jobs/${job1}/stop`);
+    };
+    const w1 = fakeWorld(cats, { onCall: await stopAt("search", 20) });
+    assert.equal(await runJob(job1, w1.make, { rnd: lcg(1), today: "2026-11-04" }), "paused");
+    const done1 = new Set(w1.calls.filter((c) => c.kind === "search").map((c) => c.arg));
+    assert.equal((await call(s, "POST", `/leadgen/jobs/${job1}/resume`)).statusCode, 200);
+    const w2 = fakeWorld(cats, { onCall: await stopAt("dadata", 7) });
+    assert.equal(await runJob(job1, w2.make, { rnd: lcg(2), today: "2026-11-04" }), "paused");
+    assert.ok(w2.calls.filter((c) => c.kind === "search").every((c) => !done1.has(c.arg)), "страницы выдачи не запрашиваются повторно");
+    await call(s, "POST", `/leadgen/jobs/${job1}/resume`);
+    const w3 = fakeWorld(cats);
+    assert.equal(await runJob(job1, w3.make, { rnd: lcg(3), today: "2026-11-04" }), "done");
+    assert.equal(w3.calls.filter((c) => c.kind === "search").length, 0, "после этапа выдачи поиск больше не нужен");
+    const dadataInns = [...w2.calls, ...w3.calls].filter((c) => c.kind === "dadata").map((c) => c.arg);
+    assert.equal(new Set(dadataInns).size, dadataInns.length, "ни один ИНН не проверен в DaData дважды");
+
+    const job = (await call(s, "GET", "/leadgen/jobs")).json().jobs.find((j: { id: number }) => j.id === job1);
+    assert.equal(job.status, "done");
+    assert.equal(job.stage, "done");
+    for (const c of cats) assert.equal(job.progress.categories[c.id].selected, 10, c.name);
+    assert.ok(job.progress.categories[cats[0].id].rejected["нет российского ИНН"] > 0);
+
+    const base = (await call(s, "GET", "/leadgen/sellers?month=2027-03&limit=500")).json();
+    assert.equal(base.total, 60);
+    for (const seller of base.sellers) {
+      assert.equal(lg.innKind(seller.inn) !== null, true);
+      assert.ok(seller.regDate && seller.managerName && seller.egrStatus === "ACTIVE", "реквизиты DaData");
+      assert.ok(seller.contacts.some((c: { type: string; valid: boolean }) => c.type === "phone" || (c.type === "email" && c.valid)), "есть валидный контакт");
+      for (const c of seller.contacts) {
+        assert.ok(["wb", "checko", "site"].includes(c.source), "источник контакта");
+        if (c.type === "phone") assert.match(c.value, /^\+7\d{10}$/, "полный номер без маски");
+        if (c.type === "email") assert.equal(c.value, c.value.toLowerCase());
+      }
+      assert.ok(seller.products.length >= 2 && seller.products[0].url.includes("wildberries.ru/catalog/"));
+      assert.match(seller.firstLine, /^Видел ваши .+ под брендом DemoBrand\d+ на WB\./);
+    }
+    const bad = base.sellers.flatMap((x: { contacts: { value: string; valid: boolean; note: string }[] }) => x.contacts).find((c: { value: string }) => c.value === "x@bad.example");
+    assert.deepEqual([bad?.valid, bad?.note], [false, "у домена нет MX"], "невалидный email хранится с пометкой");
+    assert.ok(base.sellers.some((x: { contacts: { source: string }[] }) => x.contacts.some((c) => c.source === "site")), "email с сайта");
+    const candidates = await db.select().from(schema.leadCandidates).where(eq(schema.leadCandidates.jobId, job1));
+    const stops = cats.flatMap((c) => c.stopWords.map((w) => w.toLowerCase()));
+    assert.ok(candidates.every((c) => c.products.every((p) => !stops.some((w) => p.name.toLowerCase().includes(w)))), "товары со стоп-словами отброшены");
+
+    // Повторный прогон — ни одного ИНН из прошлой выгрузки.
+    const job2 = (await call(s, "POST", "/leadgen/jobs", { month: "2027-04", quota: 10 })).json().job.id as number;
+    assert.equal(await runJob(job2, fakeWorld(cats).make, { rnd: lcg(4), today: "2026-11-04" }), "done");
+    const second = (await call(s, "GET", "/leadgen/sellers?month=2027-04&limit=500")).json();
+    assert.equal(second.total, 60);
+    const firstInns = new Set(base.sellers.map((x: { inn: string }) => x.inn));
+    assert.ok(second.sellers.every((x: { inn: string }) => !firstInns.has(x.inn)), "ИНН не повторяются");
+
+    // «Сегодня»: 30 продавцов, по 5 из каждой категории.
+    const today = (await call(s, "GET", "/leadgen/today?day=2027-03-01")).json();
+    assert.equal(today.first.length, 30);
+    const perCat = new Map<number, number>();
+    for (const it of today.first) perCat.set(it.categoryId, (perCat.get(it.categoryId) ?? 0) + 1);
+    assert.deepEqual([...perCat.values()], [5, 5, 5, 5, 5, 5]);
+    assert.notEqual(today.first[0].categoryId, today.first[1].categoryId, "категории вперемешку");
+    assert.ok(today.first.every((it: { plannedDate: string }) => it.plannedDate === "2027-03-01"));
+
+    // Статусы → история; повтор через 4 дня; ответ снимает повтор.
+    const inn = today.first[0].inn as string;
+    const { setSellerStatus, todayList, getLeadgenSettings } = await import("../lib/leadgen/work.ts");
+    const settings = await getLeadgenSettings(db);
+    await db.transaction((tx) => setSellerStatus(tx, inn, "sent", 1, null, settings, new Date("2027-03-01T10:00:00Z")));
+    const inn2 = today.first[1].inn as string;
+    assert.equal((await call(s, "POST", `/leadgen/sellers/${inn2}/status`, { status: "bounced", comment: "адрес не существует" })).statusCode, 200);
+    const later = await todayList(db, "2027-03-05", settings);
+    assert.ok(later.followups.some((f) => f.inn === inn), "повтор появился через 4 дня");
+    assert.ok(!(await todayList(db, "2027-03-04", settings)).followups.some((f) => f.inn === inn), "раньше — нет");
+    assert.ok(!later.first.some((f) => f.inn === inn), "написанный не висит в первых");
+    await db.transaction((tx) => setSellerStatus(tx, inn, "followup_sent", 1, null, settings, new Date("2027-03-05T10:00:00Z")));
+    const answered = await call(s, "POST", `/leadgen/sellers/${inn}/status`, { status: "replied_pos", comment: "интересно" });
+    // В тесте «написал» и «повтор» датированы 2027 годом, ответ — сегодняшним днём: порядок не сравниваем.
+    assert.deepEqual(answered.json().events.map((e: { type: string }) => e.type).sort(), ["followup_sent", "replied_pos", "sent"]);
+    assert.ok(answered.json().queue.every((q: { status: string }) => q.status !== "planned"), "после ответа касаний в плане нет");
+    assert.equal(answered.json().seller.status, "replied_pos");
+
+    const st = (await call(s, "GET", "/leadgen/stats?month=2027-03")).json().rows as { categoryId: number; sent: number; bounced: number; replies: number; positive: number; positivePct: number }[];
+    const cat0 = st.find((r) => r.categoryId === today.first[0].categoryId)!;
+    assert.deepEqual([cat0.sent, cat0.replies, cat0.positive, cat0.positivePct], [1, 1, 1, 100]);
+    assert.equal(st.reduce((a, r) => a + r.bounced, 0), 1);
+
+    // Экспорт: все поля и все контакты.
+    const csv = await call(s, "GET", "/leadgen/export.csv?month=2027-03");
+    assert.equal(csv.statusCode, 200);
+    const lines = csv.body.replace(/^﻿/, "").trim().split("\r\n");
+    assert.equal(lines.length, 61);
+    assert.match(lines[0], /^ИНН;Юрназвание;Тип;ОГРН/);
+    assert.ok(lines.slice(1).every((l) => /\+7\d{10}|@/.test(l)));
+    const xlsx = await call(s, "GET", "/leadgen/export.xlsx");
+    assert.equal(xlsx.statusCode, 200);
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(xlsx.rawPayload);
+    assert.match((await zip.file("xl/workbook.xml")!.async("string")), /Продавцы.*Контакты/);
+    assert.equal(((await zip.file("xl/worksheets/sheet1.xml")!.async("string")).match(/<row /g) ?? []).length, 121);
+
+    // Фильтры базы.
+    const withEmail = (await call(s, "GET", `/leadgen/sellers?email=1&category=${cats[0].id}&limit=500`)).json();
+    assert.ok(withEmail.sellers.every((x: { categoryId: number; contacts: { type: string; valid: boolean }[] }) => x.categoryId === cats[0].id && x.contacts.some((c) => c.type === "email" && c.valid)));
+    assert.equal((await call(s, "GET", "/leadgen/sellers?status=replied_pos")).json().total, 1);
   });
 });

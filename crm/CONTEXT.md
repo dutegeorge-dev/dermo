@@ -10,7 +10,7 @@
 > Технический справочник (таблицы, API, команды) — `crm/README.md`.
 > Публичный сайт (11ty) — `PROJECT-MAP.md` в корне.
 >
-> Актуально на: ноябрь 2026, бот заявок в Telegram (миграция 0017 — последняя).
+> Актуально на: ноябрь 2026, лидогенерация WB (миграция 0019 — последняя).
 > Меняете поведение — обновите этот файл в том же коммите.
 
 ---
@@ -343,6 +343,25 @@
     заводит лиды тем же `createLeadFromDraft` (`source: intake`), дубли за 7 дней пропускает; `dryRun: true` —
     в транзакции с откатом: видно, кого нашёл бы, ничего не пишет. Без токена (или короче 24 символов) — 404.
 
+30. **Лидогенерация WB (ноябрь 2026)** — раздел «Лидогенерация» (`/leadgen`). Задача владельца: **раз в месяц по
+    одной кнопке** собрать базу продавцов Wildberries с китайским товаром (белый импорт под нашим контрактом,
+    маркировка «Честный знак») с **полными** телефонами и email; дальше каждый день он сам пишет 30 продавцам.
+    **Искать каждый день нельзя** — только раз в месяц на месяц вперёд. Решения из ТЗ владельца: категории
+    эксперимента правятся в UI (6 засеяны миграцией 0019, квота 150); отбор — **случайная выборка** из прошедших
+    фильтры, не топ; дедупликация **по ИНН** (кабинеты одного ИНН склеиваются), ИНН из прошлых выгрузок и «Не писать»
+    исключаются; без российского ИНН (кроссбордер) — отсев; DaData — реквизиты, отсев ликвидируемых и моложе 12 мес.;
+    контакты WB → Checko → сайт, телефоны `+7…`, email с проверкой MX (невалидные хранятся с пометкой); в «Сегодня» —
+    30 в день, по 5 из каждой категории; нет ответа 4 дня — повтор; «Итоги» — чтобы в конце месяца решить, какие
+    категории оставить. Доступ — админ или право `leadgen` (`users.permissions`, галочка в «Пользователях»).
+    Сбор — **фоновая задача** (`lead_jobs`) в отдельной службе `bars-crm-leadgen` (идёт часами), прогресс по этапам и
+    категориям, «Остановить» / «Продолжить» с места остановки (курсор выдачи + статусы кандидатов `lead_candidates`),
+    временные сбои воркер продолжает сам. Эндпоинты WB — в `server/lib/leadgen/wb-endpoints.json` (WB их меняет;
+    чинить конфигом, `npm run leadgen:check`, `scripts/wb-probe.cjs`). **Из среды разработки поиск и каталог WB
+    недоступны (403, не российский IP)** — их адреса не проверены живьём, проверены только статика корзин
+    (профиль продавца, карточка, upstreams) и рейтинг продавца; документация Checko тоже была недоступна (поля
+    контактов разбираются терпимо). Подробно — `server/lib/leadgen/README.md`. Не сделано, но заложено: SMTP-рассылка
+    и разбор ответов по IMAP, клики по посадочным (`?l=`), Ozon.
+
 Стиль работы с владельцем: пишет по-русски коротко и эмоционально, присылает
 скриншоты со стрелками. Любит, когда сначала коротко согласовали, потом сделали;
 останавливает, если начали кодить большое без обсуждения. Ценит простоту и
@@ -445,6 +464,11 @@ crm/
       (routes/intake.ts — импорт разобранных заявок по токену CRM_INTAKE_TOKEN, dryRun)
       telegram-bot.ts   бот заявок: long polling (startTelegramBot из index.ts), привязка кодом (createLinkCode), handleUpdate
                         (склейка кусков, очередь по чату, ответ с «Отменить»); маршруты — auth.ts /auth/telegram
+      leadgen/          лидогенерация WB (README.md — как устроено и как чинить): wb-endpoints.json (адреса WB), wb.ts
+                        (поиск, профиль, каталог, рейтинг, карточки), http.ts (паузы, повторы, прокси, redact), registry.ts
+                        (DaData, Checko), site.ts (контакты с сайта, MX), job.ts (runJob: collect → filter → schedule,
+                        чекпоинты, LeadSources — подменяются в тестах), worker.ts (цикл, advisory lock, realSources),
+                        work.ts («Сегодня», статусы и повторы, итоги, список, экспорт XLSX/CSV, настройки)
       settings.ts call-script.ts text.ts
     routes/             auth users kb files calls search audit deals counterparties documents orders products settings shipments ai
                         factories (список, дубли, карточка, цены, «сделать поставщиком», GET /products/:id/offers);
@@ -457,6 +481,8 @@ crm/
                         calendar (свои события календаря: POST/PATCH/DELETE /calendar/events; в GET /calendar — calendarCustomEvents)
                         payments (POST /payments, DELETE /payments/:id — оплата на несколько счетов; файл — files.ts POST /payments/:id/files)
                         estimates (раздел «Расчёт»: CRUD /estimates, POST /estimates/parse — ИИ по тексту заявки, /estimates/:id/kp.docx)
+    routes/leadgen.ts   /leadgen/* (право leadgen): категории, задачи сбора, база, сегодня, статусы, итоги, экспорт
+    cli/leadgen-worker.ts  npm run leadgen:worker (служба bars-crm-leadgen); cli/leadgen-check.ts — npm run leadgen:check
     cli/tnved.ts        npm run tnved:update [--if-empty] [--file]
     cli/guide.ts        npm run kb:guide [-- --force] — инструкция для сотрудников в базу знаний (seed/guide/*.md + img/)
                         (shipments.ts — список/карточка/правка/даты/флажки/этап/статус/подрядчики/комментарии + GET /calendar)
@@ -473,6 +499,8 @@ crm/
                         factories/CatalogsPage (/factories/catalogs — загрузка каталогов и скриншотов, проверка группами по
                         контакту, категории),
                         factories/FreightRatesPage (/freight-rates: ставки, «вставить из переписки»),
+                        leadgen/LeadgenPage (/leadgen: вкладки, «Собрать базу на месяц», Категории, Сбор, Итоги) +
+                        leadgen/LeadgenSellers (Сегодня, База, карточка продавца),
                         estimates/EstimatesPage (/estimates — список), estimates/EstimatePage (/estimates/new|:id — заявка → ИИ,
                         поля, итог справа, КП в Word),
                         components/payments/PaymentSplit — разнесение платёжки по счетам (PaymentAllocator, autoAllocate),
@@ -524,7 +552,7 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   currency, note — что за не разнесённый остаток; файл — attachments owner_type `payment`), `payment_allocations`
   (payment_id, document_id, amount). Обычная оплата одного счёта сюда не пишется.
 
-**Миграции:** … **0018** `calendar_events`; **0017** `users.telegram_id` (бот заявок); **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0019** лидогенерация WB: `lead_*` (+ 6 категорий), `users.permissions`; **0018** `calendar_events`; **0017** `users.telegram_id` (бот заявок); **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).
@@ -576,6 +604,11 @@ counterparties) → 0004 сделки-отгрузки → **0005** перено
 - **ИИ-чат**: модель (effort low) крутит цикл инструментов до 6 шагов; ответы инструментов ужаты (`shipmentBrief`, `pick`)
   до 16 тыс. символов, инструкция и инструменты кэшируются. Модель — `CRM_AI_MODEL` (по умолчанию `claude-haiku-5-5`).
   Расход каждого запроса — в журнале службы (`"ai":"parse"|"chat"`, `usage`).
+- **Лидогенерация** (`server/lib/leadgen/job.ts`): этапы задачи collect (выдача WB по страницам, курсор в
+  `checkpoint.collect`) → filter (кандидаты в случайном порядке: ИНН, база/«Не писать», дубль ИНН, SKU, отзывы,
+  доля Китая по карточкам, DaData → пул × 1,6 квоты → контакты WB/Checko/сайт → `lead_sellers`) → schedule
+  (рабочие дни, `perDay`, категории по кругу → `lead_queue`). Статус «Написал» ставит повтор через `followupDays` на
+  ближайший рабочий день; ответ / возврат / «Не писать» снимают план. Итоги — по истории (`lead_events`).
 - **Демо**: `seed --demo` (метка «демо», удаляется `--remove-demo`): лиды воронки, 3 сделки с полной цепочкой
   документов + повторные заказы на всех этапах, даты вокруг сегодняшнего дня. Всё вымышленное.
 
@@ -625,6 +658,11 @@ counterparties) → 0004 сделки-отгрузки → **0005** перено
   Теперь архивов вложений локально 2, с проверкой места (`scripts/backup.sh`). Большие файлы — помнить про диск.
 - **Postgres в контейнере** мог остановиться между сессиями → `service postgresql start`, затем `db:migrate` и
   `tnved:update -- --file …` (выгрузку можно скачать `curl -L https://www.tws.by/tws/tnved/download/excel`).
+- **WB из контейнера Claude Code**: `search.wb.ru` / `catalog.wb.ru` — 403, сайт — антибот «Подозрительная
+  активность» (не российский IP); статика `*.wbbasket.ru` и `suppliers-shipment-2` отвечают (через `HTTPS_PROXY` среды:
+  `WB_PROXY=$HTTPS_PROXY NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`). Тесты лидогенерации в сеть не ходят —
+  вымышленные источники (`fakeWorld` в api.test.ts). `node --test` запускает файлы тестов параллельно на одной БД —
+  новые тесты дописывать в `api.test.ts`, а не отдельным файлом.
 - **Никогда не коммитить реальные данные клиентов** и их документы (однажды попали в тест — переписывали
   историю). Демо и тесты — только вымышленные компании/ИНН/контейнеры (`DEMU…`).
 

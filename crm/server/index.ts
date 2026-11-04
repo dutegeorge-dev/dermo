@@ -10,6 +10,7 @@ import { config } from "./config.ts";
 import { pool } from "./db/client.ts";
 import { kickCatalogQueue, resetCatalogQueue, sweepPartialUploads } from "./lib/catalogs.ts";
 import { purgeExpiredSessions } from "./lib/session.ts";
+import { startLeadgenWorker } from "./lib/leadgen/worker.ts";
 import { startTelegramBot } from "./lib/telegram-bot.ts";
 
 const app = await buildApp({ logger: true });
@@ -26,11 +27,13 @@ const sweep = setInterval(() => {
 sweep.unref();
 
 let stopBot = () => {};
+let stopLeadgen: () => Promise<void> = async () => {};
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, async () => {
     app.log.info(`${signal}: останавливаемся`);
     stopBot();
+    await stopLeadgen();
     await app.close();
     await pool.end();
     process.exit(0);
@@ -45,3 +48,8 @@ kickCatalogQueue();
 
 // Бот заявок в Telegram (если задан CRM_TELEGRAM_BOT_TOKEN).
 stopBot = startTelegramBot(app.log);
+
+// Сбор базы для лидогенерации WB — обычно отдельная служба bars-crm-leadgen; внутри сервера — при CRM_LEADGEN_INLINE=true.
+if (config.leadgen.inlineWorker) {
+  stopLeadgen = startLeadgenWorker({ info: (m) => app.log.info(m), error: (m) => app.log.error(m) });
+}

@@ -1,0 +1,39 @@
+{
+  "_comment": "Эндпоинты Wildberries для лидогенерации. WB меняет версии и хосты — чинится правкой этого файла (или своим файлом в LEADGEN_WB_CONFIG). В url: {query} {page} {dest} {supplierId} {nm} {vol} {part} {basket}. Несколько url — пробуются по очереди, пока какой-то не ответит не 404/403. Как найти новые — README модуля (server/lib/leadgen/README.md).",
+  "dest": "-1257786",
+  "headers": {
+    "accept": "application/json, text/plain, */*",
+    "accept-language": "ru-RU,ru;q=0.9",
+    "origin": "https://www.wildberries.ru",
+    "referer": "https://www.wildberries.ru/"
+  },
+  "search": {
+    "urls": [
+      "https://u-search.wb.ru/exactmatch/ru/common/v18/search?ab_testing=false&appType=1&curr=rub&dest={dest}&hide_dtype=13&lang=ru&page={page}&query={query}&resultset=catalog&sort=popular&spp=30&suppressSpellcheck=false",
+      "https://search.wb.ru/exactmatch/ru/common/v14/search?ab_testing=false&appType=1&curr=rub&dest={dest}&lang=ru&page={page}&query={query}&resultset=catalog&sort=popular&spp=30&suppressSpellcheck=false"
+    ]
+  },
+  "sellerCatalog": {
+    "urls": [
+      "https://u-catalog.wb.ru/sellers/v4/catalog?ab_testing=false&appType=1&curr=rub&dest={dest}&hide_dtype=13&lang=ru&page={page}&sort=popular&spp=30&supplier={supplierId}",
+      "https://catalog.wb.ru/sellers/v4/catalog?appType=1&curr=rub&dest={dest}&lang=ru&page={page}&sort=popular&spp=30&supplier={supplierId}"
+    ]
+  },
+  "sellerInfo": {
+    "urls": ["https://static-basket-01.wbbasket.ru/vol0/data/supplier-by-id/{supplierId}.json"]
+  },
+  "sellerRating": {
+    "urls": ["https://suppliers-shipment-2.wildberries.ru/api/v1/suppliers/{supplierId}"],
+    "headers": { "x-client-name": "site" }
+  },
+  "upstreams": {
+    "url": "https://cdn.wbbasket.ru/api/v3/upstreams",
+    "routeMap": "origin.mediabasket_route_map"
+  },
+  "card": {
+    "url": "https://{basket}/vol{vol}/part{part}/{nm}/info/ru/card.json",
+    "countryOption": "Страна производства"
+  },
+  "productUrl": "https://www.wildberries.ru/catalog/{nm}/detail.aspx",
+  "sellerUrl": "https://www.wildberries.ru/seller/{supplierId}"
+}

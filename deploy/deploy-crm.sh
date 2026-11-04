@@ -51,6 +51,10 @@ npm --prefix crm run kb:guide || echo "! Инструкция в базу зна
 echo "→ 4/5 владелец www-data и перезапуск bars-crm"
 chown -R www-data:www-data "$REPO"
 systemctl restart bars-crm
+# Воркер лидогенерации WB — если служба установлена (crm/server/lib/leadgen/README.md). Прерванный сбор он продолжит сам.
+if systemctl list-unit-files bars-crm-leadgen.service --no-legend 2>/dev/null | grep -q bars-crm-leadgen; then
+  systemctl restart bars-crm-leadgen
+fi
 
 echo "→ 5/5 проверка"
 for _ in $(seq 1 20); do

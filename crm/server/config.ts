@@ -96,6 +96,15 @@ export const config = {
   },
   /** Импорт заявок (POST /intake/leads): секрет из .env; короче 24 символов — выключен. */
   intakeToken: (process.env.CRM_INTAKE_TOKEN?.trim().length ?? 0) >= 24 ? process.env.CRM_INTAKE_TOKEN!.trim() : undefined,
+  /** Лидогенерация WB: ключи только из окружения (crm/.env), в git не попадают. */
+  leadgen: {
+    dadataToken: process.env.DADATA_TOKEN?.trim() || undefined,
+    checkoKey: process.env.CHECKO_API_KEY?.trim() || undefined,
+    /** Прокси для запросов к WB (http://user:pass@host:port) — если у сервера не российский IP. */
+    wbProxy: process.env.WB_PROXY?.trim() || undefined,
+    /** Запускать воркер сбора внутри bars-crm (разработка). В проде — отдельная служба bars-crm-leadgen. */
+    inlineWorker: envBool("CRM_LEADGEN_INLINE", false),
+  },
   loginLimit: {
     /** Неудачных попыток на один логин за окно. */
     perLogin: envNumber("CRM_LOGIN_LIMIT_PER_LOGIN", 5),

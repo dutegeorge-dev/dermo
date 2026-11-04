@@ -115,6 +115,10 @@ npm run crm:dev
 | `npm run crm:guide [-- --force]` | Инструкция для сотрудников в базу знаний (пространство «Компания», 12 страниц со скриншотами) из `crm/seed/guide/`. Без `--force` — только если её ещё нет (так делает `deploy-crm.sh`); `--force` — обновить из файлов (новые версии страниц, картинки заменяются) |
 | `npm run crm:test` | Интеграционные тесты API — нужна **отдельная** БД: `CRM_TEST_DATABASE_URL=postgres://…/crm_test` (она очищается) |
 
+Лидогенерация WB (в `crm/`): `npm run leadgen:worker` — воркер сбора (в проде служба `bars-crm-leadgen`),
+`npm run leadgen:check [-- --query "гантели" --registry]` — отвечают ли эндпоинты WB / DaData / Checko с этого сервера,
+`scripts/wb-probe.cjs` — найти новые эндпоинты WB через Playwright. Подробно — `server/lib/leadgen/README.md`.
+
 В `crm/`: `npm run typecheck`, `npm run db:generate` (новая миграция после правки `server/db/schema.ts`), `npm start` (прод-запуск).
 
 ## Деплой на сервер
@@ -158,6 +162,8 @@ sudo cp deploy/systemd/bars-crm.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now bars-crm
 curl -s http://127.0.0.1:3100/crm/api/health      # {"ok":true}
+# Воркер лидогенерации WB (если нужен раздел «Лидогенерация»; ключи DADATA_TOKEN, CHECKO_API_KEY в crm/.env):
+sudo cp deploy/systemd/bars-crm-leadgen.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now bars-crm-leadgen
 
 # 6. nginx — в server{} для tlkbars.ru добавить блок location /crm/
 #    (он уже есть в deploy/nginx/tlkbars.live.conf и tlkbars.ru.conf):
@@ -301,7 +307,7 @@ sudo systemctl start bars-crm
 
 | Таблица | Назначение |
 |---|---|
-| `users` | Сотрудники: `login` (нижний регистр, уникальный), `name`, `email`, `role` (`admin`/`manager`), `password_hash` (argon2id), `is_active`, `last_login_at`, `telegram_id` (привязка к боту заявок, уникальный) |
+| `users` | Сотрудники: `login` (нижний регистр, уникальный), `name`, `email`, `role` (`admin`/`manager`), `permissions` (text[]: доп. права, `leadgen` — раздел «Лидогенерация»; админу всё), `password_hash` (argon2id), `is_active`, `last_login_at`, `telegram_id` (привязка к боту заявок, уникальный) |
 | `sessions` | `id` = SHA-256 токена, `user_id`, `csrf_token`, `expires_at`, `last_seen_at`, `ip`, `user_agent` |
 | `audit_log` | `user_id`, `action` (create/update/delete/move/restore/login/logout/import), `entity_type`, `entity_id`, `summary` (текст для журнала), `data` (jsonb: что было до удаления и т.п.), `ip`, `created_at` |
 | `kb_spaces` | Пространства: `key` (SALES, CUSTOMS…), `name`, `description`, `position` |
@@ -327,6 +333,13 @@ sudo systemctl start bars-crm
 | `catalog_shots` | Скриншоты окна «Файлы» (файл — attachments `catalog_shot`, label — sha256): `filename`, `status` (`queued`/`processing`/`done`/`failed`), `rows` — сколько строк прочитано, `note` |
 | `product_offers` | Цены фабрик: `factory_id`, `product_id` (товар справочника — по названию без размера рулона и цвета), `name` (позиция с характеристиками), `price`, `currency`, `unit`, `moq`, `per_container` (единиц в 40HQ), `kg_per_unit`, `m3_per_unit`, `conditions`, `quoted_at` |
 | `freight_rates` | Ставки доставки: `transport` (rail/truck/sea/multimodal), `mode` (`container` / `cbm`), `container`, `origin`, `destination`, `rate`, `currency`, `kg_per_cbm`, `min_cbm`, `fee` + `fee_currency` (за отправку), `transit_days`, `etd`, `valid_until`, `quoted_at`, `carrier_name`, `notes` |
+| `lead_categories` | Лидогенерация WB: категории — `name`, `queries` text[], `stop_words` text[], `marking`, `marking_note`, `quota`, `template` (первая строка: `{brand}`, `{product}`), `active`, `sort`. 6 категорий засеяны миграцией 0019 |
+| `lead_jobs` | Сбор базы на месяц: `month` (YYYY-MM), `status` (queued/running/stopping/paused/failed/done), `stage` (collect/filter/schedule/done), `progress` (по категориям + число запросов), `checkpoint` (курсор выдачи, `retryAt`), `params` (категории, квоты, пороги), `errors`, `heartbeat_at` |
+| `lead_candidates` | Продавцы из выдачи в сборе: `job_id`, `category_id`, `supplier_id`, `products` (из выдачи), `rank` (случайный порядок), `status` (new/pool/selected/no_contacts/rejected), `reason`, `inn`, `info` (профиль WB, SKU, отзывы, доля Китая, DaData, контакты) |
+| `lead_sellers` | Отобранные продавцы, ключ — `inn`: `wb_supplier_ids`, `brands`, юрназвание, ОГРН, `kind` ul/ip, руководитель, `reg_date`, ОКВЭД, регион, адрес, `egr_status`, `sku_count`, `feedbacks_total`, `china_share`, `products` (артикул, название, ссылка), `category_id`, `batch_month`, `job_id`, `status` (new/sent/followup_sent/replied_pos/replied_neg/bounced/do_not_contact), `first_line`, `first_sent_at` |
+| `lead_contacts` | `seller_inn`, `type` (phone/email/site), `value` (+7XXXXXXXXXX / нижний регистр), `source` (wb/checko/site), `valid` (email: синтаксис + MX), `note`, `received_at` |
+| `lead_queue` | Касания: `seller_inn`, `planned_date`, `position` (порядок в дне), `touch` (first/followup), `status` (planned/done/cancelled), `sent_at`, `note` |
+| `lead_events` | История статусов продавца: `seller_inn`, `type`, `comment`, `user_id`, `created_at` |
 | `calendar_events` | Свои события календаря: `type` (meeting / trip / payment / call / task / other), `title`, `date`, `time`, `end_date` (поездка), `notes`, `amount` + `currency` (оплата), `shipment_id`, `counterparty_id`, `assignee_id`, `done`, `done_at` |
 | `estimates` | Раздел «Расчёт»: заявки клиентов на их товары — `title`, `client_name`, `scheme` (`commission` / `teu`), `request` (текст заявки), `params` / `result` (jsonb, `shared/estimate.ts`; `params.markup` — наличные сверху расчёта, только админам), `freight`, `rates`, `rates_date` |
 | `payments` | Оплата на несколько счетов (одна платёжка → несколько инвойсов, в т. ч. другой сделки): `shipment_id`, `counterparty_id` (получатель), `number`, `date`, `amount`, `currency`, `note` (что за не разнесённый остаток). Файл — `attachments` с `owner_type='payment'`. Обычная оплата одного счёта сюда не пишется |
@@ -401,6 +414,15 @@ sudo systemctl start bars-crm
 | `POST /shipments/:number/flags/:key/proof` (multipart `file`) | Платёжка к галочке оплаты — файл `payment` к последнему инвойсу / счёту / ДТ этой оплаты |
 | `POST /shipments/:number/stage` `{stage}`, `POST /shipments/:number/status` `{status}` | Перенос на доске; закрыть / отменить / вернуть |
 | `POST/DELETE /shipments/:number/parties[/:id]`, `POST /shipments/:number/comments` | Подрядчики, комментарии |
+| `GET /leadgen/status` | Лидогенерация (право `leadgen`): ключи DaData / Checko / прокси, жив ли воркер, пороги, месяцы выгрузок |
+| `PUT /leadgen/settings` | Пороги фильтров, продавцов в день, рабочие дни, праздники, повтор через N дней, паузы запросов |
+| `GET/POST /leadgen/categories`, `PATCH/DELETE /leadgen/categories/:id` | Категории (удалить — только без продавцов) |
+| `GET /leadgen/jobs`, `POST /leadgen/jobs` `{month, quota?}`, `POST /leadgen/jobs/:id/stop\|resume\|cancel` | «Собрать базу на месяц» (одна незавершённая задача), остановить, продолжить с места остановки, завершить досрочно (отобранные раскладываются) |
+| `GET /leadgen/sellers?category&month&status&phone=1\|0&email=1\|0&q&limit&offset`, `GET/PATCH /leadgen/sellers/:inn` (`firstLine`) | База продавцов с контактами; карточка с историей и касаниями |
+| `POST /leadgen/sellers/:inn/status` `{status, comment?}` | Статус: «Написал» ставит повтор через `followupDays`, ответ / возврат / «Не писать» снимают план |
+| `GET /leadgen/today?day=` | На день: первые письма (≤ `perDay`, по плану) и подошедшие повторы |
+| `GET /leadgen/stats?month=` | Итоги по категориям: отправлено, возвраты, ответы, положительные, % от отправленных |
+| `GET /leadgen/export.xlsx\|csv?<фильтры базы>` | Выгрузка: все поля продавца и все контакты (XLSX — листы «Продавцы» и «Контакты») |
 | `GET /calendar` | События календаря: даты сделок в работе и свои события (`kind: "custom"`) |
 | `POST /calendar/events` `{type, title, date, time?, endDate?, notes?, amount?, currency?, shipmentId?, counterpartyId?, assigneeId?}`, `PATCH/DELETE /calendar/events/:id` (`done` — выполнено) | Свои события календаря: встреча, поездка, оплата, звонок, задача, другое |
 | `GET/POST /products`, `GET/PATCH/DELETE /products/:id`, `POST /products/:id/merge` | Товары (`hsCode` — 10 цифр, `vat10`); карточка со ставкой из ТН ВЭД; объединение дублей |
