@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { db } from "../db/client.ts";
 import { users } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
+import { PERMISSIONS } from "../../shared/leadgen.ts";
 import { body, HttpError, intParam, requireAdmin, type Role } from "../lib/http.ts";
 import { hashPassword, validatePassword } from "../lib/password.ts";
 import { destroyUserSessions } from "../lib/session.ts";
@@ -20,6 +21,7 @@ const publicColumns = {
   name: users.name,
   email: users.email,
   role: users.role,
+  permissions: users.permissions,
   isActive: users.isActive,
   createdAt: users.createdAt,
   lastLoginAt: users.lastLoginAt,
@@ -41,11 +43,12 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/", async (request) => {
     const admin = requireAdmin(request);
-    const input = body<{ login: string; name: string; email: string; role: Role; password: string }>(request);
+    const input = body<{ login: string; name: string; email: string; role: Role; password: string; permissions: string[] }>(request);
     const login = String(input.login ?? "").trim().toLowerCase();
     const name = String(input.name ?? "").trim().slice(0, 120);
     const email = String(input.email ?? "").trim().slice(0, 200) || null;
     const role = input.role ?? "manager";
+    const permissions = Array.isArray(input.permissions) ? [...new Set(input.permissions.filter((p) => typeof p === "string" && p in PERMISSIONS))] : [];
 
     if (!LOGIN_RE.test(login)) {
       throw new HttpError(400, "Логин: 3–64 символа — латиница, цифры, точка, дефис, @");
@@ -60,7 +63,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
 
     const [created] = await db
       .insert(users)
-      .values({ login, name, email, role, passwordHash: await hashPassword(input.password as string) })
+      .values({ login, name, email, role, permissions, passwordHash: await hashPassword(input.password as string) })
       .returning(publicColumns);
 
     await audit(db, {
@@ -77,7 +80,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/:id", async (request) => {
     const admin = requireAdmin(request);
     const id = intParam((request.params as { id: string }).id);
-    const input = body<{ name: string; email: string; role: Role; isActive: boolean; password: string }>(request);
+    const input = body<{ name: string; email: string; role: Role; isActive: boolean; password: string; permissions: string[] }>(request);
 
     const [user] = await db.select().from(users).where(eq(users.id, id));
     if (!user) throw new HttpError(404, "Пользователь не найден");
@@ -110,6 +113,13 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       if (id === admin.id) throw new HttpError(400, "Нельзя отключить самого себя");
       changes.isActive = input.isActive;
       notes.push(input.isActive ? "включён" : "отключён");
+    }
+    if (Array.isArray(input.permissions)) {
+      const next = [...new Set(input.permissions.filter((p): p is string => typeof p === "string" && p in PERMISSIONS))].sort();
+      if (next.join() !== [...user.permissions].sort().join()) {
+        changes.permissions = next;
+        notes.push(`права → ${next.map((p) => PERMISSIONS[p]).join(", ") || "нет"}`);
+      }
     }
     if (input.password !== undefined && input.password !== "") {
       const problem = validatePassword(input.password);

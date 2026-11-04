@@ -21,6 +21,8 @@ export type AuthUser = {
   name: string;
   email: string | null;
   role: Role;
+  /** Дополнительные права (shared/leadgen.ts PERMISSIONS). */
+  permissions: string[];
 };
 
 declare module "fastify" {
@@ -39,6 +41,15 @@ export function currentUser(request: FastifyRequest): AuthUser {
 export function requireAdmin(request: FastifyRequest): AuthUser {
   const user = currentUser(request);
   if (user.role !== "admin") throw new HttpError(403, "Недостаточно прав");
+  return user;
+}
+
+/** Есть ли у сотрудника право (админу доступно всё). */
+export const hasPermission = (user: AuthUser, permission: string) => user.role === "admin" || user.permissions.includes(permission);
+
+export function requirePermission(request: FastifyRequest, permission: string): AuthUser {
+  const user = currentUser(request);
+  if (!hasPermission(user, permission)) throw new HttpError(403, "Недостаточно прав");
   return user;
 }
 

@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { PERMISSIONS } from "../../../shared/leadgen.ts";
 import { IconPlus } from "../components/Icons.tsx";
 import { Content } from "../components/Layout.tsx";
 import { ErrorBox, Modal, PageHeader, Spinner } from "../components/ui.tsx";
@@ -28,6 +29,7 @@ function UserDialog({ user, onClose }: { user?: UserRow; onClose: () => void }) 
   const [email, setEmail] = useState(user?.email ?? "");
   const [role, setRole] = useState<Role>(user?.role ?? "manager");
   const [isActive, setIsActive] = useState(user?.isActive ?? true);
+  const [permissions, setPermissions] = useState<string[]>(user?.permissions ?? []);
   const [password, setPassword] = useState(user ? "" : generatePassword());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -39,9 +41,9 @@ function UserDialog({ user, onClose }: { user?: UserRow; onClose: () => void }) 
     setError(null);
     try {
       if (user) {
-        await api(`/users/${user.id}`, { method: "PATCH", body: { name, email, role, isActive, password } });
+        await api(`/users/${user.id}`, { method: "PATCH", body: { name, email, role, isActive, password, permissions } });
       } else {
-        await api("/users", { method: "POST", body: { name, login, email, role, password } });
+        await api("/users", { method: "POST", body: { name, login, email, role, password, permissions } });
       }
       await queryClient.invalidateQueries({ queryKey: ["users"] });
       onClose();
@@ -92,6 +94,21 @@ function UserDialog({ user, onClose }: { user?: UserRow; onClose: () => void }) 
             </label>
           )}
         </div>
+        <fieldset>
+          <legend className="label">Дополнительные права</legend>
+          {Object.entries(PERMISSIONS).map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={role === "admin" || permissions.includes(key)}
+                disabled={role === "admin"}
+                onChange={(e) => setPermissions((list) => (e.target.checked ? [...list, key] : list.filter((p) => p !== key)))}
+              />
+              {label}
+              {role === "admin" && <span className="text-xs muted">— у администратора есть всегда</span>}
+            </label>
+          ))}
+        </fieldset>
         <div>
           <label className="label" htmlFor="u-pass">{user ? "Новый пароль (пусто — не менять)" : "Пароль"}</label>
           <div className="flex gap-2">
@@ -162,7 +179,10 @@ export function UsersPage() {
                     {!u.isActive && <span className="ml-2 text-xs">(отключён)</span>}
                   </td>
                   <td className="px-4 py-2 font-mono text-xs">{u.login}</td>
-                  <td className="px-4 py-2">{ROLE_NAMES[u.role]}</td>
+                  <td className="px-4 py-2">
+                    {ROLE_NAMES[u.role]}
+                    {u.role !== "admin" && u.permissions.length > 0 && <span className="ml-1 text-xs muted">+ {u.permissions.map((p) => PERMISSIONS[p] ?? p).join(", ")}</span>}
+                  </td>
                   <td className="px-4 py-2 text-xs muted">{u.lastLoginAt ? formatRelative(u.lastLoginAt) : "не входил"}</td>
                 </tr>
               ))}

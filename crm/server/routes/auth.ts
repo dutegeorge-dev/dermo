@@ -64,7 +64,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return {
-      user: { id: user.id, login: user.login, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, login: user.login, name: user.name, email: user.email, role: user.role, permissions: user.permissions },
       csrfToken,
     };
   });

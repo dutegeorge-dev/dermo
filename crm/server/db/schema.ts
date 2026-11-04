@@ -39,6 +39,7 @@ import type { ShipmentCalc } from "../../shared/customs.ts";
 import type { ShipmentCash } from "../../shared/shipments.ts";
 import type { EstimateParams, EstimateResult } from "../../shared/estimate.ts";
 import type { CatalogResult, FactoryProfile } from "../../shared/factories.ts";
+import type { JobError, JobProgress, LeadgenSettings, ProductSample } from "../../shared/leadgen.ts";
 import type { FreightRate, QuoteParams, QuoteResult } from "../../shared/quote.ts";
 
 /** Полнотекстовый индекс PostgreSQL. */
@@ -70,6 +71,8 @@ export const users = pgTable("users", {
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   /** Telegram-аккаунт сотрудника (user id в Telegram) — бот заявок принимает сообщения только от привязанных. */
   telegramId: bigint("telegram_id", { mode: "number" }).unique(),
+  /** Дополнительные права сотрудника (shared/leadgen.ts PERMISSIONS), например "leadgen". Админу доступно всё. */
+  permissions: text("permissions").array().notNull().default(sql`'{}'::text[]`),
 });
 
 export const sessions = pgTable(
@@ -921,3 +924,177 @@ export const calendarEvents = pgTable(
   (t) => [index("calendar_events_date_idx").on(t.date)],
 );
 
+
+// ── Лидогенерация WB (раздел «Лидогенерация», shared/leadgen.ts, server/lib/leadgen/) ──────────────────────────────
+
+/** Категории эксперимента: по ним ищем продавцов на WB. */
+export const leadCategories = pgTable("lead_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  queries: text("queries").array().notNull().default(sql`'{}'::text[]`),
+  stopWords: text("stop_words").array().notNull().default(sql`'{}'::text[]`),
+  /** Товары категории маркируются «Честным знаком». */
+  marking: boolean("marking").notNull().default(false),
+  markingNote: text("marking_note").notNull().default(""),
+  quota: integer("quota").notNull().default(150),
+  /** Шаблон первой строки письма: {brand}, {product}. */
+  template: text("template").notNull().default(""),
+  active: boolean("active").notNull().default(true),
+  sort: integer("sort").notNull().default(0),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** Задача сбора базы: одна задача = один месяц. Прогресс и курсор продолжения — здесь, кандидаты — в lead_candidates. */
+export const leadJobs = pgTable(
+  "lead_jobs",
+  {
+    id: serial("id").primaryKey(),
+    /** Месяц выгрузки YYYY-MM. */
+    month: text("month").notNull(),
+    /** queued / running / stopping / paused / failed / done (JOB_STATUSES). */
+    status: text("status").notNull().default("queued"),
+    /** collect / filter / schedule / done (JOB_STAGES). */
+    stage: text("stage").notNull().default("collect"),
+    progress: jsonb("progress").$type<JobProgress>().notNull().default({ categories: {}, requests: { wb: 0, dadata: 0, checko: 0, site: 0 } }),
+    /** Курсор продолжения: на каком запросе / странице остановились. */
+    checkpoint: jsonb("checkpoint").$type<Record<string, unknown>>().notNull().default({}),
+    /** Параметры запуска: категории, квоты (тестовый прогон — своя квота), пороги на момент запуска. */
+    params: jsonb("params").$type<{ categoryIds: number[]; quotas: Record<string, number>; settings: LeadgenSettings }>().notNull(),
+    errors: jsonb("errors").$type<JobError[]>().notNull().default([]),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** Воркер отмечается раз в несколько секунд — по нему видно, что задача не зависла. */
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("lead_jobs_status_idx").on(t.status)],
+);
+
+/** Продавцы, найденные задачей в выдаче WB, до отбора: собранные товары, проверки, причина отсева. */
+export const leadCandidates = pgTable(
+  "lead_candidates",
+  {
+    id: serial("id").primaryKey(),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => leadJobs.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => leadCategories.id, { onDelete: "cascade" }),
+    supplierId: bigint("supplier_id", { mode: "number" }).notNull(),
+    /** Товары продавца из выдачи (после стоп-слов): артикул, название, бренд, отзывы. */
+    products: jsonb("products").$type<{ nm: number; name: string; brand: string; feedbacks: number }[]>().notNull().default([]),
+    /** Случайный порядок проверки — выборка случайная, а не топ выдачи. */
+    rank: doublePrecision("rank").notNull().default(sql`random()`),
+    /** new → pool (прошёл фильтры) → selected / no_contacts; rejected — отсеян (reason). */
+    status: text("status").notNull().default("new"),
+    reason: text("reason"),
+    inn: text("inn"),
+    /** Всё, что узнали: профиль WB, SKU, отзывы, доля Китая, DaData, контакты. */
+    info: jsonb("info").$type<Record<string, unknown>>().notNull().default({}),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("lead_candidates_job_cat_supplier_uq").on(t.jobId, t.categoryId, t.supplierId),
+    index("lead_candidates_job_status_idx").on(t.jobId, t.categoryId, t.status),
+    index("lead_candidates_inn_idx").on(t.inn),
+  ],
+);
+
+/** Отобранные продавцы — база для писем. ИНН уникален: один ИНН (несколько кабинетов WB) — одна запись. */
+export const leadSellers = pgTable(
+  "lead_sellers",
+  {
+    inn: text("inn").primaryKey(),
+    wbSupplierIds: bigint("wb_supplier_ids", { mode: "number" }).array().notNull().default(sql`'{}'::bigint[]`),
+    brands: text("brands").array().notNull().default(sql`'{}'::text[]`),
+    legalName: text("legal_name").notNull().default(""),
+    ogrn: text("ogrn"),
+    /** ul — организация, ip — индивидуальный предприниматель. */
+    kind: text("kind").notNull().default("ul"),
+    managerName: text("manager_name"),
+    managerPost: text("manager_post"),
+    regDate: date("reg_date"),
+    okved: text("okved"),
+    region: text("region"),
+    address: text("address"),
+    /** Статус в ЕГРЮЛ / ЕГРИП по DaData (ACTIVE…). */
+    egrStatus: text("egr_status"),
+    skuCount: integer("sku_count"),
+    feedbacksTotal: integer("feedbacks_total"),
+    chinaShare: doublePrecision("china_share"),
+    products: jsonb("products").$type<ProductSample[]>().notNull().default([]),
+    categoryId: integer("category_id").references(() => leadCategories.id, { onDelete: "set null" }),
+    /** Месяц выгрузки YYYY-MM. */
+    batchMonth: text("batch_month").notNull(),
+    jobId: integer("job_id").references(() => leadJobs.id, { onDelete: "set null" }),
+    /** Статус работы (SELLER_STATUSES). */
+    status: text("status").notNull().default("new"),
+    firstLine: text("first_line").notNull().default(""),
+    firstSentAt: timestamp("first_sent_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("lead_sellers_batch_idx").on(t.batchMonth, t.categoryId), index("lead_sellers_status_idx").on(t.status)],
+);
+
+export const leadContacts = pgTable(
+  "lead_contacts",
+  {
+    id: serial("id").primaryKey(),
+    sellerInn: text("seller_inn")
+      .notNull()
+      .references(() => leadSellers.inn, { onDelete: "cascade", onUpdate: "cascade" }),
+    /** phone / email / site. */
+    type: text("type").notNull(),
+    value: text("value").notNull(),
+    /** wb / checko / site. */
+    source: text("source").notNull(),
+    /** Email: синтаксис и MX домена; телефон и сайт — true. */
+    valid: boolean("valid").notNull().default(true),
+    note: text("note"),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("lead_contacts_uq").on(t.sellerInn, t.type, t.value)],
+);
+
+/** Очередь касаний: первое письмо по плану раскладки и повторы. */
+export const leadQueue = pgTable(
+  "lead_queue",
+  {
+    id: serial("id").primaryKey(),
+    sellerInn: text("seller_inn")
+      .notNull()
+      .references(() => leadSellers.inn, { onDelete: "cascade", onUpdate: "cascade" }),
+    plannedDate: date("planned_date").notNull(),
+    /** Порядок внутри дня (категории вперемешку). */
+    position: integer("position").notNull().default(0),
+    /** first / followup. */
+    touch: text("touch").notNull().default("first"),
+    /** planned / done / cancelled. */
+    status: text("status").notNull().default("planned"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("lead_queue_plan_idx").on(t.status, t.plannedDate, t.position), index("lead_queue_seller_idx").on(t.sellerInn)],
+);
+
+/** История смен статусов продавца. */
+export const leadEvents = pgTable(
+  "lead_events",
+  {
+    id: serial("id").primaryKey(),
+    sellerInn: text("seller_inn")
+      .notNull()
+      .references(() => leadSellers.inn, { onDelete: "cascade", onUpdate: "cascade" }),
+    type: text("type").notNull(),
+    comment: text("comment"),
+    userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("lead_events_seller_idx").on(t.sellerInn, t.createdAt)],
+);

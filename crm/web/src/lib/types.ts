@@ -1,6 +1,6 @@
 export type Role = "admin" | "manager";
 
-export type User = { id: number; login: string; name: string; email: string | null; role: Role };
+export type User = { id: number; login: string; name: string; email: string | null; role: Role; permissions: string[] };
 
 export type UserRow = User & { isActive: boolean; createdAt: string; lastLoginAt: string | null };
 

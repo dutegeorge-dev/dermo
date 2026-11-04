@@ -90,6 +90,7 @@ export async function loadSession(request: FastifyRequest, reply: FastifyReply):
         name: users.name,
         email: users.email,
         role: users.role,
+        permissions: users.permissions,
         isActive: users.isActive,
       },
     })
