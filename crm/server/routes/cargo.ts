@@ -4,7 +4,11 @@
  */
 
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { pipeline } from "node:stream/promises";
 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import JSZip from "jszip";
@@ -30,22 +34,44 @@ async function shipmentByNumber(tx: DbOrTx, raw: string) {
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const disposition = (filename: string, ascii: string) => `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 /**
- * Файл из хранилища — в архив потоком (не читаем в память: в сделке бывают сотни МБ сканов). false — файла нет.
+ * Файл из хранилища — в архив потоком (не читаем в память: в сделке бывают сотни МБ сканов). false — файла нет
+ * или его нельзя прочитать: такой пропускаем (в «Не найдено.txt»), а не обрываем весь архив на середине.
  */
 function addStored(zip: JSZip, name: string, key: string): boolean {
-  const full = storagePath(key);
-  if (!fs.existsSync(full)) return false;
-  zip.file(name, fs.createReadStream(full));
-  return true;
+  try {
+    const full = storagePath(key);
+    fs.accessSync(full, fs.constants.R_OK);
+    if (!fs.statSync(full).isFile()) return false;
+    zip.file(name, fs.createReadStream(full));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Архив — сразу в ответ потоком и без пересжатия (PDF, сканы, xlsx уже сжаты): раньше собирали целиком в памяти
- * со сжатием — на больших сделках сервер не успевал, у владельца «Failed to fetch».
+ * Архив без пересжатия (PDF, сканы, xlsx уже сжаты) собираем потоком во временный файл на диске и только потом
+ * отдаём — с размером. Первая версия собирала всё в памяти (на большой сделке — «Failed to fetch»), вторая отдавала
+ * архив прямо по ходу сборки — сбой на одном файле обрывал скачивание посередине («проверьте подключение»). Теперь
+ * ошибка сборки — понятным сообщением до начала скачивания.
  */
-function sendZip(reply: FastifyReply, zip: JSZip, filename: string, ascii: string) {
-  const stream = zip.generateNodeStream({ type: "nodebuffer", streamFiles: true, compression: "STORE" });
-  return reply.header("content-type", "application/zip").header("content-disposition", disposition(filename, ascii)).send(stream);
+async function sendZip(reply: FastifyReply, zip: JSZip, filename: string, ascii: string) {
+  const tmp = path.join(os.tmpdir(), `bars-crm-${crypto.randomUUID()}.zip`);
+  try {
+    await pipeline(zip.generateNodeStream({ type: "nodebuffer", streamFiles: true, compression: "STORE" }), fs.createWriteStream(tmp));
+  } catch (error) {
+    await fs.promises.rm(tmp, { force: true });
+    reply.log.error({ err: error }, "архив документов не собрался");
+    throw new HttpError(500, `Архив не собрался: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const { size } = await fs.promises.stat(tmp);
+  const stream = fs.createReadStream(tmp);
+  stream.on("close", () => void fs.promises.rm(tmp, { force: true }));
+  return reply
+    .header("content-type", "application/zip")
+    .header("content-length", size)
+    .header("content-disposition", disposition(filename, ascii))
+    .send(stream);
 }
 
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
