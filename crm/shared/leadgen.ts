@@ -19,22 +19,12 @@ export type LeadgenSettings = {
   /** Пауза расширения между страницами WB, секунд: от и до. */
   browserDelayMin: number;
   browserDelayMax: number;
-  /** Сколько карточек продавца смотреть для «Страны производства». */
-  cardsSample: number;
-  /** Минимум карточек с указанной страной, чтобы считать долю. */
-  minCountryCards: number;
-  /** Доля карточек «Китай», 0…1. */
-  chinaShareMin: number;
-  skuMin: number;
-  skuMax: number;
+  /** Фильтры «Отобрать в работу» по умолчанию: отзывы о продавце от / до, возраст компании от, месяцев. */
   feedbacksMin: number;
   feedbacksMax: number;
-  /** Возраст юрлица / ИП не меньше, месяцев. */
   minAgeMonths: number;
-  /** Пул с запасом: прошедших фильтры набираем квота × poolFactor, контакты ищем по пулу. */
-  poolFactor: number;
-  /** Квота категории по умолчанию (новая категория). */
-  defaultQuota: number;
+  /** Сколько продавцов на категорию отбирать в работу по умолчанию. */
+  pickPerCategory: number;
   /** Продавцов в день (первое касание). */
   perDay: number;
   /** Рабочие дни недели: 1 — понедельник … 7 — воскресенье. */
@@ -55,16 +45,10 @@ export const DEFAULT_LEADGEN_SETTINGS: LeadgenSettings = {
   browserProducts: 300,
   browserDelayMin: 6,
   browserDelayMax: 15,
-  cardsSample: 20,
-  minCountryCards: 5,
-  chinaShareMin: 0,
-  skuMin: 50,
-  skuMax: 1500,
   feedbacksMin: 1000,
   feedbacksMax: 50000,
   minAgeMonths: 12,
-  poolFactor: 1.6,
-  defaultQuota: 150,
+  pickPerCategory: 300,
   perDay: 30,
   workdays: [1, 2, 3, 4, 5],
   holidays: [],
@@ -74,22 +58,16 @@ export const DEFAULT_LEADGEN_SETTINGS: LeadgenSettings = {
   apiDelayMs: 150,
 };
 
-/** Подписи порогов для страницы настроек (ключ → подпись, подсказка). */
+/** Подписи настроек для страницы «Сбор» (ключ → подпись, подсказка). */
 export const SETTINGS_FIELDS: { key: keyof LeadgenSettings; label: string; hint?: string; step?: number }[] = [
   { key: "browserProducts", label: "Товаров на запрос (браузер)", hint: "прокрутка выдачи" },
   { key: "browserDelayMin", label: "Пауза браузера, с, от" },
   { key: "browserDelayMax", label: "Пауза браузера, с, до" },
   { key: "searchPages", label: "Страниц выдачи на запрос (сервер)" },
-  { key: "cardsSample", label: "Карточек на продавца (страна)" },
-  { key: "minCountryCards", label: "Минимум карточек со страной" },
-  { key: "chinaShareMin", label: "Доля «Китай» не меньше", hint: "0 — не проверять; 0,7 = 70 %", step: 0.05 },
-  { key: "skuMin", label: "SKU от" },
-  { key: "skuMax", label: "SKU до" },
-  { key: "feedbacksMin", label: "Отзывов от" },
-  { key: "feedbacksMax", label: "Отзывов до" },
-  { key: "minAgeMonths", label: "Возраст компании, мес. от" },
-  { key: "poolFactor", label: "Запас пула × квота", step: 0.1 },
-  { key: "defaultQuota", label: "Квота новой категории" },
+  { key: "feedbacksMin", label: "Отбор: отзывов от", hint: "по умолчанию" },
+  { key: "feedbacksMax", label: "Отбор: отзывов до", hint: "по умолчанию" },
+  { key: "minAgeMonths", label: "Отбор: возраст компании, мес. от", hint: "по умолчанию" },
+  { key: "pickPerCategory", label: "Отбор: продавцов на категорию", hint: "по умолчанию" },
   { key: "perDay", label: "Продавцов в день" },
   { key: "followupDays", label: "Повтор через, дней" },
   { key: "wbDelayMs", label: "Пауза WB, мс" },
@@ -113,8 +91,7 @@ export function normalizeSettings(raw: unknown): LeadgenSettings {
     if (days.length) out.workdays = days;
   }
   if (Array.isArray(src.holidays)) out.holidays = src.holidays.filter((d): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d));
-  out.chinaShareMin = Math.min(1, out.chinaShareMin);
-  out.poolFactor = Math.max(1, out.poolFactor);
+  out.pickPerCategory = Math.max(1, Math.round(out.pickPerCategory));
   out.searchPages = Math.max(1, Math.round(out.searchPages));
   out.browserProducts = Math.min(1000, Math.max(20, Math.round(out.browserProducts)));
   out.browserDelayMin = Math.max(3, out.browserDelayMin);
@@ -160,32 +137,37 @@ export type JobSource = keyof typeof JOB_SOURCES;
 
 export const JOB_STAGES = {
   collect: "Сбор продавцов с WB",
-  filter: "Фильтры, реквизиты и контакты",
-  schedule: "Раскладка на месяц",
+  enrich: "Реквизиты продавцов: WB, отзывы, DaData",
+  /** Старое название этапа (сборы до «сначала собрать всё») — продолжаются как enrich. */
+  filter: "Реквизиты продавцов: WB, отзывы, DaData",
+  pick: "Контакты Checko и отбор в работу",
+  schedule: "Раскладка по дням",
   done: "Готово",
 } as const;
+
+export const JOB_KINDS = {
+  collect: "Сбор в базу",
+  pick: "Отбор в работу",
+} as const;
+export type JobKind = keyof typeof JOB_KINDS;
 export type JobStage = keyof typeof JOB_STAGES;
 
-/** Счётчики прогресса по категории. */
+/**
+ * Счётчики по категории. Сбор в базу: запросы, collected (продавцов в выдаче), checked (проверено), passed (в базе —
+ * российский ИНН). Отбор в работу: quota, checked (запрошены контакты), selected (взяты в работу).
+ */
 export type CategoryProgress = {
   name: string;
   quota: number;
-  /** Пройдено поисковых запросов / страниц. */
+  /** Пройдено поисковых запросов. */
   queriesDone: number;
   queriesTotal: number;
-  /** Найдено продавцов в выдаче. */
   collected: number;
-  /** Проверено фильтрами. */
   checked: number;
-  /** Прошли все фильтры (WB + DaData). */
   passed: number;
-  /** Нашлись контакты. */
   withContacts: number;
-  /** Отобрано в базу. */
   selected: number;
-  /** Сбор в браузере: ждут, пока расширение откроет страницу продавца. */
-  waiting?: number;
-  /** Причины отсева: причина → сколько. */
+  /** Не попали: причина → сколько («нет российского ИНН», «нет контактов»). */
   rejected: Record<string, number>;
 };
 

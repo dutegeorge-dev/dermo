@@ -1,17 +1,23 @@
 /**
- * Задача «Собрать базу на месяц» (lead_jobs): этапы collect → filter → schedule → done.
+ * Задачи лидогенерации (lead_jobs). Два вида (params.kind):
  *
- * - collect: выдача WB по каждому запросу категории, страница за страницей; после каждой страницы курсор
- *   (checkpoint.collect[категория] = {q, page}) пишется в БД — после остановки / падения продолжаем со следующей.
- * - filter: кандидаты категории в случайном порядке (rank) проходят фильтры WB (ИНН, SKU, отзывы, доля Китая) и
- *   DaData; прошедшие копятся в пул (квота × poolFactor), по пулу ищем контакты (WB → Checko → сайт), с контактами —
- *   в lead_sellers. Состояние — в статусе кандидата, поэтому продолжение не повторяет уже проверенных.
- * - schedule: отобранные — по рабочим дням, perDay в день, категории вперемешку (lead_queue).
+ * collect — «Собрать базу на месяц»: этапы collect → enrich → done.
+ * - collect: выдача WB по запросам категорий (с сервера — страницами, курсор checkpoint.collect; в режиме браузера
+ *   выдачу присылает расширение, collector.ts) → кандидаты (lead_candidates), товары со стоп-словами отброшены.
+ * - enrich: каждый кандидат — профиль WB (ИНН, юрназвание, email из профиля), отзывы о продавце, DaData → в базу
+ *   (lead_sellers) **без отсева**: фильтрует потом сам владелец в «Базе». Не попадают только продавцы без российского
+ *   ИНН. Уже известные ИНН (другая категория, второй кабинет, прошлые сборы) склеиваются. Состояние — в статусе
+ *   кандидата, продолжение не повторяет проверенных.
+ *
+ * pick — «Отобрать в работу»: этапы pick → schedule → done. Из базы по фильтру (params.filter) — случайно, N на
+ * категорию (params.quotas), по каждому контакты Checko / сайт (платные — только здесь, решение владельца) и проверка
+ * email; нет телефона и рабочего email — пометка «нет контактов», берётся следующий. Взятые в работу —
+ * по рабочим дням, perDay в день, категории вперемешку (lead_queue).
  *
  * Источники данных (WB, DaData, Checko, сайт, DNS) передаются снаружи (LeadSources) — тесты подменяют их.
  */
 
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import {
   type CategoryProgress,
@@ -23,7 +29,6 @@ import {
   innKind,
   interleave,
   isoDay,
-  monthStart,
   normalizeEmail,
   normalizePhone,
   normalizeSettings,
@@ -40,7 +45,8 @@ import { leadCandidates, leadCategories, leadContacts, leadJobs, leadQueue, lead
 import { FetchError } from "./http.ts";
 import type { RawContacts, Requisites } from "./registry.ts";
 import { checkEmail } from "./site.ts";
-import { isChina, type WbProduct, type WbSellerInfo } from "./wb.ts";
+import type { WbProduct, WbSellerInfo } from "./wb.ts";
+import { filterWhere, parseSellerFilter } from "./work.ts";
 
 export interface LeadSources {
   search(query: string, page: number): Promise<WbProduct[]>;
@@ -64,42 +70,13 @@ export type MakeSources = (settings: LeadgenSettings, stop: () => boolean, log: 
 type Job = typeof leadJobs.$inferSelect;
 type Category = typeof leadCategories.$inferSelect;
 type Candidate = typeof leadCandidates.$inferSelect;
-
-type CandidateInfo = {
-  wb?: WbSellerInfo;
-  supplierIds?: number[];
-  sku?: number;
-  feedbacks?: number;
-  chinaShare?: number;
-  cards?: number;
-  catalog?: { nm: number; name: string; brand: string }[];
-  /** Каталог продавца, присланный расширением из браузера (до проверки страны). */
-  catalogProducts?: WbProduct[];
-  requisites?: Requisites;
-  contacts?: { type: "phone" | "email" | "site"; value: string; source: "wb" | "checko" | "site"; valid: boolean; note: string | null; at: string }[];
-  why?: string;
-};
+type Seller = typeof leadSellers.$inferSelect;
 
 class Stopped extends Error {}
 
-/** Отсев: короткая причина (для счётчиков) и подробность. */
-class Reject extends Error {
-  constructor(
-    readonly reason: string,
-    readonly why = "",
-  ) {
-    super(reason);
-  }
-}
-
-const BAD_EGR_STATUS = new Set(["LIQUIDATING", "LIQUIDATED", "BANKRUPT"]);
 const MAX_ERRORS = 200;
-
-const monthsBetween = (from: string, to: string) => {
-  const a = new Date(`${from}T00:00:00Z`);
-  const b = new Date(`${to}T00:00:00Z`);
-  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth()) - (b.getUTCDate() < a.getUTCDate() ? 1 : 0);
-};
+/** Кандидат сбора обработан: в базе, склеен с известным ИНН, без российского ИНН, ошибка. */
+const DONE_STATUSES = ["in_base", "merged", "no_inn", "error"];
 
 export const hasStopWord = (name: string, stopWords: string[]) => {
   const n = name.toLowerCase();
@@ -116,31 +93,58 @@ export async function appendJobError(jobId: number, stage: string, message: stri
   await db.execute(sql`update lead_jobs set errors = (select coalesce(jsonb_agg(e order by n), '[]'::jsonb) from jsonb_array_elements(errors) with ordinality as t(e, n) where n > jsonb_array_length(errors) - ${MAX_ERRORS}) where id = ${jobId} and jsonb_array_length(errors) > ${MAX_ERRORS}`);
 }
 
-/** Счётчики по категориям — из статусов кандидатов. */
+/** Счётчики по категориям: у сбора — из статусов кандидатов, у отбора — из отметок продавцов этой задачи. */
 export async function computeProgress(job: Job, cats: Category[], requests: JobProgress["requests"]): Promise<JobProgress> {
+  const categories: Record<string, CategoryProgress> = {};
+  if (job.params.kind === "pick") {
+    const rows = await db
+      .select({
+        categoryId: leadSellers.categoryId,
+        checked: sql<number>`count(*) filter (where ${leadSellers.contactsJobId} = ${job.id})::int`,
+        none: sql<number>`count(*) filter (where ${leadSellers.contactsJobId} = ${job.id} and ${leadSellers.contactsStatus} = 'none')::int`,
+        picked: sql<number>`count(*) filter (where ${leadSellers.pickJobId} = ${job.id})::int`,
+      })
+      .from(leadSellers)
+      .where(sql`${leadSellers.contactsJobId} = ${job.id} or ${leadSellers.pickJobId} = ${job.id}`)
+      .groupBy(leadSellers.categoryId);
+    for (const c of cats) {
+      const r = rows.find((x) => x.categoryId === c.id);
+      categories[c.id] = {
+        name: c.name,
+        quota: job.params.quotas[c.id] ?? 0,
+        queriesDone: 0,
+        queriesTotal: 0,
+        collected: 0,
+        checked: r?.checked ?? 0,
+        passed: 0,
+        withContacts: r?.picked ?? 0,
+        selected: r?.picked ?? 0,
+        rejected: r?.none ? { "нет контактов": r.none } : {},
+      };
+    }
+    return { ...job.progress, categories, requests };
+  }
   const rows = await db
     .select({ categoryId: leadCandidates.categoryId, status: leadCandidates.status, reason: leadCandidates.reason, n: sql<number>`count(*)::int` })
     .from(leadCandidates)
     .where(eq(leadCandidates.jobId, job.id))
     .groupBy(leadCandidates.categoryId, leadCandidates.status, leadCandidates.reason);
   const cp = (job.checkpoint.collect ?? {}) as Record<string, { q: number; page: number }>;
-  const categories: Record<string, CategoryProgress> = {};
   for (const c of cats) {
     const mine = rows.filter((r) => r.categoryId === c.id);
     const sum = (pred: (r: (typeof mine)[number]) => boolean) => mine.filter(pred).reduce((s, r) => s + r.n, 0);
     const rejected: Record<string, number> = {};
-    for (const r of mine) if (r.status === "rejected" || r.status === "no_contacts") rejected[r.reason ?? "—"] = (rejected[r.reason ?? "—"] ?? 0) + r.n;
+    for (const r of mine) if (r.status === "merged" || r.status === "no_inn" || r.status === "error") rejected[r.reason ?? "—"] = (rejected[r.reason ?? "—"] ?? 0) + r.n;
     categories[c.id] = {
       name: c.name,
-      quota: job.params.quotas[c.id] ?? c.quota,
+      quota: 0,
       queriesDone: Math.min(c.queries.length, cp[c.id]?.q ?? 0),
       queriesTotal: c.queries.length,
       collected: sum(() => true),
-      checked: sum((r) => r.status !== "new"),
-      passed: sum((r) => ["pool", "selected", "no_contacts"].includes(r.status)),
-      withContacts: sum((r) => r.status === "selected"),
-      selected: sum((r) => r.status === "selected"),
-      waiting: sum((r) => r.status === "need_seller" || r.status === "seller_done"),
+      checked: sum((r) => DONE_STATUSES.includes(r.status)),
+      passed: sum((r) => r.status === "in_base"),
+      withContacts: 0,
+      selected: 0,
       rejected,
     };
   }
@@ -206,34 +210,35 @@ export async function runJob(jobId: number, makeSources: MakeSources, opts: RunO
 
   try {
     sources = makeSources(settings, () => stop.flag, log);
-    if (!cats.length) throw new Error("Нет категорий для сбора — включите хотя бы одну");
-    const browser = job.params.source === "browser";
-    if (job.stage === "collect") {
-      if (browser) {
-        // Выдачу WB присылает расширение в браузере (collector.ts) — ждём его.
-        await save({ status: "collecting" }, true);
-        log(`Лидогенерация: задача ${job.id} ждёт сборщик в браузере (выдача WB)`);
-        return "collecting";
+    if (!cats.length) throw new Error("Нет категорий — включите хотя бы одну");
+    if (job.params.kind === "pick") {
+      if (job.stage === "pick") {
+        await pickAll(job, cats, sources, save, checkStop, log, today);
+        await save({ stage: "schedule" }, true);
       }
-      await collect(job, cats, settings, sources, save, checkStop, log);
-      await save({ stage: "filter" }, true);
-    }
-    if (job.stage === "filter") {
-      let waiting = false;
-      for (const cat of cats) if ((await filterCategory(job, cat, settings, sources, save, checkStop, rnd, log, today)) === "wait") waiting = true;
-      if (waiting) {
-        await save({ status: "collecting" }, true);
-        log(`Лидогенерация: задача ${job.id} ждёт сборщик в браузере (страницы продавцов)`);
-        return "collecting";
+      if (job.stage === "schedule") {
+        const scheduled = await schedule(job, cats, settings, rnd, today);
+        await save({ stage: "done", progress: { ...job.progress, scheduled } }, true);
       }
-      await save({ stage: "schedule" }, true);
-    }
-    if (job.stage === "schedule") {
-      const scheduled = await schedule(job, cats, settings, rnd, today);
-      await save({ stage: "done", progress: { ...job.progress, scheduled } }, true);
+    } else {
+      if (job.stage === "collect") {
+        if (job.params.source === "browser") {
+          // Выдачу WB присылает расширение в браузере (collector.ts) — ждём его.
+          await save({ status: "collecting" }, true);
+          log(`Лидогенерация: задача ${job.id} ждёт сборщик в браузере (выдача WB)`);
+          return "collecting";
+        }
+        await collect(job, cats, settings, sources, save, checkStop, log);
+        await save({ stage: "enrich" }, true);
+      }
+      // filter — этап сборов, начатых до «сначала собрать всё»: продолжаются как enrich.
+      if (job.stage === "enrich" || job.stage === "filter") {
+        await enrichAll(job, cats, sources, save, checkStop, rnd);
+        await save({ stage: "done" }, true);
+      }
     }
     await save({ status: "done", finishedAt: new Date() }, true);
-    log(`Лидогенерация: задача ${job.id} (${job.month}) готова`);
+    log(`Лидогенерация: задача ${job.id} готова`);
     return "done";
   } catch (error) {
     if (error instanceof Stopped || (stop.flag && error instanceof FetchError)) {
@@ -245,7 +250,7 @@ export async function runJob(jobId: number, makeSources: MakeSources, opts: RunO
     const transient = error instanceof FetchError && error.transient;
     await appendJobError(job.id, job.stage, message);
     const retries = Number(job.checkpoint.autoRetries ?? 0);
-    // Временный сбой (сеть, 429/5xx, лимит DaData) — воркер сам продолжит позже, до 6 раз подряд.
+    // Временный сбой (сеть, 429/5xx, лимит DaData, баланс Checko) — воркер сам продолжит позже, до 6 раз подряд.
     const checkpoint = transient && retries < 6 ? { ...job.checkpoint, autoRetries: retries + 1, retryAt: new Date(Date.now() + (/DaData/.test(message) ? 6 * 3600_000 : 15 * 60_000)).toISOString() } : { ...job.checkpoint, retryAt: null };
     await save({ status: "failed", checkpoint }, true);
     log(`Лидогенерация: задача ${job.id} — ошибка: ${message}`);
@@ -257,7 +262,7 @@ export async function runJob(jobId: number, makeSources: MakeSources, opts: RunO
 
 type Save = (patch?: Partial<typeof leadJobs.$inferInsert>, force?: boolean) => Promise<void>;
 
-// ── Шаг 1. Продавцы из выдачи WB ─────────────────────────────────────────────
+// ── Сбор: выдача WB с сервера ────────────────────────────────────────────────
 
 async function collect(job: Job, cats: Category[], s: LeadgenSettings, src: LeadSources, save: Save, checkStop: () => void, log: (m: string) => void) {
   const cp = { ...((job.checkpoint.collect ?? {}) as Record<string, { q: number; page: number }>) };
@@ -313,228 +318,112 @@ export async function upsertCandidates(jobId: number, categoryId: number, produc
     .onConflictDoUpdate({ target: [leadCandidates.jobId, leadCandidates.categoryId, leadCandidates.supplierId], set: { products: sql`excluded.products`, updatedAt: new Date() } });
 }
 
-// ── Шаги 2–4. Фильтры, реквизиты, контакты ───────────────────────────────────
+// ── Сбор: реквизиты каждого продавца — в базу без отсева ─────────────────────
 
-/** Продавец «в работе» после первых фильтров: в пуле, ждёт страницу продавца, отобран и т.п. — для склейки по ИНН. */
-const ALIVE = ["pool", "selected", "no_contacts", "need_seller", "seller_done"];
-
-/** Категория: "wait" — нужны страницы продавцов от расширения в браузере (задача ждёт сборщик). */
-async function filterCategory(job: Job, cat: Category, s: LeadgenSettings, src: LeadSources, save: Save, checkStop: () => void, rnd: () => number, log: (m: string) => void, today: string): Promise<"done" | "wait"> {
-  const browser = job.params.source === "browser";
-  const quota = job.params.quotas[cat.id] ?? cat.quota;
-  const countBy = async () => {
-    const rows = await db
-      .select({ status: leadCandidates.status, n: sql<number>`count(*)::int` })
-      .from(leadCandidates)
-      .where(and(eq(leadCandidates.jobId, job.id), eq(leadCandidates.categoryId, cat.id)))
-      .groupBy(leadCandidates.status);
-    return Object.fromEntries(rows.map((r) => [r.status, r.n])) as Record<string, number>;
-  };
-  const next = async (status: string) =>
-    (
-      await db
+async function enrichAll(job: Job, cats: Category[], src: LeadSources, save: Save, checkStop: () => void, rnd: () => number) {
+  for (const cat of cats) {
+    for (;;) {
+      checkStop();
+      const [cand] = await db
         .select()
         .from(leadCandidates)
-        .where(and(eq(leadCandidates.jobId, job.id), eq(leadCandidates.categoryId, cat.id), eq(leadCandidates.status, status)))
-        .orderBy(asc(leadCandidates.rank), asc(leadCandidates.id))
-        .limit(1)
-    )[0];
-
-  for (;;) {
-    checkStop();
-    const counts = await countBy();
-    const selected = counts.selected ?? 0;
-    if (selected >= quota) return "done";
-    const pooled = await next("pool");
-    if (pooled) {
-      await step(job, pooled, "contacts", () => contactsStep(job, cat, pooled, src, rnd));
-      await save();
-      continue;
-    }
-    const sellerDone = await next("seller_done");
-    if (sellerDone) {
-      const info = sellerDone.info as CandidateInfo;
-      await step(job, sellerDone, "filter", () => catalogStep(sellerDone, s, src, rnd, info.catalogProducts ?? [], info.sku ?? null));
-      await save();
-      continue;
-    }
-    if ((counts.need_seller ?? 0) > 0) return "wait";
-    // Пул пуст — набираем новый с запасом: (сколько осталось) × poolFactor прошедших фильтры.
-    const need = Math.ceil((quota - selected) * s.poolFactor);
-    let passed = 0;
-    let any = false;
-    while (passed < need) {
-      checkStop();
-      const cand = await next("new");
+        .where(and(eq(leadCandidates.jobId, job.id), eq(leadCandidates.categoryId, cat.id), sql`${leadCandidates.status} not in ('in_base', 'merged', 'no_inn', 'error')`))
+        .orderBy(asc(leadCandidates.id))
+        .limit(1);
       if (!cand) break;
-      any = true;
-      const ok = await step(job, cand, "filter", async () => {
-        if (!(await sellerStep(job, cand, s, src, today))) return false;
-        if (browser) {
-          // Каталог продавца (SKU и товары для страны) откроет расширение в браузере.
-          await db.update(leadCandidates).set({ status: "need_seller", updatedAt: new Date() }).where(eq(leadCandidates.id, cand.id));
-          return true;
-        }
-        const catalog = await fetchCatalog(cand.supplierId, s, src);
-        return catalogStep(cand, s, src, rnd, catalog.products, catalog.sku);
-      });
-      if (ok) passed++;
+      try {
+        await enrichOne(job, cat, cand, src, rnd);
+      } catch (error) {
+        if (error instanceof FetchError && error.transient) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        await appendJobError(job.id, "enrich", `продавец WB ${cand.supplierId}: ${message}`);
+        await markCandidate(cand.id, "error", "ошибка", message.slice(0, 300));
+      }
       await save();
     }
-    if (!any) {
-      if (selected < quota) {
-        const msg = `${cat.name}: отобрано ${selected} из ${quota} — продавцы в выдаче кончились (добавьте поисковых запросов или снизьте пороги)`;
-        await appendJobError(job.id, "filter", msg);
-        log(`Лидогенерация: ${msg}`);
-      }
-      return "done";
-    }
   }
 }
 
-/** Шаг по кандидату: отсев → rejected с причиной; разовая ошибка по продавцу — rejected «ошибка», не роняет задачу. */
-async function step(job: Job, cand: Candidate, stage: string, fn: () => Promise<boolean>): Promise<boolean> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof Stopped) throw error;
-    if (error instanceof Reject) {
-      await rejectCandidate(cand.id, error.reason, error.why);
-      return false;
-    }
-    if (error instanceof FetchError && error.transient) throw error;
-    const message = error instanceof Error ? error.message : String(error);
-    await appendJobError(job.id, stage, `продавец WB ${cand.supplierId}: ${message}`);
-    await rejectCandidate(cand.id, "ошибка", message.slice(0, 300));
-    return false;
-  }
-}
-
-export async function rejectCandidate(id: number, reason: string, why = ""): Promise<void> {
+async function markCandidate(id: number, status: string, reason: string | null, why?: string, patch: Partial<typeof leadCandidates.$inferInsert> = {}) {
   await db
     .update(leadCandidates)
-    .set({ status: "rejected", reason, info: sql`${leadCandidates.info} || ${JSON.stringify({ why: why || reason })}::jsonb`, updatedAt: new Date() })
+    .set({ ...patch, status, reason, ...(why ? { info: sql`${leadCandidates.info} || ${JSON.stringify({ why })}::jsonb` } : {}), updatedAt: new Date() })
     .where(eq(leadCandidates.id, id));
 }
 
-/** Фильтры по профилю продавца: российский ИНН, не в базе, не дубль ИНН, отзывы, DaData. */
-async function sellerStep(job: Job, cand: Candidate, s: LeadgenSettings, src: LeadSources, today: string): Promise<boolean> {
+/** Бренды кандидата: по частоте в выдаче, торговая марка из профиля WB — в конце. */
+function brandsOf(products: Candidate["products"], trademark: string): string[] {
+  const count = new Map<string, number>();
+  for (const p of products) if (p.brand) count.set(p.brand, (count.get(p.brand) ?? 0) + 1);
+  const brands = [...count].sort((a, b) => b[1] - a[1]).map(([b]) => b);
+  if (trademark && !brands.some((b) => b.toLowerCase() === trademark.toLowerCase())) brands.push(trademark);
+  return brands.slice(0, 10);
+}
+
+async function enrichOne(job: Job, cat: Category, cand: Candidate, src: LeadSources, rnd: () => number) {
   const sid = cand.supplierId;
   const wb = await src.sellerInfo(sid);
-  if (!wb) throw new Reject("нет профиля на WB");
+  if (!wb) return markCandidate(cand.id, "error", "нет профиля на WB");
   const kind = innKind(wb.inn);
-  await db.update(leadCandidates).set({ inn: wb.inn || null, info: { wb, supplierIds: [sid] } }).where(eq(leadCandidates.id, cand.id));
-  if (!kind) throw new Reject("нет российского ИНН", wb.inn ? `ИНН «${wb.inn}»` : "ИНН не указан");
+  if (!kind) return markCandidate(cand.id, "no_inn", "нет российского ИНН", wb.inn ? `ИНН «${wb.inn}»` : "ИНН не указан", { inn: wb.inn || null, info: { wb } });
   const inn = wb.inn;
+  const brands = brandsOf(cand.products, wb.trademark);
 
-  // Уже в базе прошлых выгрузок или «Не писать».
-  const [known] = await db.select({ status: leadSellers.status, jobId: leadSellers.jobId, month: leadSellers.batchMonth }).from(leadSellers).where(eq(leadSellers.inn, inn));
-  if (known && known.jobId !== job.id) throw new Reject(known.status === "do_not_contact" ? "не писать" : "уже в базе", `выгрузка ${known.month}`);
-
-  // Тот же ИНН (другой кабинет WB) уже прошёл в этой задаче — склеиваем в одну запись.
-  const [twin] = await db
-    .select()
-    .from(leadCandidates)
-    .where(and(eq(leadCandidates.jobId, job.id), eq(leadCandidates.inn, inn), ne(leadCandidates.id, cand.id), inArray(leadCandidates.status, ALIVE)))
-    .limit(1);
-  if (twin) {
-    await mergeTwin(twin, cand, sid);
-    throw new Reject("дубль ИНН", `второй кабинет продавца WB ${twin.supplierId}`);
-  }
-
-  // Отзывы о продавце (рейтинг продавца WB); нет ответа — посчитаем по товарам каталога на следующем шаге.
-  const feedbacks = await src.sellerFeedbacks(sid);
-  if (feedbacks !== null && (feedbacks < s.feedbacksMin || feedbacks > s.feedbacksMax)) throw new Reject("отзывы вне порога", `отзывов ${feedbacks}`);
-
-  // Реквизиты по ИНН — DaData.
-  const requisites = await src.dadata(inn);
-  if (!requisites) throw new Reject("нет в ЕГРЮЛ / ЕГРИП", "DaData не нашла ИНН");
-  if (BAD_EGR_STATUS.has(requisites.status)) throw new Reject("ликвидация / банкротство", requisites.status);
-  if (!requisites.regDate) throw new Reject("нет даты регистрации");
-  if (monthsBetween(requisites.regDate, today) < s.minAgeMonths) throw new Reject(`моложе ${s.minAgeMonths} мес.`, `зарегистрирован ${requisites.regDate}`);
-
-  const info: CandidateInfo = { wb, supplierIds: [sid], ...(feedbacks !== null ? { feedbacks } : {}), requisites };
-  await db.update(leadCandidates).set({ inn, info, updatedAt: new Date() }).where(eq(leadCandidates.id, cand.id));
-  return true;
-}
-
-/** Каталог продавца с сервера (API WB): SKU и товары для выборки по стране. */
-async function fetchCatalog(sid: number, s: LeadgenSettings, src: LeadSources): Promise<{ sku: number | null; products: WbProduct[] }> {
-  const first = await src.sellerCatalog(sid, 1);
-  const products = [...first.products];
-  if (first.total !== null) return { sku: first.total, products };
-  // Эндпоинт без total — считаем страницами (до skuMax + 1).
-  for (let page = 2; first.products.length && products.length <= s.skuMax && page <= 30; page++) {
-    const more = await src.sellerCatalog(sid, page);
-    if (!more.products.length) break;
-    products.push(...more.products);
-  }
-  return { sku: products.length, products };
-}
-
-/** SKU, отзывы (если рейтинг не ответил) и доля «Китай» по карточкам → в пул. sku null — неизвестно (порог не проверяется). */
-async function catalogStep(cand: Candidate, s: LeadgenSettings, src: LeadSources, rnd: () => number, catalog: WbProduct[], sku: number | null): Promise<boolean> {
-  const [fresh] = await db.select().from(leadCandidates).where(eq(leadCandidates.id, cand.id));
-  const info = (fresh?.info ?? cand.info) as CandidateInfo;
-  if (sku !== null && (sku < s.skuMin || sku > s.skuMax)) throw new Reject("SKU вне порога", `SKU ${sku}`);
-  let feedbacks = info.feedbacks ?? null;
-  // Рейтинг продавца не ответил — сумма по товарам каталога, если в нём есть отзывы (со страницы продавца их нет:
-  // тогда порог не проверяем, а не отсеиваем по нулю).
-  if (feedbacks === null && catalog.some((p) => p.feedbacks > 0)) {
-    feedbacks = catalog.reduce((sum, p) => sum + p.feedbacks, 0);
-    if (feedbacks < s.feedbacksMin || feedbacks > s.feedbacksMax) throw new Reject("отзывы вне порога", `отзывов ${feedbacks} (по товарам каталога)`);
-  }
-
-  // Страна производства по выборке карточек. По умолчанию — только для справки: в карточках с серыми декларациями
-  // часто пишут «Россия», а это как раз целевые продавцы (решение владельца). Фильтр — если задан порог chinaShareMin.
-  const filterCountry = s.chinaShareMin > 0;
-  const nms = shuffle([...new Set([...catalog.map((p) => p.nm), ...cand.products.map((p) => p.nm)])], rnd).slice(0, filterCountry ? s.cardsSample : Math.min(s.cardsSample, 10));
-  let withCountry = 0;
-  let china = 0;
-  for (const nm of nms) {
-    const country = await src.cardCountry(nm);
-    if (!country) continue;
-    withCountry++;
-    if (isChina(country)) china++;
-  }
-  if (filterCountry && (withCountry < Math.min(s.minCountryCards, nms.length) || withCountry === 0)) throw new Reject("мало данных о стране", `страна указана в ${withCountry} из ${nms.length} карточек`);
-  const chinaShare = withCountry ? china / withCountry : null;
-  if (filterCountry && chinaShare !== null && chinaShare < s.chinaShareMin) throw new Reject(`Китай < ${Math.round(s.chinaShareMin * 100)} %`, `Китай ${Math.round(chinaShare * 100)} % (${china} из ${withCountry})`);
-
-  const next: CandidateInfo = {
-    ...info,
-    sku: sku ?? undefined,
-    feedbacks: feedbacks ?? undefined,
-    chinaShare: chinaShare ?? undefined,
-    cards: withCountry,
-    catalog: catalog.slice(0, 30).map((p) => ({ nm: p.nm, name: p.name, brand: p.brand })),
-    catalogProducts: undefined,
-  };
-  await db.update(leadCandidates).set({ status: "pool", reason: null, info: next, updatedAt: new Date() }).where(eq(leadCandidates.id, cand.id));
-  return true;
-}
-
-/** Второй кабинет того же ИНН: его id и товары — к уже прошедшему кандидату (и в lead_sellers, если уже отобран). */
-async function mergeTwin(twin: Candidate, cand: Candidate, sid: number) {
-  const info = twin.info as CandidateInfo;
-  const supplierIds = [...new Set([...(info.supplierIds ?? [twin.supplierId]), sid])];
-  const products = [...twin.products];
-  for (const p of cand.products) if (!products.some((m) => m.nm === p.nm) && products.length < 50) products.push(p);
-  await db
-    .update(leadCandidates)
-    .set({ info: { ...info, supplierIds }, products, updatedAt: new Date() })
-    .where(eq(leadCandidates.id, twin.id));
-  if (twin.status === "selected" && twin.inn) {
-    const brands = [...new Set(cand.products.map((p) => p.brand).filter(Boolean))];
+  const [known] = await db.select().from(leadSellers).where(eq(leadSellers.inn, inn));
+  if (known) {
+    // Тот же ИНН: другая категория / второй кабинет в этом сборе или продавец из прошлых сборов — одна запись.
+    const sameJob = known.jobId === job.id;
+    const feedbacks = sameJob ? null : await src.sellerFeedbacks(sid);
     await db
       .update(leadSellers)
       .set({
-        wbSupplierIds: supplierIds,
-        brands: sql`(select array(select distinct unnest(${leadSellers.brands} || ${brands}::text[])))`,
+        wbSupplierIds: [...new Set([...known.wbSupplierIds, sid])],
+        brands: [...new Set([...known.brands, ...brands])].slice(0, 10),
+        ...(feedbacks !== null ? { feedbacksTotal: feedbacks } : {}),
         updatedAt: new Date(),
       })
-      .where(eq(leadSellers.inn, twin.inn));
+      .where(eq(leadSellers.inn, inn));
+    return markCandidate(cand.id, "merged", sameJob ? "дубль: другая категория или кабинет" : "уже в базе с прошлых сборов", undefined, { inn });
   }
+
+  const feedbacks = await src.sellerFeedbacks(sid);
+  const req = await src.dadata(inn);
+  const mainBrand = brands[0] ?? "";
+  // Примеры — товары из выдачи по запросам категории, сначала с главным брендом.
+  const pick = shuffle(cand.products, rnd).sort((a, b) => Number(b.brand === mainBrand) - Number(a.brand === mainBrand));
+  const products: ProductSample[] = pick.slice(0, 3).map((p) => ({ nm: p.nm, name: p.name, url: src.productUrl(p.nm) }));
+  const firstLine = renderFirstLine(cat.template || (cat.marking ? TEMPLATE_MARKING : TEMPLATE_PLAIN), { brand: mainBrand, product: shortProduct(pick[0]?.name ?? "", mainBrand) });
+  // Email / телефон из профиля WB — бесплатно, сразу (Checko — только при отборе в работу).
+  const wbContacts = await checkContacts(normalizeAll({ phones: wb.phones, emails: wb.emails, sites: [] }, "wb"), src);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(leadSellers)
+      .values({
+        inn,
+        wbSupplierIds: [sid],
+        brands,
+        legalName: req?.legalName || wb.fullName || wb.name,
+        ogrn: req?.ogrn ?? (wb.ogrn || null),
+        kind: req?.kind ?? kind,
+        managerName: req?.managerName ?? null,
+        managerPost: req?.managerPost ?? null,
+        regDate: req?.regDate ?? null,
+        okved: req?.okved ?? null,
+        region: req?.region ?? null,
+        address: req?.address ?? (wb.address || null),
+        egrStatus: req?.status ?? "NOT_FOUND",
+        feedbacksTotal: feedbacks,
+        products,
+        categoryId: cat.id,
+        batchMonth: job.month,
+        jobId: job.id,
+        firstLine,
+      })
+      .onConflictDoNothing();
+    if (wbContacts.length) await tx.insert(leadContacts).values(wbContacts.map((c) => ({ sellerInn: inn, ...c }))).onConflictDoNothing();
+    await tx.update(leadCandidates).set({ status: "in_base", reason: null, inn, updatedAt: new Date() }).where(eq(leadCandidates.id, cand.id));
+  });
 }
 
 type Found = { type: "phone" | "email" | "site"; value: string; source: "wb" | "checko" | "site" };
@@ -556,106 +445,112 @@ function normalizeAll(raw: RawContacts, source: Found["source"]): Found[] {
   return out;
 }
 
-async function contactsStep(job: Job, cat: Category, cand: Candidate, src: LeadSources, rnd: () => number): Promise<boolean> {
-  const info = cand.info as CandidateInfo;
-  const inn = cand.inn!;
-  const wb = info.wb!;
-  const req = info.requisites!;
-  const found: Found[] = normalizeAll({ phones: wb.phones, emails: wb.emails, sites: [] }, "wb");
-  if (src.checko) found.push(...normalizeAll(await src.checko(inn, req.kind), "checko"));
-  const hasEmail = () => found.some((f) => f.type === "email");
+
+/** Дубли — первый источник важнее; email — синтаксис и MX. */
+async function checkContacts(found: Found[], src: LeadSources, known: { type: string; value: string }[] = []) {
+  const unique: Found[] = [];
+  for (const f of found) if (!known.some((k) => k.type === f.type && k.value === f.value) && !unique.some((u) => u.type === f.type && u.value === f.value)) unique.push(f);
+  const out: { type: string; value: string; source: string; valid: boolean; note: string | null; receivedAt: Date }[] = [];
+  for (const f of unique) {
+    const check = f.type === "email" ? await checkEmail(f.value, (d) => src.mx(d)) : { valid: true, note: null };
+    out.push({ ...f, ...check, receivedAt: new Date() });
+  }
+  return out;
+}
+
+// ── Отбор в работу: контакты Checko / сайт → в работу ────────────────────────
+
+async function pickAll(job: Job, cats: Category[], src: LeadSources, save: Save, checkStop: () => void, log: (m: string) => void, today: string) {
+  const filter = parseSellerFilter(job.params.filter ?? {});
+  for (const cat of cats) {
+    const quota = job.params.quotas[cat.id] ?? 0;
+    for (;;) {
+      checkStop();
+      const [{ picked }] = await db
+        .select({ picked: sql<number>`count(*)::int` })
+        .from(leadSellers)
+        .where(and(eq(leadSellers.pickJobId, job.id), eq(leadSellers.categoryId, cat.id)));
+      if (picked >= quota) break;
+      // Случайно, но воспроизводимо (продолжение после остановки идёт тем же порядком).
+      const [seller] = await db
+        .select()
+        .from(leadSellers)
+        .where(
+          and(
+            filterWhere({ ...filter, categoryId: cat.id, inWork: false }, today),
+            sql`${leadSellers.status} <> 'do_not_contact'`,
+            sql`${leadSellers.contactsStatus} is distinct from 'none'`,
+            sql`${leadSellers.contactsJobId} is distinct from ${job.id}`,
+          ),
+        )
+        .orderBy(sql`md5(${leadSellers.inn} || ${String(job.id)})`)
+        .limit(1);
+      if (!seller) {
+        const msg = `${cat.name}: в работу взято ${picked} из ${quota} — в базе по этому фильтру больше нет подходящих продавцов`;
+        await appendJobError(job.id, "pick", msg);
+        log(`Лидогенерация: ${msg}`);
+        break;
+      }
+      try {
+        await pickOne(job, seller, src);
+      } catch (error) {
+        if (error instanceof FetchError && error.transient) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        await appendJobError(job.id, "pick", `ИНН ${seller.inn}: ${message}`);
+        // Не повторяем в этой задаче; в следующих отборах продавец снова доступен.
+        await db.update(leadSellers).set({ contactsJobId: job.id, updatedAt: new Date() }).where(eq(leadSellers.inn, seller.inn));
+      }
+      await save();
+    }
+  }
+}
+
+async function pickOne(job: Job, seller: Seller, src: LeadSources) {
+  const known = await db.select().from(leadContacts).where(eq(leadContacts.sellerInn, seller.inn));
+  const found: Found[] = [];
+  if (src.checko) found.push(...normalizeAll(await src.checko(seller.inn, seller.kind === "ip" ? "ip" : "ul"), "checko"));
+  const hasEmail = () => known.some((k) => k.type === "email" && k.valid) || found.some((f) => f.type === "email");
   if (!hasEmail()) {
-    for (const site of found.filter((f) => f.type === "site").slice(0, 2)) {
-      found.push(...normalizeAll(await src.site(site.value), "site"));
+    const sites = [...new Set([...known.filter((k) => k.type === "site").map((k) => k.value), ...found.filter((f) => f.type === "site").map((f) => f.value)])];
+    for (const site of sites.slice(0, 2)) {
+      found.push(...normalizeAll(await src.site(site), "site"));
       if (hasEmail()) break;
     }
   }
-  // Дубли — первый источник важнее (WB → Checko → сайт).
-  const unique: Found[] = [];
-  for (const f of found) if (!unique.some((u) => u.type === f.type && u.value === f.value)) unique.push(f);
-  const at = new Date().toISOString();
-  const contacts: NonNullable<CandidateInfo["contacts"]> = [];
-  for (const f of unique) {
-    const check = f.type === "email" ? await checkEmail(f.value, (d) => src.mx(d)) : { valid: true, note: null };
-    contacts.push({ ...f, ...check, at });
-  }
-  const usable = contacts.some((c) => c.type === "phone" || (c.type === "email" && c.valid));
-  if (!usable) {
-    await db
-      .update(leadCandidates)
-      .set({ status: "no_contacts", reason: "нет контактов", info: { ...info, contacts }, updatedAt: new Date() })
-      .where(eq(leadCandidates.id, cand.id));
-    return false;
-  }
-
-  // Отбор: запись в базу продавцов.
-  const brandCount = new Map<string, number>();
-  for (const p of cand.products) if (p.brand) brandCount.set(p.brand, (brandCount.get(p.brand) ?? 0) + 1);
-  const brands = [...brandCount].sort((a, b) => b[1] - a[1]).map(([b]) => b);
-  if (wb.trademark && !brands.some((b) => b.toLowerCase() === wb.trademark.toLowerCase())) brands.push(wb.trademark);
-  const mainBrand = brands[0] ?? wb.trademark ?? "";
-  // Примеры — товары из выдачи по запросам категории (они про категорию), сначала с главным брендом.
-  // Мало попаданий в выдачу — добираем из каталога продавца (без стоп-слов категории).
-  const extra = (info.catalog ?? []).filter((p) => p.name && !hasStopWord(p.name, cat.stopWords) && !cand.products.some((m) => m.nm === p.nm));
-  const pick = [
-    ...shuffle(cand.products, rnd).sort((a, b) => Number(b.brand === mainBrand) - Number(a.brand === mainBrand)),
-    ...shuffle(extra, rnd),
-  ];
-  const products: ProductSample[] = pick.slice(0, 3).map((p) => ({ nm: p.nm, name: p.name, url: src.productUrl(p.nm) }));
-  const product = shortProduct(pick[0]?.name ?? "", mainBrand);
-  const firstLine = renderFirstLine(cat.template || (cat.marking ? TEMPLATE_MARKING : TEMPLATE_PLAIN), { brand: mainBrand, product });
-
+  const fresh = await checkContacts(found, src, known);
+  const all = [...known, ...fresh];
+  const usable = all.some((c) => c.type === "phone" || (c.type === "email" && c.valid));
   await db.transaction(async (tx) => {
-    const values = {
-      inn,
-      wbSupplierIds: info.supplierIds ?? [cand.supplierId],
-      brands: brands.slice(0, 10),
-      legalName: req.legalName || wb.fullName || wb.name,
-      ogrn: req.ogrn ?? (wb.ogrn || null),
-      kind: req.kind,
-      managerName: req.managerName,
-      managerPost: req.managerPost,
-      regDate: req.regDate,
-      okved: req.okved,
-      region: req.region,
-      address: req.address ?? (wb.address || null),
-      egrStatus: req.status,
-      skuCount: info.sku ?? null,
-      feedbacksTotal: info.feedbacks ?? null,
-      chinaShare: info.chinaShare ?? null,
-      products,
-      categoryId: cat.id,
-      batchMonth: job.month,
-      jobId: job.id,
-      firstLine,
-    };
-    await tx.insert(leadSellers).values(values).onConflictDoUpdate({ target: leadSellers.inn, set: { ...values, updatedAt: new Date() }, where: eq(leadSellers.jobId, job.id) });
+    if (fresh.length) await tx.insert(leadContacts).values(fresh.map((c) => ({ sellerInn: seller.inn, ...c }))).onConflictDoNothing();
     await tx
-      .insert(leadContacts)
-      .values(contacts.map((c) => ({ sellerInn: inn, type: c.type, value: c.value, source: c.source, valid: c.valid, note: c.note, receivedAt: new Date(c.at) })))
-      .onConflictDoNothing();
-    await tx.update(leadCandidates).set({ status: "selected", reason: null, info: { ...info, contacts }, updatedAt: new Date() }).where(eq(leadCandidates.id, cand.id));
+      .update(leadSellers)
+      .set({
+        contactsStatus: usable ? "found" : "none",
+        contactsJobId: job.id,
+        contactsCheckedAt: new Date(),
+        ...(usable ? { pickedAt: new Date(), pickJobId: job.id } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(leadSellers.inn, seller.inn));
   });
-  return true;
 }
 
-// ── Шаг 5. Раскладка по рабочим дням ─────────────────────────────────────────
+// ── Раскладка по рабочим дням ────────────────────────────────────────────────
 
 async function schedule(job: Job, cats: Category[], s: LeadgenSettings, rnd: () => number, today: string): Promise<JobProgress["scheduled"]> {
   const rows = await db
     .select({ inn: leadSellers.inn, categoryId: leadSellers.categoryId })
     .from(leadSellers)
-    .where(and(eq(leadSellers.jobId, job.id), sql`not exists (select 1 from lead_queue q where q.seller_inn = ${leadSellers.inn})`));
+    .where(and(eq(leadSellers.pickJobId, job.id), sql`not exists (select 1 from lead_queue q where q.seller_inn = ${leadSellers.inn})`));
   if (!rows.length) return job.progress.scheduled ?? { sellers: 0, from: "", to: "" };
   const groups = cats.map((c) => shuffle(rows.filter((r) => r.categoryId === c.id).map((r) => r.inn), rnd));
   const order = interleave(groups);
-  // Продолжаем после уже разложенных этой задачей (если раскладку прерывали), иначе — с начала месяца / сегодня.
+  // После уже запланированных первых писем (прошлые отборы), не раньше сегодняшнего дня.
   const [last] = await db
     .select({ day: sql<string | null>`max(${leadQueue.plannedDate})::text` })
     .from(leadQueue)
-    .innerJoin(leadSellers, eq(leadSellers.inn, leadQueue.sellerInn))
-    .where(and(eq(leadSellers.jobId, job.id), eq(leadQueue.touch, "first")));
-  const begin = [monthStart(job.month) ?? today, today, last?.day ? addDaysIso(last.day, 1) : ""].sort().at(-1)!;
+    .where(and(eq(leadQueue.touch, "first"), eq(leadQueue.status, "planned")));
+  const begin = last?.day && last.day >= today ? addDaysIso(last.day, 1) : today;
   const days = planDays(order.length, begin, s);
   const values = order.map((inn, i) => ({ sellerInn: inn, plannedDate: days[i], position: i % s.perDay, touch: "first" }));
   for (let i = 0; i < values.length; i += 500) await db.insert(leadQueue).values(values.slice(i, i + 500));

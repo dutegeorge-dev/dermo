@@ -962,7 +962,17 @@ export const leadJobs = pgTable(
     /** Курсор продолжения: на каком запросе / странице остановились. */
     checkpoint: jsonb("checkpoint").$type<Record<string, unknown>>().notNull().default({}),
     /** Параметры запуска: категории, квоты (тестовый прогон — своя квота), пороги на момент запуска. */
-    params: jsonb("params").$type<{ categoryIds: number[]; quotas: Record<string, number>; settings: LeadgenSettings; source?: JobSource }>().notNull(),
+    params: jsonb("params")
+      .$type<{
+        categoryIds: number[];
+        quotas: Record<string, number>;
+        settings: LeadgenSettings;
+        source?: JobSource;
+        /** collect — сбор выдачи и реквизитов в базу; pick — отбор в работу из базы по фильтру. */
+        kind?: "collect" | "pick";
+        filter?: Record<string, unknown>;
+      }>()
+      .notNull(),
     errors: jsonb("errors").$type<JobError[]>().notNull().default([]),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -1038,10 +1048,21 @@ export const leadSellers = pgTable(
     status: text("status").notNull().default("new"),
     firstLine: text("first_line").notNull().default(""),
     firstSentAt: timestamp("first_sent_at", { withTimezone: true }),
+    /** Взят в работу («Отобрать в работу»): null — лежит в базе, писать ему не планировали. */
+    pickedAt: timestamp("picked_at", { withTimezone: true }),
+    pickJobId: integer("pick_job_id").references(() => leadJobs.id, { onDelete: "set null" }),
+    /** Контакты Checko / сайт: null — не запрашивали, found — есть телефон или рабочий email, none — нет. */
+    contactsStatus: text("contacts_status"),
+    contactsJobId: integer("contacts_job_id").references(() => leadJobs.id, { onDelete: "set null" }),
+    contactsCheckedAt: timestamp("contacts_checked_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("lead_sellers_batch_idx").on(t.batchMonth, t.categoryId), index("lead_sellers_status_idx").on(t.status)],
+  (t) => [
+    index("lead_sellers_batch_idx").on(t.batchMonth, t.categoryId),
+    index("lead_sellers_status_idx").on(t.status),
+    index("lead_sellers_pick_idx").on(t.categoryId, t.pickedAt),
+  ],
 );
 
 export const leadContacts = pgTable(

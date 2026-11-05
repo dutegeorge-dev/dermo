@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 
-import { DEFAULT_LEADGEN_SETTINGS, JOB_SOURCES, JOB_STAGES, JOB_STATUSES, type JobSource, type LeadgenSettings, SETTINGS_FIELDS, TEMPLATE_MARKING, TEMPLATE_PLAIN } from "../../../../shared/leadgen.ts";
+import { DEFAULT_LEADGEN_SETTINGS, JOB_KINDS, JOB_SOURCES, JOB_STAGES, JOB_STATUSES, type JobSource, type LeadgenSettings, SETTINGS_FIELDS, TEMPLATE_MARKING, TEMPLATE_PLAIN } from "../../../../shared/leadgen.ts";
 import { IconPencil, IconPlus } from "../../components/Icons.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { ConfirmDialog, EmptyState, ErrorBox, Modal, PageHeader, Spinner } from "../../components/ui.tsx";
@@ -61,7 +61,7 @@ export function LeadgenPage() {
       {status.data && categories.data && (
         <>
           {tab === "today" && <TodayTab status={status.data} />}
-          {tab === "base" && <BaseTab status={status.data} categories={categories.data.categories} />}
+          {tab === "base" && <BaseTab status={status.data} categories={categories.data.categories} onPicked={() => go("collect")} />}
           {tab === "categories" && <CategoriesTab categories={categories.data.categories} />}
           {tab === "collect" && <CollectTab status={status.data} categories={categories.data.categories} onStart={() => setStarting(true)} />}
           {tab === "stats" && <StatsTab status={status.data} />}
@@ -86,17 +86,15 @@ const thisMonth = () => new Date().toISOString().slice(0, 7);
 function StartDialog({ categories, onClose, onStarted }: { categories: LeadCategory[]; onClose: () => void; onStarted: () => void }) {
   const qc = useQueryClient();
   const [month, setMonth] = useState(thisMonth());
-  const [quota, setQuota] = useState("");
   const [source, setSource] = useState<JobSource>("browser");
   const active = categories.filter((c) => c.active && c.queries.length);
   const start = useMutation({
-    mutationFn: () => api<{ job: LeadJob }>("/leadgen/jobs", { method: "POST", body: { month, quota: quota ? Number(quota) : null, source } }),
+    mutationFn: () => api<{ job: LeadJob }>("/leadgen/jobs", { method: "POST", body: { month, source } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["leadgen"] });
       onStarted();
     },
   });
-  const total = active.reduce((s, c) => s + (quota ? Number(quota) || 0 : c.quota), 0);
   return (
     <Modal
       title="Собрать базу на месяц"
@@ -112,19 +110,14 @@ function StartDialog({ categories, onClose, onStarted }: { categories: LeadCateg
     >
       <div className="space-y-3 text-sm">
         <p className="muted">
-          Сбор идёт в фоне несколько часов: выдача WB по запросам категорий → фильтры → реквизиты DaData → контакты Checko → случайный отбор по квоте → раскладка по рабочим
-          дням. Можно остановить и продолжить с места остановки.
+          Выдача WB по запросам категорий → по каждому продавцу профиль WB (ИНН, юрназвание), отзывы и реквизиты DaData → все в «Базу», без
+          отсева. Фильтровать и отбирать в работу — потом, на вкладке «База» (там же — контакты Checko). Сбор можно остановить и продолжить с
+          места остановки.
         </p>
-        <div className="grid grid-cols-2 gap-3">
-          <label>
-            <span className="label">Месяц выгрузки</span>
-            <input type="month" className="input" value={month} onChange={(e) => setMonth(e.target.value)} />
-          </label>
-          <label>
-            <span className="label">Квота на категорию (пусто — из категорий)</span>
-            <input type="number" min={1} className="input" placeholder="например, 10 для пробы" value={quota} onChange={(e) => setQuota(e.target.value)} />
-          </label>
-        </div>
+        <label className="block w-48">
+          <span className="label">Месяц сбора</span>
+          <input type="month" className="input" value={month} onChange={(e) => setMonth(e.target.value)} />
+        </label>
         <fieldset className="space-y-1">
           <legend className="label">Откуда брать выдачу WB</legend>
           <label className="flex items-start gap-2">
@@ -141,7 +134,7 @@ function StartDialog({ categories, onClose, onStarted }: { categories: LeadCateg
           </label>
         </fieldset>
         <div>
-          Категорий: {active.length}, отобрать всего: <b>{total}</b>
+          Категорий: <b>{active.length}</b>, поисковых запросов: <b>{active.reduce((n, c) => n + c.queries.length, 0)}</b>
         </div>
         <ErrorBox error={start.error} />
       </div>
@@ -183,9 +176,8 @@ function CategoriesTab({ categories }: { categories: LeadCategory[] }) {
             </div>
             <div className="text-right text-xs">
               <div>
-                квота <b>{c.quota}</b>
+                в базе <b>{c.sellers}</b>
               </div>
-              <div className="muted">в базе {c.sellers}</div>
             </div>
             <button type="button" className="icon-btn" onClick={() => setEditing(c)} aria-label="Изменить">
               <IconPencil size={14} />
@@ -264,7 +256,7 @@ function CategoryDialog({ category, onClose }: { category: LeadCategory | null; 
             <textarea className="input min-h-[150px]" {...field("stopWords")} />
           </label>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -281,10 +273,6 @@ function CategoryDialog({ category, onClose }: { category: LeadCategory | null; 
           <label className="block">
             <span className="label">Пометка (с какой даты)</span>
             <input className="input" {...field("markingNote")} placeholder="с 01.12.2026" />
-          </label>
-          <label className="block">
-            <span className="label">Квота продавцов на месяц</span>
-            <input type="number" min={1} className="input" {...field("quota")} />
           </label>
         </div>
         <label className="block">
@@ -346,15 +334,21 @@ function CollectTab({ status, categories, onStart }: { status: LeadStatus; categ
       {current && <JobView job={current} categories={categories} busy={action.isPending} onAction={(act) => action.mutate({ id: current.id, act })} />}
       {jobs.data && jobs.data.jobs.length > 1 && (
         <div>
-          <h2 className="mb-2 font-semibold">Прошлые сборы</h2>
+          <h2 className="mb-2 font-semibold">Прошлые задачи</h2>
           <div className="panel divide-line text-sm">
             {jobs.data.jobs.slice(1).map((j) => {
               const cats = Object.values(j.progress.categories ?? {});
               return (
                 <div key={j.id} className="flex flex-wrap gap-x-4 px-4 py-2">
-                  <span className="font-medium">№ {j.id} · {j.month}</span>
+                  <span className="font-medium">
+                    № {j.id} · {JOB_KINDS[j.kind ?? "collect"]} · {j.month}
+                  </span>
                   <span className="muted">{JOB_STATUSES[j.status]}</span>
-                  <span>отобрано {cats.reduce((s, c) => s + c.selected, 0)} из {cats.reduce((s, c) => s + c.quota, 0)}</span>
+                  <span>
+                    {j.kind === "pick"
+                      ? `взято в работу ${cats.reduce((s, c) => s + c.selected, 0)} из ${cats.reduce((s, c) => s + c.quota, 0)}`
+                      : `продавцов в выдаче ${cats.reduce((s, c) => s + c.collected, 0)}, новых в базе ${cats.reduce((s, c) => s + c.passed, 0)}`}
+                  </span>
                   <span className="muted">{formatDateTime(j.createdAt)}</span>
                 </div>
               );
@@ -429,21 +423,43 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
+/** Фильтр отбора словами: «отзывов 1000–50000 · от 12 мес. · действующие». */
+function filterText(f: Record<string, string>, categories: LeadCategory[]): string {
+  const parts: string[] = [];
+  if (f.category) parts.push(categories.find((c) => String(c.id) === f.category)?.name ?? `категория ${f.category}`);
+  if (f.fbMin || f.fbMax) parts.push(`отзывов ${f.fbMin || "0"}–${f.fbMax || "∞"}`);
+  if (f.age) parts.push(`компании от ${f.age} мес.`);
+  if (f.active === "1") parts.push("действующие");
+  if (f.region) parts.push(`регион «${f.region}»`);
+  if (f.kind) parts.push(f.kind === "ip" ? "ИП" : "ООО");
+  if (f.month) parts.push(`сбор ${f.month}`);
+  if (f.phone === "1") parts.push("есть телефон");
+  if (f.email === "1") parts.push("есть email");
+  if (f.q) parts.push(`«${f.q}»`);
+  return parts.join(" · ") || "вся база";
+}
+
 function JobView({ job, categories, busy, onAction }: { job: LeadJob; categories: LeadCategory[]; busy: boolean; onAction: (act: "stop" | "resume" | "cancel") => void }) {
   const [showErrors, setShowErrors] = useState(false);
+  const pick = job.kind === "pick";
   const rows = job.categoryIds.map((id) => ({ id, p: job.progress.categories?.[id], name: categories.find((c) => c.id === id)?.name ?? `#${id}` }));
-  const total = rows.reduce((s, r) => s + (r.p?.selected ?? 0), 0);
-  const quota = rows.reduce((s, r) => s + (r.p?.quota ?? job.quotas[r.id] ?? 0), 0);
+  const sum = (k: "selected" | "quota" | "collected" | "passed" | "checked") => rows.reduce((s, r) => s + (r.p?.[k] ?? (k === "quota" ? (job.quotas[r.id] ?? 0) : 0)), 0);
   const req = job.progress.requests ?? { wb: 0, dadata: 0, checko: 0, site: 0 };
+  const reasons = (p: LeadJob["progress"]["categories"][string] | undefined) =>
+    Object.entries(p?.rejected ?? {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([r, n]) => `${r} — ${n}`)
+      .join("; ");
   return (
     <div className="panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-lg font-semibold">
-            Сбор № {job.id} на {job.month}
-          </div>
+          <div className="text-lg font-semibold">{pick ? `Отбор в работу № ${job.id}` : `Сбор в базу № ${job.id} на ${job.month}`}</div>
           <div className="text-sm">
-            <b>{JOB_STATUSES[job.status]}</b> · этап: {JOB_STAGES[job.stage]} · отобрано {total} из {quota} · {JOB_SOURCES[job.source ?? "direct"]}
+            <b>{JOB_STATUSES[job.status]}</b> · этап: {JOB_STAGES[job.stage]} ·{" "}
+            {pick
+              ? `взято в работу ${sum("selected")} из ${sum("quota")}`
+              : `продавцов в выдаче ${sum("collected")}, проверено ${sum("checked")}, новых в базе ${sum("passed")} · ${JOB_SOURCES[job.source ?? "direct"]}`}
           </div>
           <div className="text-xs muted">
             {job.startedAt && `начат ${formatDateTime(job.startedAt)}`}
@@ -452,6 +468,7 @@ function JobView({ job, categories, busy, onAction }: { job: LeadJob; categories
             {job.retryAt && ` · воркер сам продолжит ${formatDateTime(job.retryAt)}`}
             {` · запросов: WB ${req.wb}, DaData ${req.dadata}, Checko ${req.checko}, сайты ${req.site}`}
           </div>
+          {pick && job.filter && Object.keys(job.filter).length > 0 && <div className="text-xs muted">фильтр: {filterText(job.filter, categories)}</div>}
         </div>
         <div className="flex gap-2">
           {(job.status === "running" || job.status === "queued" || job.status === "collecting") && (
@@ -468,8 +485,11 @@ function JobView({ job, categories, busy, onAction }: { job: LeadJob; categories
                 type="button"
                 className="btn"
                 disabled={busy}
-                title="Не искать дальше: уже отобранные — разложить по дням"
-                onClick={() => window.confirm("Завершить сбор досрочно? Уже отобранные продавцы останутся и разложатся по дням.") && onAction("cancel")}
+                title={pick ? "Не брать больше: уже взятые — разложить по дням" : "Не собирать дальше: уже собранное остаётся в базе"}
+                onClick={() =>
+                  window.confirm(pick ? "Завершить отбор досрочно? Уже взятые в работу разложатся по дням." : "Завершить сбор досрочно? Уже собранные продавцы останутся в базе.") &&
+                  onAction("cancel")
+                }
               >
                 Завершить досрочно
               </button>
@@ -479,8 +499,8 @@ function JobView({ job, categories, busy, onAction }: { job: LeadJob; categories
       </div>
       {job.status === "collecting" && (
         <div className="mt-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
-          {job.stage === "collect" ? "Сервер ждёт выдачу WB" : `Сервер ждёт страницы продавцов (${rows.reduce((s, r) => s + (r.p?.waiting ?? 0), 0)})`} от расширения «Ирбис · сборщик WB». Откройте его в Chrome и нажмите «Запустить» —
-          браузер с вкладкой WB должен быть открыт.
+          Сервер ждёт выдачу WB от расширения «Ирбис · сборщик WB». Откройте его в Chrome и нажмите «Запустить» — окно WB, которое оно откроет,
+          не сворачивайте.
         </div>
       )}
       {job.progress.scheduled && job.progress.scheduled.sellers > 0 && (
@@ -491,38 +511,46 @@ function JobView({ job, categories, busy, onAction }: { job: LeadJob; categories
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-xs muted">
-            <tr>
-              <th className="py-1 pr-3 font-medium">Категория</th>
-              <th className="px-2 py-1 text-right font-medium">Запросы</th>
-              <th className="px-2 py-1 text-right font-medium">Собрано продавцов</th>
-              <th className="px-2 py-1 text-right font-medium">Проверено</th>
-              <th className="px-2 py-1 text-right font-medium">Прошли фильтры</th>
-              <th className="px-2 py-1 text-right font-medium">С контактами</th>
-              <th className="px-2 py-1 text-right font-medium">Отобрано</th>
-              <th className="py-1 pl-3 font-medium">Чаще всего отсеяны</th>
-            </tr>
+            {pick ? (
+              <tr>
+                <th className="py-1 pr-3 font-medium">Категория</th>
+                <th className="px-2 py-1 text-right font-medium">Запрошено контактов</th>
+                <th className="px-2 py-1 text-right font-medium">Взято в работу</th>
+                <th className="py-1 pl-3 font-medium">Не взяты</th>
+              </tr>
+            ) : (
+              <tr>
+                <th className="py-1 pr-3 font-medium">Категория</th>
+                <th className="px-2 py-1 text-right font-medium">Запросы</th>
+                <th className="px-2 py-1 text-right font-medium">Продавцов в выдаче</th>
+                <th className="px-2 py-1 text-right font-medium">Проверено</th>
+                <th className="px-2 py-1 text-right font-medium">Новых в базе</th>
+                <th className="py-1 pl-3 font-medium">Не добавлены / уже были</th>
+              </tr>
+            )}
           </thead>
           <tbody className="divide-y divide-slate-200 tabular-nums dark:divide-neutral-800">
-            {rows.map(({ id, p, name }) => (
-              <tr key={id} className="align-top">
-                <td className="py-1.5 pr-3">{name}</td>
-                <td className="px-2 py-1.5 text-right">{p ? `${p.queriesDone}/${p.queriesTotal}` : "—"}</td>
-                <td className="px-2 py-1.5 text-right">{p?.collected ?? 0}</td>
-                <td className="px-2 py-1.5 text-right">{p?.checked ?? 0}</td>
-                <td className="px-2 py-1.5 text-right">{p?.passed ?? 0}</td>
-                <td className="px-2 py-1.5 text-right">{p?.withContacts ?? 0}</td>
-                <td className="px-2 py-1.5 text-right font-semibold">
-                  {p?.selected ?? 0} / {p?.quota ?? job.quotas[id]}
-                </td>
-                <td className="py-1.5 pl-3 text-xs muted">
-                  {Object.entries(p?.rejected ?? {})
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 3)
-                    .map(([r, n]) => `${r} — ${n}`)
-                    .join("; ")}
-                </td>
-              </tr>
-            ))}
+            {rows.map(({ id, p, name }) =>
+              pick ? (
+                <tr key={id} className="align-top">
+                  <td className="py-1.5 pr-3">{name}</td>
+                  <td className="px-2 py-1.5 text-right">{p?.checked ?? 0}</td>
+                  <td className="px-2 py-1.5 text-right font-semibold">
+                    {p?.selected ?? 0} / {p?.quota ?? job.quotas[id]}
+                  </td>
+                  <td className="py-1.5 pl-3 text-xs muted">{reasons(p)}</td>
+                </tr>
+              ) : (
+                <tr key={id} className="align-top">
+                  <td className="py-1.5 pr-3">{name}</td>
+                  <td className="px-2 py-1.5 text-right">{p ? `${p.queriesDone}/${p.queriesTotal}` : "—"}</td>
+                  <td className="px-2 py-1.5 text-right">{p?.collected ?? 0}</td>
+                  <td className="px-2 py-1.5 text-right">{p?.checked ?? 0}</td>
+                  <td className="px-2 py-1.5 text-right font-semibold">{p?.passed ?? 0}</td>
+                  <td className="py-1.5 pl-3 text-xs muted">{reasons(p)}</td>
+                </tr>
+              ),
+            )}
           </tbody>
         </table>
       </div>

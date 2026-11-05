@@ -21,7 +21,9 @@ export type LeadJob = {
   month: string;
   status: "queued" | "running" | "stopping" | "collecting" | "paused" | "failed" | "done";
   source?: "browser" | "direct";
-  stage: "collect" | "filter" | "schedule" | "done";
+  stage: "collect" | "enrich" | "filter" | "pick" | "schedule" | "done";
+  kind: "collect" | "pick";
+  filter: Record<string, string> | null;
   progress: JobProgress;
   quotas: Record<string, number>;
   categoryIds: number[];
@@ -61,6 +63,8 @@ export type LeadSeller = {
   firstSentAt: string | null;
   createdAt: string;
   contacts: LeadContact[];
+  pickedAt: string | null;
+  contactsStatus: "found" | "none" | null;
 };
 
 export type TodayItem = LeadSeller & { queueId: number; touch: "first" | "followup"; plannedDate: string };

@@ -2,22 +2,22 @@
  * Сборщик в браузере: расширение Chrome (crm/tools/wb-extension) на компьютере сотрудника открывает страницы WB в его
  * обычном браузере и присылает сюда то, что браузер получил от WB. Сервер говорит, что открыть дальше:
  *  - этап collect — страницы выдачи по запросам категорий (курсор checkpoint.collect, как у сбора с сервера);
- *  - этап filter — страницы продавцов, прошедших первые фильтры (status need_seller): число SKU и каталог.
+ *    реквизиты продавцов (профиль WB, отзывы, DaData) сервер берёт сам — страницы продавцов не открываются.
  * Задача в это время в статусе collecting; когда всё нужное прислано — снова queued, дальше работает воркер.
  * Доступ — по ключу сборщика (Authorization: Bearer), ключ выпускается на вкладке «Сбор», в БД — только SHA-256.
  */
 
 import crypto from "node:crypto";
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { normalizeSettings } from "../../../shared/leadgen.ts";
 import { config } from "../../config.ts";
 import { db } from "../../db/client.ts";
-import { leadCandidates, leadCategories, leadJobs, settings as settingsTable } from "../../db/schema.ts";
+import { leadCategories, leadJobs, settings as settingsTable } from "../../db/schema.ts";
 import { HttpError } from "../http.ts";
 import { Http } from "./http.ts";
-import { appendJobError, computeProgress, hasStopWord, rejectCandidate, upsertCandidates } from "./job.ts";
+import { appendJobError, computeProgress, hasStopWord, upsertCandidates } from "./job.ts";
 import { parseProducts, WbClient, type WbProduct } from "./wb.ts";
 
 export const COLLECTOR_KEY = "leadgen_collector";
@@ -55,12 +55,10 @@ async function touch(lastTask: string): Promise<void> {
 
 export type CollectorTask =
   | { type: "idle"; message: string }
-  | { type: "search"; jobId: number; categoryId: number; q: number; page: number; query: string; url: string; want: number; delay: [number, number] }
-  | { type: "seller"; jobId: number; supplierId: number; url: string; delay: [number, number] };
+  | { type: "search"; jobId: number; categoryId: number; q: number; page: number; query: string; url: string; want: number; delay: [number, number] };
 
 /** WB не листает выдачу по ?page=N — одна страница на запрос, расширение прокручивает её до want товаров. */
 const searchUrl = (query: string) => `https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search=${encodeURIComponent(query)}`;
-const sellerUrl = (supplierId: number) => `https://www.wildberries.ru/seller/${supplierId}`;
 
 async function collectingJob() {
   const [job] = await db.select().from(leadJobs).where(eq(leadJobs.status, "collecting")).orderBy(asc(leadJobs.id)).limit(1);
@@ -101,7 +99,7 @@ export async function nextTask(): Promise<CollectorTask> {
   if (job.stage === "collect") {
     const cur = cursorOf(job, await jobCategories(job));
     if (!cur) {
-      await handBack(job.id, { stage: "filter" });
+      await handBack(job.id, { stage: "enrich" });
       await touch("выдача собрана");
       return { type: "idle", message: "Выдача собрана — сервер проверяет продавцов" };
     }
@@ -109,19 +107,10 @@ export async function nextTask(): Promise<CollectorTask> {
     await touch(`поиск «${query}»`);
     return { type: "search", jobId: job.id, categoryId: cur.cat.id, q: cur.q, page: cur.page, query, url: searchUrl(query), want: s.browserProducts, delay };
   }
-  const [cand] = await db
-    .select({ supplierId: leadCandidates.supplierId })
-    .from(leadCandidates)
-    .where(and(eq(leadCandidates.jobId, job.id), eq(leadCandidates.status, "need_seller")))
-    .orderBy(asc(leadCandidates.categoryId), asc(leadCandidates.rank))
-    .limit(1);
-  if (!cand) {
-    await handBack(job.id);
-    await touch("страницы продавцов собраны");
-    return { type: "idle", message: "Страницы продавцов собраны — сервер продолжает отбор" };
-  }
-  await touch(`продавец ${cand.supplierId}`);
-  return { type: "seller", jobId: job.id, supplierId: cand.supplierId, url: sellerUrl(cand.supplierId), delay };
+  // Выдача собрана — дальше сервер сам (реквизиты); расширению делать нечего.
+  await handBack(job.id);
+  await touch("выдача собрана");
+  return { type: "idle", message: "Выдача собрана — сервер дополняет продавцов реквизитами" };
 }
 
 /** Ответ расширения: data — JSON, который страница получила от WB; items — артикулы со страницы (если JSON не перехватился). */
@@ -196,44 +185,9 @@ export async function applyResult(result: CollectorResult): Promise<{ ok: boolea
     const checkpoint = { ...job.checkpoint, collect: cp };
     const [updated] = await db.update(leadJobs).set({ checkpoint, heartbeatAt: new Date(), updatedAt: new Date() }).where(eq(leadJobs.id, job.id)).returning();
     await db.update(leadJobs).set({ progress: await computeProgress(updated, cats, job.progress.requests) }).where(eq(leadJobs.id, job.id));
-    if (!cursorOf(updated, cats)) await handBack(job.id, { stage: "filter" });
+    if (!cursorOf(updated, cats)) await handBack(job.id, { stage: "enrich" });
     return { ok: true, message: `${cur.cat.name}: «${cur.cat.queries[cur.q]}» — товаров ${products.length}` };
   }
 
-  // Страница продавца: число SKU и каталог (для выборки по стране).
-  const supplierId = Number(result.supplierId);
-  const cands = await db
-    .select()
-    .from(leadCandidates)
-    .where(and(eq(leadCandidates.jobId, job.id), eq(leadCandidates.supplierId, supplierId), eq(leadCandidates.status, "need_seller")));
-  if (!cands.length) return { ok: false, message: "Этот продавец уже учтён" };
-  if (result.failed) {
-    for (const c of cands) await rejectCandidate(c.id, "страница продавца не открылась", result.failed.slice(0, 300));
-  } else {
-    // Со страницы продавца — его артикулы: продавец известен, карточки для страны сервер откроет сам.
-    const fromData = result.data !== undefined && result.data !== null ? parseProducts(result.data) : null;
-    const products: WbProduct[] = fromData?.products.length
-      ? fromData.products
-      : (result.items ?? [])
-          .filter((i) => Number.isSafeInteger(i.nm) && i.nm > 0)
-          .slice(0, 200)
-          .map((i) => ({ nm: i.nm, name: i.name ?? "", brand: i.brand ?? "", supplierId, supplier: "", feedbacks: 0 }));
-    const count = Number(result.count);
-    const total = fromData?.total ?? (Number.isSafeInteger(count) && count > 0 ? count : null);
-    // Нет числа товаров — если артикулов меньше страницы, это и есть весь каталог; иначе SKU неизвестно (порог не проверяем).
-    const sku = total ?? (products.length && products.length < 100 ? products.length : null);
-    for (const c of cands) {
-      await db
-        .update(leadCandidates)
-        .set({ status: "seller_done", info: sql`${leadCandidates.info} || ${JSON.stringify({ sku, catalogProducts: products.slice(0, 100) })}::jsonb`, updatedAt: new Date() })
-        .where(eq(leadCandidates.id, c.id));
-    }
-  }
-  const [left] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(leadCandidates)
-    .where(and(eq(leadCandidates.jobId, job.id), eq(leadCandidates.status, "need_seller")));
-  if (!left.n) await handBack(job.id);
-  await db.update(leadJobs).set({ heartbeatAt: new Date(), updatedAt: new Date() }).where(eq(leadJobs.id, job.id));
-  return { ok: true, message: `Продавец ${supplierId}: учтён` };
+  return { ok: false, message: "Страницы продавцов больше не нужны — сервер берёт реквизиты сам" };
 }

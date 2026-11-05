@@ -68,6 +68,10 @@ export type LeadSellerDto = {
   firstSentAt: string | null;
   createdAt: string;
   contacts: LeadContact[];
+  /** Взят в работу; null — лежит в базе. */
+  pickedAt: string | null;
+  /** Контакты Checko / сайт: null — не запрашивали, found / none. */
+  contactsStatus: string | null;
 };
 
 const sellerColumns = {
@@ -95,6 +99,8 @@ const sellerColumns = {
   firstLine: leadSellers.firstLine,
   firstSentAt: sql<string | null>`${leadSellers.firstSentAt}::text`,
   createdAt: sql<string>`${leadSellers.createdAt}::text`,
+  pickedAt: sql<string | null>`${leadSellers.pickedAt}::text`,
+  contactsStatus: leadSellers.contactsStatus,
 };
 
 async function withContacts<T extends { inn: string }>(tx: DbOrTx, rows: T[]): Promise<(T & { contacts: LeadContact[] })[]> {
@@ -116,22 +122,76 @@ async function withContacts<T extends { inn: string }>(tx: DbOrTx, rows: T[]): P
   return rows.map((r) => ({ ...r, contacts: contacts.filter((c) => c.inn === r.inn).map(({ inn: _inn, ...c }) => ({ ...c, source: c.source as ContactSource })) }));
 }
 
-export type SellerFilter = { categoryId?: number; month?: string; status?: string; hasPhone?: boolean; hasEmail?: boolean; q?: string };
+/** Фильтр «Базы» (он же — фильтр «Отобрать в работу»). */
+export type SellerFilter = {
+  categoryId?: number;
+  month?: string;
+  status?: string;
+  hasPhone?: boolean;
+  hasEmail?: boolean;
+  q?: string;
+  feedbacksMin?: number;
+  feedbacksMax?: number;
+  /** Компания не моложе N месяцев (по дате регистрации из DaData). */
+  minAgeMonths?: number;
+  region?: string;
+  kind?: "ul" | "ip";
+  /** Только действующие по ЕГРЮЛ / ЕГРИП. */
+  active?: boolean;
+  /** true — в работе, false — лежит в базе. */
+  inWork?: boolean;
+  /** Контакты Checko: found / none / unchecked. */
+  contacts?: "found" | "none" | "unchecked";
+};
 
 export function parseSellerFilter(query: Record<string, unknown>): SellerFilter {
-  const yes = (v: unknown) => (v === "1" || v === "true" ? true : v === "0" || v === "false" ? false : undefined);
+  const yes = (v: unknown) => (v === "1" || v === "true" || v === true ? true : v === "0" || v === "false" || v === false ? false : undefined);
+  const num = (v: unknown) => {
+    const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v.replace(/\s/g, "")) : NaN;
+    return Number.isFinite(n) && n >= 0 ? n : undefined;
+  };
   const id = Number(query.category);
+  const str = (v: unknown, max = 100) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
   return {
     categoryId: Number.isSafeInteger(id) && id > 0 ? id : undefined,
     month: typeof query.month === "string" && /^\d{4}-\d{2}$/.test(query.month) ? query.month : undefined,
     status: typeof query.status === "string" && query.status in SELLER_STATUSES ? query.status : undefined,
     hasPhone: yes(query.phone),
     hasEmail: yes(query.email),
-    q: typeof query.q === "string" && query.q.trim() ? query.q.trim().slice(0, 100) : undefined,
+    q: str(query.q),
+    feedbacksMin: num(query.fbMin),
+    feedbacksMax: num(query.fbMax),
+    minAgeMonths: num(query.age),
+    region: str(query.region),
+    kind: query.kind === "ul" || query.kind === "ip" ? query.kind : undefined,
+    active: yes(query.active),
+    inWork: yes(query.work),
+    contacts: query.contacts === "found" || query.contacts === "none" || query.contacts === "unchecked" ? query.contacts : undefined,
   };
 }
 
-function filterWhere(f: SellerFilter): SQL | undefined {
+/** Фильтр обратно в параметры запроса (для отбора в работу из текущего фильтра «Базы»). */
+export function filterToQuery(f: SellerFilter): Record<string, string> {
+  const out: Record<string, string> = {};
+  const put = (k: string, v: unknown) => v !== undefined && v !== null && v !== "" && (out[k] = typeof v === "boolean" ? (v ? "1" : "0") : String(v));
+  put("category", f.categoryId);
+  put("month", f.month);
+  put("status", f.status);
+  put("phone", f.hasPhone);
+  put("email", f.hasEmail);
+  put("q", f.q);
+  put("fbMin", f.feedbacksMin);
+  put("fbMax", f.feedbacksMax);
+  put("age", f.minAgeMonths);
+  put("region", f.region);
+  put("kind", f.kind);
+  put("active", f.active);
+  put("work", f.inWork);
+  put("contacts", f.contacts);
+  return out;
+}
+
+export function filterWhere(f: SellerFilter, today = isoDay(new Date())): SQL | undefined {
   const has = (type: string, valid: boolean) =>
     sql`exists (select 1 from lead_contacts c where c.seller_inn = ${leadSellers.inn} and c.type = ${type}${valid ? sql` and c.valid` : sql``})`;
   const conds: (SQL | undefined)[] = [
@@ -143,6 +203,14 @@ function filterWhere(f: SellerFilter): SQL | undefined {
     f.q
       ? sql`(${leadSellers.inn} like ${`${f.q.replace(/\D/g, "") || "—"}%`} or ${leadSellers.legalName} ilike ${`%${f.q}%`} or array_to_string(${leadSellers.brands}, ' ') ilike ${`%${f.q}%`})`
       : undefined,
+    f.feedbacksMin !== undefined ? sql`${leadSellers.feedbacksTotal} >= ${f.feedbacksMin}` : undefined,
+    f.feedbacksMax !== undefined ? sql`${leadSellers.feedbacksTotal} <= ${f.feedbacksMax}` : undefined,
+    f.minAgeMonths ? sql`${leadSellers.regDate} <= (${today}::date - make_interval(months => ${Math.round(f.minAgeMonths)}))` : undefined,
+    f.region ? sql`${leadSellers.region} ilike ${`%${f.region}%`}` : undefined,
+    f.kind ? eq(leadSellers.kind, f.kind) : undefined,
+    f.active === true ? eq(leadSellers.egrStatus, "ACTIVE") : undefined,
+    f.inWork === true ? sql`${leadSellers.pickedAt} is not null` : f.inWork === false ? sql`${leadSellers.pickedAt} is null` : undefined,
+    f.contacts === "unchecked" ? sql`${leadSellers.contactsStatus} is null` : f.contacts ? eq(leadSellers.contactsStatus, f.contacts) : undefined,
   ];
   return and(...conds.filter(Boolean));
 }
@@ -273,7 +341,8 @@ export async function stats(tx: DbOrTx, month?: string): Promise<StatsRow[]> {
     })
     .from(leadSellers)
     .leftJoin(leadCategories, eq(leadCategories.id, leadSellers.categoryId))
-    .where(month ? eq(leadSellers.batchMonth, month) : undefined)
+    // Итоги — по взятым в работу (остальные лежат в базе, им не писали).
+    .where(and(sql`${leadSellers.pickedAt} is not null`, month ? eq(leadSellers.batchMonth, month) : undefined))
     .groupBy(leadSellers.categoryId, leadCategories.name);
   return rows
     .sort((a, b) => a.sort - b.sort)
@@ -290,7 +359,7 @@ const KIND = { ul: "ООО / организация", ip: "ИП" } as Record<str
 function exportRows(sellers: LeadSellerDto[]) {
   const header = [
     "ИНН", "Юрназвание", "Тип", "ОГРН / ОГРНИП", "Бренды", "ID продавца WB", "Категория", "Месяц выгрузки", "Статус",
-    "Руководитель", "Должность", "Дата регистрации", "ОКВЭД", "Регион", "Адрес", "Статус ЕГРЮЛ", "SKU", "Отзывов", "Доля Китая, %",
+    "Руководитель", "Должность", "Дата регистрации", "ОКВЭД", "Регион", "Адрес", "Статус ЕГРЮЛ", "Отзывов", "В работе с", "Контакты Checko",
     "Телефоны", "Email", "Email невалидные", "Сайт", "Контакты с источниками", "Примеры товаров", "Первая строка письма", "Первое письмо", "Добавлен",
   ];
   const rows = sellers.map((s) => {
@@ -298,7 +367,7 @@ function exportRows(sellers: LeadSellerDto[]) {
     return [
       s.inn, s.legalName, KIND[s.kind] ?? s.kind, s.ogrn ?? "", s.brands.join(", "), s.wbSupplierIds.join(", "), s.categoryName ?? "", s.batchMonth,
       SELLER_STATUSES[s.status]?.label ?? s.status, s.managerName ?? "", s.managerPost ?? "", s.regDate ?? "", s.okved ?? "", s.region ?? "", s.address ?? "",
-      s.egrStatus ?? "", s.skuCount ?? "", s.feedbacksTotal ?? "", s.chinaShare === null ? "" : Math.round(s.chinaShare * 100),
+      s.egrStatus ?? "", s.feedbacksTotal ?? "", s.pickedAt?.slice(0, 10) ?? "", { found: "есть", none: "нет" }[s.contactsStatus ?? ""] ?? "не запрашивали",
       of("phone"), of("email", true), of("email", false), of("site"),
       s.contacts.map((c) => `${c.value} (${CONTACT_SOURCES[c.source] ?? c.source}, ${c.receivedAt.slice(0, 10)}${c.valid ? "" : `, ${c.note ?? "невалиден"}`})`).join("; "),
       s.products.map((p) => `${p.name} — ${p.url}`).join("; "),

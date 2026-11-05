@@ -2132,124 +2132,164 @@ describe("Лидогенерация WB", () => {
     assert.ok(cats.json().categories.every((c: { quota: number; queries: string[] }) => c.quota === 150 && c.queries.length >= 6));
   });
 
-  test("сбор на месяц с остановками, повторный прогон, «Сегодня», статусы, повторы, итоги, экспорт", async () => {
+  test("сбор в базу без отсева, остановки, отбор в работу по фильтру, повторные сбор и отбор, «Сегодня», статусы, итоги, экспорт", async () => {
     const s = await adminSession();
     const cats = (await call(s, "GET", "/leadgen/categories")).json().categories as { id: number; name: string; queries: string[]; stopWords: string[] }[];
 
-    // Фильтр по стране по умолчанию выключен (решение владельца); здесь включаем — проверить, что он работает.
-    assert.equal(lg.DEFAULT_LEADGEN_SETTINGS.chinaShareMin, 0);
-    assert.equal((await call(s, "PUT", "/leadgen/settings", { ...lg.DEFAULT_LEADGEN_SETTINGS, chinaShareMin: 0.7 })).statusCode, 200);
-    // Задача 1 — тестовый прогон с квотой 10.
-    const started = await call(s, "POST", "/leadgen/jobs", { month: "2027-03", quota: 10, source: "direct" });
+    // Сбор 1 — с сервера (в тесте), с остановками посреди выдачи и посреди реквизитов.
+    const started = await call(s, "POST", "/leadgen/jobs", { month: "2027-03", source: "direct" });
     assert.equal(started.statusCode, 200, started.body);
     const job1 = started.json().job.id as number;
     assert.equal((await call(s, "POST", "/leadgen/jobs", { month: "2027-04" })).statusCode, 409, "второй сбор, пока первый не закончен, — нельзя");
-
-    // Останавливаем посреди сбора выдачи и посреди фильтров — продолжение не повторяет сделанного.
-    const stopAt = async (kind: string, n: number) => async (c: Call, count: number) => {
-      if (c.kind === kind && count === n) await call(s, "POST", `/leadgen/jobs/${job1}/stop`);
+    const stopAt = (jobId: number, kind: string, n: number) => async (c: Call, count: number) => {
+      if (c.kind === kind && count === n) await call(s, "POST", `/leadgen/jobs/${jobId}/stop`);
     };
-    const w1 = fakeWorld(cats, { onCall: await stopAt("search", 20) });
+    const w1 = fakeWorld(cats, { onCall: stopAt(job1, "search", 20) });
     assert.equal(await runJob(job1, w1.make, { rnd: lcg(1), today: "2026-11-04" }), "paused");
     const done1 = new Set(w1.calls.filter((c) => c.kind === "search").map((c) => c.arg));
     assert.equal((await call(s, "POST", `/leadgen/jobs/${job1}/resume`)).statusCode, 200);
-    const w2 = fakeWorld(cats, { onCall: await stopAt("dadata", 7) });
+    const w2 = fakeWorld(cats, { onCall: stopAt(job1, "dadata", 7) });
     assert.equal(await runJob(job1, w2.make, { rnd: lcg(2), today: "2026-11-04" }), "paused");
     assert.ok(w2.calls.filter((c) => c.kind === "search").every((c) => !done1.has(c.arg)), "страницы выдачи не запрашиваются повторно");
     await call(s, "POST", `/leadgen/jobs/${job1}/resume`);
     const w3 = fakeWorld(cats);
     assert.equal(await runJob(job1, w3.make, { rnd: lcg(3), today: "2026-11-04" }), "done");
-    assert.equal(w3.calls.filter((c) => c.kind === "search").length, 0, "после этапа выдачи поиск больше не нужен");
+    assert.equal(w3.calls.filter((c) => c.kind === "search").length, 0, "после выдачи поиск больше не нужен");
     const dadataInns = [...w2.calls, ...w3.calls].filter((c) => c.kind === "dadata").map((c) => c.arg);
     assert.equal(new Set(dadataInns).size, dadataInns.length, "ни один ИНН не проверен в DaData дважды");
+    assert.equal([...w1.calls, ...w2.calls, ...w3.calls].filter((c) => c.kind === "checko" || c.kind === "catalog").length, 0, "при сборе Checko и каталог продавца не нужны");
+
+    const candidates = await db.select().from(schema.leadCandidates).where(eq(schema.leadCandidates.jobId, job1));
+    const stops = cats.flatMap((c) => c.stopWords.map((w) => w.toLowerCase()));
+    assert.ok(candidates.every((c) => c.products.every((p) => !stops.some((w) => p.name.toLowerCase().includes(w)))), "товары со стоп-словами отброшены");
+    assert.ok(candidates.every((c) => ["in_base", "merged", "no_inn"].includes(c.status)), "все кандидаты обработаны");
+    const inBase = candidates.filter((c) => c.status === "in_base").length;
+    assert.ok(candidates.some((c) => c.status === "merged" && c.reason === "дубль: другая категория или кабинет"), "второй кабинет ИНН склеен");
 
     const job = (await call(s, "GET", "/leadgen/jobs")).json().jobs.find((j: { id: number }) => j.id === job1);
-    assert.equal(job.status, "done");
-    assert.equal(job.stage, "done");
-    for (const c of cats) assert.equal(job.progress.categories[c.id].selected, 10, c.name);
+    assert.deepEqual([job.status, job.stage, job.kind], ["done", "done", "collect"]);
     assert.ok(job.progress.categories[cats[0].id].rejected["нет российского ИНН"] > 0);
+    assert.equal(cats.reduce((n, c) => n + job.progress.categories[c.id].passed, 0), inBase);
 
+    // В базе — все с российским ИНН, без отсева: и молодые, и ликвидируемые; контакты Checko не запрашивались.
     const base = (await call(s, "GET", "/leadgen/sellers?month=2027-03&limit=500")).json();
-    assert.equal(base.total, 60);
-    for (const seller of base.sellers) {
-      assert.equal(lg.innKind(seller.inn) !== null, true);
-      assert.ok(seller.regDate && seller.managerName && seller.egrStatus === "ACTIVE", "реквизиты DaData");
-      assert.ok(seller.contacts.some((c: { type: string; valid: boolean }) => c.type === "phone" || (c.type === "email" && c.valid)), "есть валидный контакт");
+    assert.equal(base.total, inBase);
+    assert.ok(base.total > 100);
+    assert.ok(base.sellers.every((x: { inn: string; pickedAt: string | null; contactsStatus: string | null }) => lg.innKind(x.inn) && x.pickedAt === null && x.contactsStatus === null));
+    assert.ok(base.sellers.some((x: { egrStatus: string }) => x.egrStatus === "LIQUIDATING"));
+    assert.ok(base.sellers.some((x: { regDate: string }) => x.regDate === "2026-09-01"));
+    assert.ok(base.sellers.every((x: { contacts: { source: string }[] }) => x.contacts.every((c) => c.source === "wb")), "при сборе — только контакты из профиля WB");
+    assert.ok(base.sellers.some((x: { contacts: unknown[] }) => x.contacts.length > 0));
+    for (const seller of base.sellers.slice(0, 20)) {
+      assert.ok(seller.feedbacksTotal === 5000 && seller.managerName && seller.products.length >= 1 && seller.products[0].url.includes("wildberries.ru/catalog/"));
+      assert.match(seller.firstLine, /^Видел ваши .+ под брендом DemoBrand\d+ на WB\./);
+    }
+
+    // Фильтры базы: отзывы, возраст, действующие.
+    const filter = { fbMin: "1000", fbMax: "50000", age: "12", active: "1" };
+    const qs = new URLSearchParams(filter).toString();
+    const filtered = (await call(s, "GET", `/leadgen/sellers?${qs}&limit=500`)).json();
+    assert.ok(filtered.total < base.total && filtered.sellers.every((x: { egrStatus: string; regDate: string }) => x.egrStatus === "ACTIVE" && x.regDate <= "2025-11-04"));
+    const preview = (await call(s, "GET", `/leadgen/pick/preview?${qs}`)).json().available;
+    assert.equal(Object.values(preview as Record<string, number>).reduce((a, b) => a + b, 0), filtered.total);
+
+    // Отбор в работу: 10 на категорию по фильтру; контакты Checko / сайт — только здесь.
+    const pick1 = (await call(s, "POST", "/leadgen/pick", { filter, perCategory: 10 })).json().job.id as number;
+    const wp = fakeWorld(cats, { onCall: stopAt(pick1, "checko", 15) });
+    assert.equal(await runJob(pick1, wp.make, { rnd: lcg(4), today: "2026-11-04" }), "paused");
+    await call(s, "POST", `/leadgen/jobs/${pick1}/resume`);
+    const wp2 = fakeWorld(cats);
+    assert.equal(await runJob(pick1, wp2.make, { rnd: lcg(5), today: "2026-11-04" }), "done");
+    const checkoInns = [...wp.calls, ...wp2.calls].filter((c) => c.kind === "checko").map((c) => c.arg);
+    assert.equal(new Set(checkoInns).size, checkoInns.length, "Checko по одному ИНН — один раз");
+    assert.equal(wp2.calls.filter((c) => c.kind === "dadata" || c.kind === "search").length, 0);
+
+    const work1 = (await call(s, "GET", "/leadgen/sellers?work=1&limit=500")).json();
+    assert.equal(work1.total, 60);
+    for (const seller of work1.sellers) {
+      assert.equal(seller.egrStatus, "ACTIVE");
+      assert.ok(seller.regDate <= "2025-11-04");
+      assert.equal(seller.contactsStatus, "found");
+      assert.ok(seller.contacts.some((c: { type: string; valid: boolean }) => c.type === "phone" || (c.type === "email" && c.valid)), "есть рабочий контакт");
       for (const c of seller.contacts) {
         assert.ok(["wb", "checko", "site"].includes(c.source), "источник контакта");
         if (c.type === "phone") assert.match(c.value, /^\+7\d{10}$/, "полный номер без маски");
         if (c.type === "email") assert.equal(c.value, c.value.toLowerCase());
       }
-      assert.ok(seller.products.length >= 2 && seller.products[0].url.includes("wildberries.ru/catalog/"));
-      assert.match(seller.firstLine, /^Видел ваши .+ под брендом DemoBrand\d+ на WB\./);
     }
-    const bad = base.sellers.flatMap((x: { contacts: { value: string; valid: boolean; note: string }[] }) => x.contacts).find((c: { value: string }) => c.value === "x@bad.example");
+    const bad = work1.sellers.flatMap((x: { contacts: { value: string; valid: boolean; note: string }[] }) => x.contacts).find((c: { value: string }) => c.value === "x@bad.example");
     assert.deepEqual([bad?.valid, bad?.note], [false, "у домена нет MX"], "невалидный email хранится с пометкой");
-    assert.ok(base.sellers.some((x: { contacts: { source: string }[] }) => x.contacts.some((c) => c.source === "site")), "email с сайта");
-    const candidates = await db.select().from(schema.leadCandidates).where(eq(schema.leadCandidates.jobId, job1));
-    const stops = cats.flatMap((c) => c.stopWords.map((w) => w.toLowerCase()));
-    assert.ok(candidates.every((c) => c.products.every((p) => !stops.some((w) => p.name.toLowerCase().includes(w)))), "товары со стоп-словами отброшены");
+    assert.ok(work1.sellers.some((x: { contacts: { source: string }[] }) => x.contacts.some((c) => c.source === "site")), "email с сайта");
+    const none = (await call(s, "GET", "/leadgen/sellers?contacts=none&limit=500")).json();
+    assert.ok(none.total > 0 && none.sellers.every((x: { pickedAt: string | null }) => x.pickedAt === null), "без контактов — пометка, в работу не взяты");
+    const pj = (await call(s, "GET", "/leadgen/jobs")).json().jobs.find((j: { id: number }) => j.id === pick1);
+    assert.equal(pj.kind, "pick");
+    for (const c of cats) assert.equal(pj.progress.categories[c.id].selected, 10, c.name);
+    assert.deepEqual(pj.progress.scheduled, { sellers: 60, from: "2026-11-04", to: "2026-11-05" });
 
-    // Повторный прогон — ни одного ИНН из прошлой выгрузки.
-    const job2 = (await call(s, "POST", "/leadgen/jobs", { month: "2027-04", quota: 10, source: "direct" })).json().job.id as number;
-    assert.equal(await runJob(job2, fakeWorld(cats).make, { rnd: lcg(4), today: "2026-11-04" }), "done");
-    const second = (await call(s, "GET", "/leadgen/sellers?month=2027-04&limit=500")).json();
-    assert.equal(second.total, 60);
-    const firstInns = new Set(base.sellers.map((x: { inn: string }) => x.inn));
-    assert.ok(second.sellers.every((x: { inn: string }) => !firstInns.has(x.inn)), "ИНН не повторяются");
+    // Сбор 2 — те же продавцы: не дублируются, лишь «уже в базе».
+    const job2 = (await call(s, "POST", "/leadgen/jobs", { month: "2027-04", source: "direct" })).json().job.id as number;
+    assert.equal(await runJob(job2, fakeWorld(cats).make, { rnd: lcg(6), today: "2026-11-04" }), "done");
+    assert.equal((await call(s, "GET", "/leadgen/sellers?limit=1")).json().total, base.total, "ИНН не дублируются");
+    const c2 = await db.select().from(schema.leadCandidates).where(eq(schema.leadCandidates.jobId, job2));
+    assert.ok(c2.filter((c) => c.status !== "no_inn").every((c) => c.status === "merged"));
+    // Отбор 2 — без уже взятых в работу; раскладка — после первого отбора.
+    const pick2 = (await call(s, "POST", "/leadgen/pick", { filter, perCategory: 10 })).json().job.id as number;
+    assert.equal(await runJob(pick2, fakeWorld(cats).make, { rnd: lcg(7), today: "2026-11-04" }), "done");
+    const work2 = (await call(s, "GET", "/leadgen/sellers?work=1&limit=500")).json();
+    assert.equal(work2.total, 120);
+    assert.equal(new Set(work2.sellers.map((x: { inn: string }) => x.inn)).size, 120, "второй отбор не повторяет первый");
+    const pj2 = (await call(s, "GET", "/leadgen/jobs")).json().jobs.find((j: { id: number }) => j.id === pick2);
+    assert.deepEqual(pj2.progress.scheduled, { sellers: 60, from: "2026-11-06", to: "2026-11-09" });
 
     // «Сегодня»: 30 продавцов, по 5 из каждой категории.
-    const today = (await call(s, "GET", "/leadgen/today?day=2027-03-01")).json();
+    const today = (await call(s, "GET", "/leadgen/today?day=2026-11-04")).json();
     assert.equal(today.first.length, 30);
     const perCat = new Map<number, number>();
     for (const it of today.first) perCat.set(it.categoryId, (perCat.get(it.categoryId) ?? 0) + 1);
     assert.deepEqual([...perCat.values()], [5, 5, 5, 5, 5, 5]);
     assert.notEqual(today.first[0].categoryId, today.first[1].categoryId, "категории вперемешку");
-    assert.ok(today.first.every((it: { plannedDate: string }) => it.plannedDate === "2027-03-01"));
 
     // Статусы → история; повтор через 4 дня; ответ снимает повтор.
     const inn = today.first[0].inn as string;
     const { setSellerStatus, todayList, getLeadgenSettings } = await import("../lib/leadgen/work.ts");
     const settings = await getLeadgenSettings(db);
-    await db.transaction((tx) => setSellerStatus(tx, inn, "sent", 1, null, settings, new Date("2027-03-01T10:00:00Z")));
+    await db.transaction((tx) => setSellerStatus(tx, inn, "sent", 1, null, settings, new Date("2026-11-04T10:00:00Z")));
     const inn2 = today.first[1].inn as string;
     assert.equal((await call(s, "POST", `/leadgen/sellers/${inn2}/status`, { status: "bounced", comment: "адрес не существует" })).statusCode, 200);
-    const later = await todayList(db, "2027-03-05", settings);
-    assert.ok(later.followups.some((f) => f.inn === inn), "повтор появился через 4 дня");
-    assert.ok(!(await todayList(db, "2027-03-04", settings)).followups.some((f) => f.inn === inn), "раньше — нет");
-    assert.ok(!later.first.some((f) => f.inn === inn), "написанный не висит в первых");
-    await db.transaction((tx) => setSellerStatus(tx, inn, "followup_sent", 1, null, settings, new Date("2027-03-05T10:00:00Z")));
+    const later = await todayList(db, "2026-11-09", settings);
+    assert.ok(later.followups.some((f) => f.inn === inn), "повтор — через 4 дня, на ближайший рабочий");
+    assert.ok(!(await todayList(db, "2026-11-06", settings)).followups.some((f) => f.inn === inn), "раньше — нет");
+    await db.transaction((tx) => setSellerStatus(tx, inn, "followup_sent", 1, null, settings, new Date("2026-11-09T10:00:00Z")));
     const answered = await call(s, "POST", `/leadgen/sellers/${inn}/status`, { status: "replied_pos", comment: "интересно" });
-    // В тесте «написал» и «повтор» датированы 2027 годом, ответ — сегодняшним днём: порядок не сравниваем.
     assert.deepEqual(answered.json().events.map((e: { type: string }) => e.type).sort(), ["followup_sent", "replied_pos", "sent"]);
     assert.ok(answered.json().queue.every((q: { status: string }) => q.status !== "planned"), "после ответа касаний в плане нет");
-    assert.equal(answered.json().seller.status, "replied_pos");
 
-    const st = (await call(s, "GET", "/leadgen/stats?month=2027-03")).json().rows as { categoryId: number; sent: number; bounced: number; replies: number; positive: number; positivePct: number }[];
+    // Итоги — по взятым в работу.
+    const st = (await call(s, "GET", "/leadgen/stats?month=2027-03")).json().rows as { categoryId: number; sellers: number; sent: number; bounced: number; replies: number; positive: number; positivePct: number }[];
+    assert.equal(st.reduce((a, r) => a + r.sellers, 0), 120);
     const cat0 = st.find((r) => r.categoryId === today.first[0].categoryId)!;
     assert.deepEqual([cat0.sent, cat0.replies, cat0.positive, cat0.positivePct], [1, 1, 1, 100]);
     assert.equal(st.reduce((a, r) => a + r.bounced, 0), 1);
 
-    // Экспорт: все поля и все контакты.
+    // Экспорт: вся база по фильтру, все поля и все контакты.
     const csv = await call(s, "GET", "/leadgen/export.csv?month=2027-03");
     assert.equal(csv.statusCode, 200);
-    const lines = csv.body.replace(/^﻿/, "").trim().split("\r\n");
-    assert.equal(lines.length, 61);
+    const lines = csv.body.replace(/^\ufeff/, "").trim().split("\r\n");
+    assert.equal(lines.length, base.total + 1);
     assert.match(lines[0], /^ИНН;Юрназвание;Тип;ОГРН/);
-    assert.ok(lines.slice(1).every((l) => /\+7\d{10}|@/.test(l)));
-    const xlsx = await call(s, "GET", "/leadgen/export.xlsx");
+    const workCsv = (await call(s, "GET", "/leadgen/export.csv?work=1")).body.replace(/^\ufeff/, "").trim().split("\r\n");
+    assert.equal(workCsv.length, 121);
+    assert.ok(workCsv.slice(1).every((l) => /\+7\d{10}|@/.test(l)));
+    const xlsx = await call(s, "GET", "/leadgen/export.xlsx?work=1");
     assert.equal(xlsx.statusCode, 200);
     const JSZip = (await import("jszip")).default;
     const zip = await JSZip.loadAsync(xlsx.rawPayload);
-    assert.match((await zip.file("xl/workbook.xml")!.async("string")), /Продавцы.*Контакты/);
+    assert.match(await zip.file("xl/workbook.xml")!.async("string"), /Продавцы.*Контакты/);
     assert.equal(((await zip.file("xl/worksheets/sheet1.xml")!.async("string")).match(/<row /g) ?? []).length, 121);
-
-    // Фильтры базы.
-    const withEmail = (await call(s, "GET", `/leadgen/sellers?email=1&category=${cats[0].id}&limit=500`)).json();
-    assert.ok(withEmail.sellers.every((x: { categoryId: number; contacts: { type: string; valid: boolean }[] }) => x.categoryId === cats[0].id && x.contacts.some((c) => c.type === "email" && c.valid)));
     assert.equal((await call(s, "GET", "/leadgen/sellers?status=replied_pos")).json().total, 1);
   });
-  test("сбор через расширение в браузере: ключ, задания, выдача, страницы продавцов, отбор", async () => {
+  test("сбор через расширение в браузере: ключ, задания, выдача прокруткой, дальше — сервер", async () => {
     const s = await adminSession();
     const cats = (await call(s, "GET", "/leadgen/categories")).json().categories as { id: number; name: string; queries: string[]; stopWords: string[] }[];
     const { setCardResolver } = await import("../lib/leadgen/collector.ts");
@@ -2261,68 +2301,51 @@ describe("Лидогенерация WB", () => {
     assert.match(token, /^irbis_[0-9a-f]{48}$/);
     assert.equal((await collector("GET", "/leadgen/collector/next", token)).json().task.type, "idle", "сбора нет — ждём");
 
-    // По умолчанию страна — только для справки, без отсева.
-    await call(s, "PUT", "/leadgen/settings", { ...lg.DEFAULT_LEADGEN_SETTINGS });
-    const jobId = (await call(s, "POST", "/leadgen/jobs", { month: "2027-05", quota: 3 })).json().job.id as number;
+    const jobId = (await call(s, "POST", "/leadgen/jobs", { month: "2027-05" })).json().job.id as number;
     const world = fakeWorld(cats);
     const sources = world.make(lg.DEFAULT_LEADGEN_SETTINGS, () => false, () => {});
-    // Сервер для режима браузера сам WB не ищет и каталог не открывает.
-    const serverOnly: typeof world.make = (...a) => ({ ...world.make(...a), search: async () => assert.fail("поиск — только из браузера"), sellerCatalog: async () => assert.fail("каталог — только из браузера") });
+    // Сервер для режима браузера сам WB не ищет.
+    const serverOnly: typeof world.make = (...a) => ({ ...world.make(...a), search: async () => assert.fail("поиск — только из браузера") });
     assert.equal(await runJob(jobId, serverOnly, { rnd: lcg(5), today: "2026-11-04" }), "collecting");
 
     let searches = 0;
-    let sellers = 0;
     let usedItems = false;
     setCardResolver(async (nm) => ({ nm, name: `Товар ${nm}`, brand: `DemoBrand${Math.floor(nm / 1000)}`, supplierId: Math.floor(nm / 1000), supplier: "", feedbacks: 0 }));
-    for (let guard = 0; guard < 2000; guard++) {
+    for (let guard = 0; guard < 500; guard++) {
       const job = (await call(s, "GET", "/leadgen/jobs")).json().jobs.find((j: { id: number }) => j.id === jobId);
       if (job.status === "done") break;
       if (job.status === "queued") {
-        assert.notEqual(await runJob(jobId, serverOnly, { rnd: lcg(6 + guard), today: "2026-11-04" }), "failed");
+        assert.equal(job.stage, "enrich");
+        assert.equal(await runJob(jobId, serverOnly, { rnd: lcg(6), today: "2026-11-04" }), "done");
         continue;
       }
       const task = (await collector("GET", "/leadgen/collector/next", token)).json().task;
       if (task.type === "idle") continue;
+      assert.equal(task.type, "search", "страницы продавцов больше не открываются");
+      searches++;
+      // WB не листает по ?page=N: одна страница на запрос, расширение прокручивает её.
+      assert.ok(task.url.startsWith("https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search=") && !task.url.includes("page="));
+      assert.equal(task.want, lg.DEFAULT_LEADGEN_SETTINGS.browserProducts);
+      const products = [...(await sources.search(task.query, 1)), ...(await sources.search(task.query, 2)), ...(await sources.search(task.query, 3))];
       let payload: Record<string, unknown>;
-      if (task.type === "search") {
-        searches++;
-        // WB не листает по ?page=N: одна страница на запрос, расширение прокручивает её — приходят товары нескольких «порций».
-        assert.ok(task.url.startsWith("https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search=") && !task.url.includes("page="));
-        assert.equal(task.want, lg.DEFAULT_LEADGEN_SETTINGS.browserProducts);
-        const products = [...(await sources.search(task.query, 1)), ...(await sources.search(task.query, 2)), ...(await sources.search(task.query, 3))];
-        if (!usedItems && products.length) {
-          // Ответ не перехватился — расширение прислало артикулы со страницы, продавца сервер берёт из карточки.
-          usedItems = true;
-          payload = { ...task, items: products.map((p) => ({ nm: p.nm, name: p.name })) };
-        } else {
-          payload = { ...task, data: { products: products.map((p) => ({ id: p.nm, name: p.name, brand: p.brand, supplierId: p.supplierId, feedbacks: p.feedbacks })) } };
-        }
+      if (!usedItems && products.length) {
+        // Как присылает расширение: артикулы со страницы; продавца сервер берёт из карточки.
+        usedItems = true;
+        payload = { ...task, items: products.map((p) => ({ nm: p.nm, name: p.name })) };
       } else {
-        sellers++;
-        assert.equal(task.url, `https://www.wildberries.ru/seller/${task.supplierId}`);
-        const c = await sources.sellerCatalog(task.supplierId, 1);
-        payload =
-          sellers % 2
-            ? // Как присылает расширение: артикулы со страницы продавца и «N товаров» из текста.
-              { ...task, items: c.products.map((p) => ({ nm: p.nm, name: p.name })), count: c.total }
-            : { ...task, data: { total: c.total, products: c.products.map((p) => ({ id: p.nm, name: p.name, brand: p.brand, supplierId: p.supplierId, feedbacks: p.feedbacks })) } };
+        payload = { ...task, data: { products: products.map((p) => ({ id: p.nm, name: p.name, brand: p.brand, supplierId: p.supplierId, feedbacks: p.feedbacks })) } };
       }
       const res = await collector("POST", "/leadgen/collector/result", token, payload);
       assert.equal(res.statusCode, 200, res.body);
       assert.equal(res.json().ok, true, res.body);
-      // Повтор той же страницы не засчитывается дважды.
-      if (searches === 1 && task.type === "search") assert.equal((await collector("POST", "/leadgen/collector/result", token, payload)).json().ok, false);
+      if (searches === 1) assert.equal((await collector("POST", "/leadgen/collector/result", token, payload)).json().ok, false, "повтор той же страницы не засчитывается");
     }
     setCardResolver(null);
     const job = (await call(s, "GET", "/leadgen/jobs")).json().jobs.find((j: { id: number }) => j.id === jobId);
     assert.equal(job.status, "done");
     assert.equal(searches, cats.reduce((n, c) => n + c.queries.length, 0), "один заход на поисковый запрос");
-    assert.ok(sellers > 0, "страницы продавцов открывались");
-    const base = (await call(s, "GET", "/leadgen/sellers?month=2027-05&limit=500")).json();
-    assert.equal(base.total, cats.length * 3);
-    assert.ok(base.sellers.every((x: { skuCount: number; chinaShare: number | null }) => x.skuCount === 300 && x.chinaShare !== null), "SKU — со страницы продавца, доля Китая — для справки");
-    const rejected = await db.select().from(schema.leadCandidates).where(eq(schema.leadCandidates.jobId, jobId));
-    assert.ok(!rejected.some((c) => c.reason === "мало данных о стране" || c.reason?.startsWith("Китай <")), "по стране не отсеиваем");
+    const cands = await db.select().from(schema.leadCandidates).where(eq(schema.leadCandidates.jobId, jobId));
+    assert.ok(cands.length > 0 && cands.every((c) => ["merged", "no_inn", "in_base"].includes(c.status)), "продавцы из браузера дополнены сервером");
     const status = (await call(s, "GET", "/leadgen/status")).json();
     assert.equal(status.collector.hasKey, true);
     assert.ok(status.collector.lastSeenAt);

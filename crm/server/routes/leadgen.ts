@@ -20,6 +20,8 @@ import { applyResult, checkCollectorToken, collectorState, type CollectorResult,
 import { STALE_MS, WORKER_KEY } from "../lib/leadgen/worker.ts";
 import {
   exportSellers,
+  filterToQuery,
+  filterWhere,
   getLeadgenSettings,
   getSeller,
   listSellers,
@@ -80,6 +82,8 @@ async function jobDto(id?: number) {
     progress: j.progress,
     quotas: j.params.quotas,
     source: j.params.source ?? "direct",
+    kind: j.params.kind ?? "collect",
+    filter: j.params.filter ?? null,
     categoryIds: j.params.categoryIds,
     errors: j.errors.slice(-50),
     retryAt: (j.checkpoint.retryAt as string | null) ?? null,
@@ -133,7 +137,7 @@ export async function leadgenRoutes(app: FastifyInstance): Promise<void> {
     const user = guard(request);
     const input = body<CategoryInput>(request);
     const s = await getLeadgenSettings(db);
-    const values = { quota: s.defaultQuota, ...categoryValues(input, false) } as typeof leadCategories.$inferInsert;
+    const values = { quota: s.pickPerCategory, ...categoryValues(input, false) } as typeof leadCategories.$inferInsert;
     const [{ max }] = await db.select({ max: sql<number>`coalesce(max(${leadCategories.sort}), 0)::int` }).from(leadCategories);
     const [row] = await db.insert(leadCategories).values({ sort: max + 1, ...values }).returning();
     await audit(db, { userId: user.id, action: "create", entityType: "lead_category", entityId: row.id, summary: `Лидогенерация: категория «${row.name}»`, ip: request.ip });
@@ -184,19 +188,59 @@ export async function leadgenRoutes(app: FastifyInstance): Promise<void> {
     if (only.length) cats = cats.filter((c) => only.includes(c.id));
     cats = cats.filter((c) => c.queries.length);
     if (!cats.length) throw new HttpError(400, "Нет активных категорий с поисковыми запросами");
-    const quota = input.quota === null || input.quota === undefined || (input.quota as unknown) === "" ? null : Number(input.quota);
-    if (quota !== null && (!Number.isInteger(quota) || quota < 1 || quota > 5000)) throw new HttpError(400, "Квота — целое число от 1 до 5000");
     const settings = await getLeadgenSettings(db);
     const [job] = await db
       .insert(leadJobs)
       .values({
         month,
-        params: { categoryIds: cats.map((c) => c.id), quotas: Object.fromEntries(cats.map((c) => [c.id, quota ?? c.quota])), settings, source },
+        params: { kind: "collect", categoryIds: cats.map((c) => c.id), quotas: {}, settings, source },
         progress: { categories: {}, requests: { wb: 0, dadata: 0, checko: 0, site: 0 } },
         createdBy: user.id,
       })
       .returning();
-    await audit(db, { userId: user.id, action: "create", entityType: "lead_job", entityId: job.id, summary: `Лидогенерация: запустил сбор базы на ${month}${quota ? ` (квота ${quota})` : ""}`, ip: request.ip });
+    await audit(db, { userId: user.id, action: "create", entityType: "lead_job", entityId: job.id, summary: `Лидогенерация: запустил сбор базы на ${month}`, ip: request.ip });
+    return { job: (await jobDto(job.id))[0] };
+  });
+
+  /** Сколько продавцов можно взять в работу по фильтру — по категориям (ещё не в работе, не «Не писать», контакты не «нет»). */
+  app.get("/leadgen/pick/preview", async (request) => {
+    guard(request);
+    const filter = parseSellerFilter(request.query as Record<string, unknown>);
+    const rows = await db
+      .select({ categoryId: leadSellers.categoryId, n: sql<number>`count(*)::int` })
+      .from(leadSellers)
+      .where(and(filterWhere({ ...filter, inWork: false }), sql`${leadSellers.status} <> 'do_not_contact'`, sql`${leadSellers.contactsStatus} is distinct from 'none'`))
+      .groupBy(leadSellers.categoryId);
+    return { available: Object.fromEntries(rows.map((r) => [r.categoryId ?? 0, r.n])) };
+  });
+
+  /**
+   * «Отобрать в работу»: из базы по фильтру «Базы» — perCategory продавцов на категорию, случайно; по каждому —
+   * контакты Checko / сайт (платные — только здесь); у кого нет телефона и рабочего email — следующий. Затем раскладка.
+   */
+  app.post("/leadgen/pick", async (request) => {
+    const user = guard(request);
+    const input = body<{ filter: Record<string, unknown>; perCategory: number }>(request);
+    const perCategory = Number(input.perCategory);
+    if (!Number.isInteger(perCategory) || perCategory < 1 || perCategory > 5000) throw new HttpError(400, "Сколько брать — целое число от 1 до 5000");
+    const unfinished = await db.select({ id: leadJobs.id, status: leadJobs.status }).from(leadJobs).where(inArray(leadJobs.status, [...ACTIVE_JOB, "paused", "failed"]));
+    if (unfinished.length) throw new HttpError(409, `Есть незавершённая задача № ${unfinished[0].id} (${JOB_STATUSES[unfinished[0].status as keyof typeof JOB_STATUSES] ?? unfinished[0].status}) — продолжите или завершите её`);
+    const filter = parseSellerFilter(input.filter && typeof input.filter === "object" ? input.filter : {});
+    let cats = await db.select().from(leadCategories).orderBy(asc(leadCategories.sort), asc(leadCategories.id));
+    cats = filter.categoryId ? cats.filter((c) => c.id === filter.categoryId) : cats.filter((c) => c.active);
+    if (!cats.length) throw new HttpError(400, "Нет категорий для отбора");
+    const settings = await getLeadgenSettings(db);
+    const [job] = await db
+      .insert(leadJobs)
+      .values({
+        month: isoDay(new Date()).slice(0, 7),
+        stage: "pick",
+        params: { kind: "pick", categoryIds: cats.map((c) => c.id), quotas: Object.fromEntries(cats.map((c) => [c.id, perCategory])), settings, filter: filterToQuery(filter) },
+        progress: { categories: {}, requests: { wb: 0, dadata: 0, checko: 0, site: 0 } },
+        createdBy: user.id,
+      })
+      .returning();
+    await audit(db, { userId: user.id, action: "create", entityType: "lead_job", entityId: job.id, summary: `Лидогенерация: отбор в работу — по ${perCategory} на категорию`, data: filterToQuery(filter), ip: request.ip });
     return { job: (await jobDto(job.id))[0] };
   });
 

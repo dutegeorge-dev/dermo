@@ -214,8 +214,10 @@ export function SellerDialog({ inn, onClose }: { inn: string; onClose: () => voi
               ["Регистрация", s.regDate && formatDate(s.regDate)],
               ["ОКВЭД", s.okved],
               ["Адрес", s.address],
-              ["SKU / отзывов", `${s.skuCount ?? "—"} / ${s.feedbacksTotal ?? "—"}`],
-              ["Доля Китая", s.chinaShare === null ? "—" : `${Math.round(s.chinaShare * 100)} %`],
+              ["Отзывов о продавце", s.feedbacksTotal?.toLocaleString("ru-RU") ?? "—"],
+              ["Статус ЕГРЮЛ", egrLabel(s.egrStatus)],
+              ["В работе", s.pickedAt ? `с ${formatDate(s.pickedAt.slice(0, 10))}` : "нет — в базе"],
+              ["Контакты Checko", s.contactsStatus === "found" ? "найдены" : s.contactsStatus === "none" ? "нет телефона и рабочего email" : "не запрашивали"],
             ].map(([k, v]) => (
               <div key={k} className="contents">
                 <dt className="muted">{k}</dt>
@@ -286,7 +288,9 @@ export function TodayTab({ status }: { status: LeadStatus }) {
       {isLoading && <Spinner />}
       <ErrorBox error={error} />
       {data && !data.first.length && !data.followups.length && (
-        <EmptyState title="На этот день писем нет">Соберите базу на месяц во вкладке «Сбор» — продавцы разложатся по рабочим дням.</EmptyState>
+        <EmptyState title="На этот день писем нет">
+          Соберите базу («Собрать базу на месяц»), затем на вкладке «База» — «Отобрать в работу»: взятые разложатся по рабочим дням.
+        </EmptyState>
       )}
       {data && data.followups.length > 0 && (
         <section className="space-y-3">
@@ -308,17 +312,24 @@ export function TodayTab({ status }: { status: LeadStatus }) {
   );
 }
 
-export function BaseTab({ status, categories }: { status: LeadStatus; categories: LeadCategory[] }) {
-  const [f, setF] = useState({ category: "", month: "", status: "", phone: "", email: "", q: "" });
+const EMPTY_FILTER = { category: "", month: "", status: "", phone: "", email: "", q: "", fbMin: "", fbMax: "", age: "", region: "", kind: "", active: "", work: "", contacts: "" };
+type BaseFilter = typeof EMPTY_FILTER;
+
+const egrLabel = (s: string | null) =>
+  ({ ACTIVE: "действует", LIQUIDATING: "ликвидируется", LIQUIDATED: "ликвидирована", BANKRUPT: "банкротство", REORGANIZING: "реорганизация", NOT_FOUND: "нет в ЕГРЮЛ" })[s ?? ""] ?? s ?? "—";
+
+export function BaseTab({ status, categories, onPicked }: { status: LeadStatus; categories: LeadCategory[]; onPicked: () => void }) {
+  const [f, setF] = useState<BaseFilter>(EMPTY_FILTER);
   const [limit, setLimit] = useState(100);
   const [open, setOpen] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const [exportError, setExportError] = useState<unknown>(null);
   const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v));
   const { data, isLoading, error } = useQuery({
     queryKey: ["leadgen", "sellers", qs.toString(), limit],
     queryFn: () => api<{ sellers: LeadSeller[]; total: number }>(`/leadgen/sellers?${qs.toString()}&limit=${limit}`),
   });
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const set = (k: keyof BaseFilter) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setF({ ...f, [k]: e.target.value });
     setLimit(100);
   };
@@ -326,39 +337,68 @@ export function BaseTab({ status, categories }: { status: LeadStatus; categories
     setExportError(null);
     apiDownload(`/leadgen/export.${format}?${qs.toString()}`).catch(setExportError);
   };
+  const defaults = () => {
+    const st = status.settings;
+    setF({ ...f, fbMin: String(st.feedbacksMin), fbMax: String(st.feedbacksMax), age: String(st.minAgeMonths), active: "1", work: "0" });
+    setLimit(100);
+  };
+  const sel = (k: keyof BaseFilter, label: string, options: [string, string][]) => (
+    <select className="input w-auto" value={f[k]} onChange={set(k)} aria-label={label}>
+      {options.map(([v, l]) => (
+        <option key={v} value={v}>{l}</option>
+      ))}
+    </select>
+  );
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
-        <select className="input w-auto" value={f.category} onChange={set("category")} aria-label="Категория">
-          <option value="">Все категории</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-        <select className="input w-auto" value={f.month} onChange={set("month")} aria-label="Месяц выгрузки">
-          <option value="">Все месяцы</option>
-          {status.months.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-        <select className="input w-auto" value={f.status} onChange={set("status")} aria-label="Статус">
-          <option value="">Все статусы</option>
-          {Object.entries(SELLER_STATUSES).map(([k, v]) => (
-            <option key={k} value={k}>{v.label}</option>
-          ))}
-        </select>
-        <select className="input w-auto" value={f.phone} onChange={set("phone")} aria-label="Телефон">
-          <option value="">Телефон — любой</option>
-          <option value="1">есть телефон</option>
-          <option value="0">нет телефона</option>
-        </select>
-        <select className="input w-auto" value={f.email} onChange={set("email")} aria-label="Email">
-          <option value="">Email — любой</option>
-          <option value="1">есть валидный email</option>
-          <option value="0">нет email</option>
-        </select>
+        {sel("category", "Категория", [["", "Все категории"], ...categories.map((c) => [String(c.id), c.name] as [string, string])])}
+        {sel("month", "Месяц сбора", [["", "Все месяцы"], ...status.months.map((m) => [m, m] as [string, string])])}
+        {sel("work", "В работе", [["", "В работе и в базе"], ["1", "в работе"], ["0", "не в работе"]])}
+        {sel("status", "Статус", [["", "Все статусы"], ...Object.entries(SELLER_STATUSES).map(([k, v]) => [k, v.label] as [string, string])])}
+        {sel("contacts", "Контакты Checko", [["", "Контакты — любые"], ["found", "контакты найдены"], ["none", "контактов нет"], ["unchecked", "не запрашивали"]])}
+        {sel("phone", "Телефон", [["", "Телефон — любой"], ["1", "есть телефон"], ["0", "нет телефона"]])}
+        {sel("email", "Email", [["", "Email — любой"], ["1", "есть рабочий email"], ["0", "нет email"]])}
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-xs muted">
+          Отзывов от
+          <input className="input w-24" inputMode="numeric" value={f.fbMin} onChange={set("fbMin")} />
+        </label>
+        <label className="text-xs muted">
+          до
+          <input className="input w-24" inputMode="numeric" value={f.fbMax} onChange={set("fbMax")} />
+        </label>
+        <label className="text-xs muted">
+          Компании, мес. от
+          <input className="input w-20" inputMode="numeric" value={f.age} onChange={set("age")} />
+        </label>
+        <label className="text-xs muted">
+          Регион
+          <input className="input w-36" placeholder="Москва" value={f.region} onChange={set("region")} />
+        </label>
+        <label className="text-xs muted">
+          Тип
+          {sel("kind", "Тип", [["", "ООО и ИП"], ["ul", "ООО"], ["ip", "ИП"]])}
+        </label>
+        <label className="text-xs muted">
+          ЕГРЮЛ
+          {sel("active", "Статус ЕГРЮЛ", [["", "любой"], ["1", "действующие"]])}
+        </label>
         <input type="search" className="input w-48" placeholder="ИНН, название, бренд" value={f.q} onChange={set("q")} />
+        <button type="button" className="btn btn-sm" onClick={defaults} title="Отзывы, возраст, действующие, не в работе — из «Сбор → Пороги»">
+          Фильтр по умолчанию
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setF(EMPTY_FILTER)}>
+          Сбросить
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {data && <span className="text-sm muted">Найдено: {data.total}</span>}
         <span className="ml-auto flex gap-2">
+          <button type="button" className="btn btn-primary" onClick={() => setPicking(true)} title="Взять продавцов из базы по этому фильтру: контакты Checko, раскладка по дням">
+            Отобрать в работу
+          </button>
           <button type="button" className="btn" onClick={() => download("xlsx")}>
             <IconDownload size={14} /> XLSX
           </button>
@@ -372,7 +412,6 @@ export function BaseTab({ status, categories }: { status: LeadStatus; categories
       <ErrorBox error={error} />
       {data && (
         <>
-          <div className="text-sm muted">Найдено: {data.total}</div>
           <div className="panel overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-slate-200 text-left text-xs muted dark:border-neutral-800">
@@ -380,9 +419,10 @@ export function BaseTab({ status, categories }: { status: LeadStatus; categories
                   <th className="px-3 py-2 font-medium">Продавец</th>
                   <th className="px-3 py-2 font-medium">Категория</th>
                   <th className="px-3 py-2 font-medium">Статус</th>
+                  <th className="px-3 py-2 font-medium">Компания</th>
                   <th className="px-3 py-2 font-medium">Телефоны</th>
                   <th className="px-3 py-2 font-medium">Email</th>
-                  <th className="px-3 py-2 font-medium text-right">SKU / отзывы</th>
+                  <th className="px-3 py-2 text-right font-medium">Отзывов</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-neutral-800">
@@ -399,7 +439,14 @@ export function BaseTab({ status, categories }: { status: LeadStatus; categories
                       <div className="muted">{s.batchMonth}</div>
                     </td>
                     <td className="px-3 py-2">
-                      <StatusBadge status={s.status} />
+                      {s.pickedAt ? <StatusBadge status={s.status} /> : <span className="text-xs muted">в базе</span>}
+                      {s.contactsStatus === "none" && <div className="text-[11px] text-red-600 dark:text-red-400">нет контактов</div>}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      <div>{s.regDate ? `с ${formatDate(s.regDate)}` : "—"}</div>
+                      <div className="muted">
+                        {[s.kind === "ip" ? "ИП" : "ООО", s.region, s.egrStatus !== "ACTIVE" ? egrLabel(s.egrStatus) : null].filter(Boolean).join(" · ")}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-xs tabular-nums">
                       {s.contacts.filter((c) => c.type === "phone").map((c) => (
@@ -411,9 +458,7 @@ export function BaseTab({ status, categories }: { status: LeadStatus; categories
                         <div key={c.id} className={c.valid ? "" : "text-slate-400 line-through"}>{c.value}</div>
                       ))}
                     </td>
-                    <td className="px-3 py-2 text-right text-xs tabular-nums">
-                      {s.skuCount ?? "—"} / {s.feedbacksTotal ?? "—"}
-                    </td>
+                    <td className="px-3 py-2 text-right text-xs tabular-nums">{s.feedbacksTotal?.toLocaleString("ru-RU") ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -428,6 +473,88 @@ export function BaseTab({ status, categories }: { status: LeadStatus; categories
         </>
       )}
       {open && <SellerDialog inn={open} onClose={() => setOpen(null)} />}
+      {picking && (
+        <PickDialog
+          filter={Object.fromEntries(qs)}
+          categories={categories}
+          perCategory={status.settings.pickPerCategory}
+          onClose={() => setPicking(false)}
+          onStarted={() => {
+            setPicking(false);
+            onPicked();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** «Отобрать в работу»: по текущему фильтру «Базы», N на категорию, сколько доступно — по категориям. */
+function PickDialog({ filter, categories, perCategory, onClose, onStarted }: { filter: Record<string, string>; categories: LeadCategory[]; perCategory: number; onClose: () => void; onStarted: () => void }) {
+  const qc = useQueryClient();
+  const [n, setN] = useState(String(perCategory));
+  const qs = new URLSearchParams(filter).toString();
+  const preview = useQuery({ queryKey: ["leadgen", "pick-preview", qs], queryFn: () => api<{ available: Record<string, number> }>(`/leadgen/pick/preview?${qs}`) });
+  const start = useMutation({
+    mutationFn: () => api("/leadgen/pick", { method: "POST", body: { filter, perCategory: Number(n) } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["leadgen"] });
+      onStarted();
+    },
+  });
+  const cats = filter.category ? categories.filter((c) => String(c.id) === filter.category) : categories.filter((c) => c.active);
+  const want = Number(n) || 0;
+  const total = cats.reduce((sum, c) => sum + Math.min(want, preview.data?.available[c.id] ?? 0), 0);
+  return (
+    <Modal
+      title="Отобрать в работу"
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>Отмена</button>
+          <button type="button" className="btn btn-primary" disabled={start.isPending || !want || !total} onClick={() => start.mutate()}>
+            Отобрать
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3 text-sm">
+        <p className="muted">
+          Из базы по текущему фильтру — случайно, не больше N на категорию. По каждому «Ирбис» запросит контакты в Checko (платно) и
+          проверит почту; у кого нет телефона и рабочего email — пометит «нет контактов» и возьмёт следующего. Взятые разложатся по
+          рабочим дням ({"«"}Сегодня{"»"}), после уже запланированных.
+        </p>
+        <label className="block w-40">
+          <span className="label">Продавцов на категорию</span>
+          <input type="number" min={1} className="input" value={n} onChange={(e) => setN(e.target.value)} />
+        </label>
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs muted">
+            <tr>
+              <th className="py-1 font-medium">Категория</th>
+              <th className="py-1 text-right font-medium">Подходит в базе</th>
+              <th className="py-1 text-right font-medium">Возьмём</th>
+            </tr>
+          </thead>
+          <tbody className="tabular-nums">
+            {cats.map((c) => {
+              const avail = preview.data?.available[c.id] ?? 0;
+              return (
+                <tr key={c.id}>
+                  <td className="py-0.5">{c.name}</td>
+                  <td className="py-0.5 text-right">{preview.data ? avail : "…"}</td>
+                  <td className="py-0.5 text-right">{Math.min(want, avail)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div>
+          Всего возьмём до <b>{total}</b> (запросов Checko — примерно столько же, плюс замена тех, у кого контактов нет).
+        </div>
+        <ErrorBox error={start.error ?? preview.error} />
+      </div>
+    </Modal>
   );
 }
