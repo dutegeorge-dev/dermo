@@ -4,7 +4,9 @@
  */
 
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import fs from "node:fs";
+
+import type { FastifyInstance, FastifyReply } from "fastify";
 import JSZip from "jszip";
 
 import { DEFAULT_SPEC_PARAMS, type SpecParams } from "../../shared/cargo.ts";
@@ -17,7 +19,7 @@ import { shipmentDocuments } from "../lib/finance.ts";
 import { body, currentUser, HttpError } from "../lib/http.ts";
 import { paymentExplanation, shipmentPayments } from "../lib/payments.ts";
 import { addShipmentEvent, parseShipmentNumber } from "../lib/shipments.ts";
-import { readStored, storeBuffer } from "./files.ts";
+import { storagePath, storeBuffer } from "./files.ts";
 
 async function shipmentByNumber(tx: DbOrTx, raw: string) {
   const [sh] = await tx.select().from(shipments).where(eq(shipments.number, parseShipmentNumber(raw)));
@@ -27,6 +29,25 @@ async function shipmentByNumber(tx: DbOrTx, raw: string) {
 
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const disposition = (filename: string, ascii: string) => `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+/**
+ * Файл из хранилища — в архив потоком (не читаем в память: в сделке бывают сотни МБ сканов). false — файла нет.
+ */
+function addStored(zip: JSZip, name: string, key: string): boolean {
+  const full = storagePath(key);
+  if (!fs.existsSync(full)) return false;
+  zip.file(name, fs.createReadStream(full));
+  return true;
+}
+
+/**
+ * Архив — сразу в ответ потоком и без пересжатия (PDF, сканы, xlsx уже сжаты): раньше собирали целиком в памяти
+ * со сжатием — на больших сделках сервер не успевал, у владельца «Failed to fetch».
+ */
+function sendZip(reply: FastifyReply, zip: JSZip, filename: string, ascii: string) {
+  const stream = zip.generateNodeStream({ type: "nodebuffer", streamFiles: true, compression: "STORE" });
+  return reply.header("content-type", "application/zip").header("content-disposition", disposition(filename, ascii)).send(stream);
+}
+
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
 
 function parseSpecParams(input: Record<string, unknown>, base: SpecParams): SpecParams {
@@ -220,17 +241,12 @@ export async function cargoRoutes(app: FastifyInstance): Promise<void> {
         let name = `${folder}/${safeName(`${label}${kind} — ${f.filename}`)}`;
         for (let i = 2; used.has(name); i++) name = `${folder}/${i} ${safeName(`${label}${kind} — ${f.filename}`)}`;
         used.add(name);
-        try {
-          zip.file(name, await readStored(key));
-        } catch {
-          missing.push(`${label}: файл «${f.filename}» не найден на диске`);
-        }
+        if (!addStored(zip, name, key)) missing.push(`${label}: файл «${f.filename}» не найден на диске`);
       }
     }
     if (missing.length) zip.file("Не найдено.txt", `\ufeff${missing.join("\r\n")}`);
-    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
     const filename = `Документы ${safeName(sh.title)}${sh.containerNo ? ` ${sh.containerNo}` : ""}.zip`;
-    return reply.header("content-type", "application/zip").header("content-disposition", disposition(filename, `documents-${sh.number}.zip`)).send(buffer);
+    return sendZip(reply, zip, filename, `documents-${sh.number}.zip`);
   });
 
   app.get("/shipments/:number/customs-pack.zip", async (request, reply) => {
@@ -243,11 +259,7 @@ export async function cargoRoutes(app: FastifyInstance): Promise<void> {
       let name = `${f.folder}/${f.name}`;
       for (let i = 2; used.has(name); i++) name = `${f.folder}/${i} ${f.name}`;
       used.add(name);
-      try {
-        zip.file(name, await readStored(f.key));
-      } catch {
-        missing.push(`${f.name}: файл не найден на диске`);
-      }
+      if (!addStored(zip, name, f.key)) missing.push(`${f.name}: файл не найден на диске`);
     }
     const lines = [
       `Документы для таможни — сделка № ${sh.number} «${sh.title}»${sh.containerNo ? `, контейнер ${sh.containerNo}` : ""}`,
@@ -267,8 +279,7 @@ export async function cargoRoutes(app: FastifyInstance): Promise<void> {
       ];
       zip.file("Пояснение по оплатам.txt", `﻿${text.join("\r\n")}`);
     }
-    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
     const filename = `Таможня ${safeName(sh.title)}${sh.containerNo ? ` ${sh.containerNo}` : ""}.zip`;
-    return reply.header("content-type", "application/zip").header("content-disposition", disposition(filename, `customs-${sh.number}.zip`)).send(buffer);
+    return sendZip(reply, zip, filename, `customs-${sh.number}.zip`);
   });
 }

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 
 import { CLIENT_CONTRACT_BY_SCHEME, CONTRACTOR_TYPES, DOC_GROUPS, type DocGroup, docSpec, formatMoney } from "../../../../shared/documents.ts";
-import { api, apiDownload, BASE, fileUrl } from "../../lib/api.ts";
+import { api, BASE, fileUrl } from "../../lib/api.ts";
 import type { DealDocument, DocumentRow, FinanceRow, Money, ShipmentResponse } from "../../lib/types.ts";
 import { docTitle, docTypeLabel, formatDay, PaymentChip, StatusChip } from "../docs/common.tsx";
 import { IconDownload, IconFile, IconPlus } from "../Icons.tsx";
@@ -106,7 +106,6 @@ export function ShipmentDocs({ data, save }: { data: ShipmentResponse; save: Sav
   const { refresh } = useShipmentActions();
   const [proofError, setProofError] = useState<unknown>(null);
   const [paying, setPaying] = useState(false);
-  const [zipping, setZipping] = useState(false);
   const uploadProof = async (documentId: number, file: File) => {
     setProofError(null);
     try {
@@ -126,25 +125,9 @@ export function ShipmentDocs({ data, save }: { data: ShipmentResponse; save: Sav
         {!order && sh.scheme === "commission" && <span className="text-xs muted">поручение — в «Расчёте для клиента» внизу</span>}
         <span className="flex-1" />
         {data.documents.some((d) => d.files.length > 0) && (
-          <button
-            type="button"
-            className="btn btn-sm"
-            title="Все файлы всех документов сделки одним архивом — по папкам, с платёжками"
-            disabled={zipping}
-            onClick={async () => {
-              setZipping(true);
-              setProofError(null);
-              try {
-                await apiDownload(`/shipments/${sh.number}/documents.zip`);
-              } catch (e) {
-                setProofError(e);
-              } finally {
-                setZipping(false);
-              }
-            }}
-          >
-            <IconDownload size={12} /> {zipping ? "Собираем…" : "Скачать все (ZIP)"}
-          </button>
+          <a className="btn btn-sm" href={`${BASE}/api/shipments/${sh.number}/documents.zip`} download title="Все файлы всех документов сделки одним архивом — по папкам, с платёжками">
+            <IconDownload size={12} /> Скачать все (ZIP)
+          </a>
         )}
         {data.documents.some((d) => d.paymentStatus !== null) && (
           <button type="button" className="btn btn-sm" title="Одна платёжка на несколько инвойсов / часть инвойса другой сделки" onClick={() => setPaying(true)}>

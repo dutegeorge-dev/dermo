@@ -80,7 +80,13 @@ export async function apiDownload(path: string, options: { method?: Method; form
   const cd = res.headers.get("content-disposition") ?? "";
   const star = /filename\*=UTF-8''([^;]+)/i.exec(cd)?.[1];
   const name = star ? decodeURIComponent(star) : (/filename="([^"]+)"/.exec(cd)?.[1] ?? "file");
-  const url = URL.createObjectURL(await res.blob());
+  let blob: Blob;
+  try {
+    blob = await res.blob();
+  } catch {
+    throw new ApiError(0, "Связь прервалась при скачивании — повторите.");
+  }
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = name;
@@ -88,6 +94,19 @@ export async function apiDownload(path: string, options: { method?: Method; form
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/**
+ * Большой файл (архив документов): обычная загрузка браузера по ссылке — с прогрессом, без сборки всего файла
+ * в памяти вкладки (fetch + blob на сотнях МБ обрывался «Failed to fetch»). Только GET; вход — по cookie.
+ */
+export function downloadLink(path: string): void {
+  const a = document.createElement("a");
+  a.href = `${API}${path}`;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 /** Отправка файла / куска файла с прогрессом (fetch его не показывает): ответ — JSON, как у api(). */
