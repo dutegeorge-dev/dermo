@@ -1,11 +1,10 @@
-// Сборщик: спрашивает у Ирбиса, что открыть, открывает страницу WB в отдельной вкладке вашего браузера, берёт ответ
-// поиска / каталога, который страница получила от WB, и отправляет в Ирбис. Между страницами — пауза (задаёт Ирбис).
-// Если WB показывает проверку «Подозрительная активность» — останавливается.
+// Сборщик: спрашивает у Ирбиса, что открыть, открывает страницу WB в отдельном окне вашего браузера, читает со страницы
+// артикулы товаров (и число товаров продавца) и отправляет в Ирбис. Продавца по артикулу Ирбис узнаёт сам из карточки.
+// Между страницами — пауза (задаёт Ирбис). Если WB показывает проверку «Подозрительная активность» — останавливается.
 
-const PAGE_TIMEOUT = 30_000;
+const LOAD_TIMEOUT = 45_000;
 let looping = false;
 let tabId = null;
-let pending = null; // { match(msg) → boolean, resolve }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -48,70 +47,46 @@ async function api(path, body) {
   return data;
 }
 
-async function openInTab(url) {
-  if (tabId !== null) {
-    try {
-      await chrome.tabs.update(tabId, { url });
-      return;
-    } catch {
-      tabId = null; // вкладку закрыли
-    }
-  }
-  // Сначала пустая вкладка: её номер должен быть известен до того, как страница WB начнёт присылать ответы.
-  const tab = await chrome.tabs.create({ url: "about:blank", active: false });
-  tabId = tab.id;
-  await chrome.tabs.update(tabId, { url });
-}
-
-/** Ответ страницы, подходящий к заданию. */
-function matcher(task) {
-  return (msg) => {
-    if (msg.kind === "blocked") return true;
-    if (msg.kind !== "capture") return false;
-    let u;
-    try {
-      u = new URL(msg.url);
-    } catch {
-      return false;
-    }
-    const products = msg.data?.products ?? msg.data?.data?.products ?? [];
-    if (task.type === "search") {
-      if (!/search/.test(u.pathname)) return false;
-      const q = u.searchParams.get("query");
-      const page = Number(u.searchParams.get("page") ?? 1);
-      return (!q || q.trim().toLowerCase() === task.query.trim().toLowerCase()) && page === task.page;
-    }
-    const sup = u.searchParams.get("supplier") ?? u.searchParams.get("supplierId");
-    if (sup) return Number(sup) === task.supplierId && Number(u.searchParams.get("page") ?? 1) === 1;
-    return products.length > 0 && products.every((p) => Number(p.supplierId) === task.supplierId);
-  };
-}
-
-function waitForPage(task) {
+/** Дождаться, пока вкладка догрузится (status complete), не дольше LOAD_TIMEOUT. */
+function waitLoaded(id) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      pending = null;
-      resolve(null);
-    }, PAGE_TIMEOUT);
-    pending = {
-      match: matcher(task),
-      resolve: (msg) => {
-        clearTimeout(timer);
-        pending = null;
-        resolve(msg);
-      },
+    const done = (ok) => {
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve(ok);
     };
+    const listener = (tid, info) => {
+      if (tid === id && info.status === "complete") done(true);
+    };
+    const timer = setTimeout(() => done(false), LOAD_TIMEOUT);
+    chrome.tabs.onUpdated.addListener(listener);
   });
 }
 
-chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (sender.tab?.id !== tabId || !pending) return;
-  if (pending.match(msg)) pending.resolve(msg);
-});
+/**
+ * Страница WB — в отдельном обычном окне (не фоновой вкладке): в скрытой вкладке WB не дорисовывает выдачу.
+ * Окно можно отодвинуть, но не сворачивать.
+ */
+async function open(url) {
+  if (tabId !== null) {
+    try {
+      const loaded = waitLoaded(tabId);
+      await chrome.tabs.update(tabId, { url });
+      return loaded;
+    } catch {
+      tabId = null; // окно / вкладку закрыли
+    }
+  }
+  const win = await chrome.windows.create({ url: "about:blank", focused: false, width: 1280, height: 900 });
+  tabId = win.tabs[0].id;
+  const loaded = waitLoaded(tabId);
+  await chrome.tabs.update(tabId, { url });
+  return loaded;
+}
 
-async function inspect() {
+async function inspect(want) {
   try {
-    return await chrome.tabs.sendMessage(tabId, { kind: "inspect" });
+    return await chrome.tabs.sendMessage(tabId, { kind: "inspect", want });
   } catch {
     return null;
   }
@@ -120,20 +95,16 @@ async function inspect() {
 async function runTask(task) {
   const base = { type: task.type, jobId: task.jobId, categoryId: task.categoryId, q: task.q, page: task.page, supplierId: task.supplierId };
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const waiting = waitForPage(task);
-    await openInTab(task.url);
-    const msg = await waiting;
-    if (msg?.kind === "blocked") return { ...base, blocked: true };
-    if (msg?.kind === "capture") return { ...base, data: msg.data };
-    // Ответ не перехватился — берём артикулы с самой страницы.
-    const page = await inspect();
+    const loaded = await open(task.url);
+    await sleep(2500); // выдача дорисовывается после загрузки
+    const page = loaded ? await inspect(task.type === "search" ? (task.want ?? 300) : 60) : null;
     if (page?.blocked) return { ...base, blocked: true };
-    if (page?.items?.length) return { ...base, items: page.items };
-    if (task.type === "search" && page && attempt === 2) return { ...base, items: [] }; // пустая выдача
-    await log(`Страница не отдала данные, повтор (${attempt}/2)`);
-    await sleep(5000);
+    if (page?.items?.length) return { ...base, items: page.items, ...(page.count ? { count: page.count } : {}) };
+    if (page && attempt === 2) return { ...base, items: [] }; // страница открылась, товаров нет — пустая выдача
+    await log(`Страница не отдала товары${loaded ? "" : " (не загрузилась)"}, повтор (${attempt}/2)`);
+    await sleep(8000);
   }
-  return { ...base, failed: "страница WB не отдала данные за 30 секунд (2 попытки)" };
+  return { ...base, failed: "страница WB не загрузилась (2 попытки)" };
 }
 
 async function loop() {
@@ -158,7 +129,7 @@ async function loop() {
         await sleep(30_000);
         continue;
       }
-      await log(task.type === "search" ? `Поиск «${task.query}», стр. ${task.page}` : `Продавец ${task.supplierId}`);
+      await log(task.type === "search" ? `Поиск «${task.query}» — прокручиваю до ${task.want ?? 300} товаров` : `Продавец ${task.supplierId}`);
       const result = await runTask(task);
       try {
         const answer = await api("/leadgen/collector/result", result);
@@ -168,8 +139,8 @@ async function loop() {
       }
       if (result.blocked) {
         await setRunning(false);
-        await log("WB показал проверку «Подозрительная активность» — сбор остановлен. Пройдите проверку во вкладке WB и нажмите «Запустить» снова.");
-        if (tabId !== null) chrome.tabs.update(tabId, { active: true }).catch(() => {});
+        await log("WB показал проверку «Подозрительная активность» — сбор остановлен. Пройдите проверку в окне WB и нажмите «Запустить» снова.");
+        if (tabId !== null) chrome.tabs.get(tabId).then((t) => chrome.windows.update(t.windowId, { focused: true })).catch(() => {});
         break;
       }
       const [min, max] = task.delay ?? [6, 15];

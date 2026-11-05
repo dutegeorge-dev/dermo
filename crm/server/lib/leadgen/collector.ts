@@ -55,10 +55,11 @@ async function touch(lastTask: string): Promise<void> {
 
 export type CollectorTask =
   | { type: "idle"; message: string }
-  | { type: "search"; jobId: number; categoryId: number; q: number; page: number; query: string; url: string; delay: [number, number] }
+  | { type: "search"; jobId: number; categoryId: number; q: number; page: number; query: string; url: string; want: number; delay: [number, number] }
   | { type: "seller"; jobId: number; supplierId: number; url: string; delay: [number, number] };
 
-const searchUrl = (query: string, page: number) => `https://www.wildberries.ru/catalog/0/search.aspx?page=${page}&sort=popular&search=${encodeURIComponent(query)}`;
+/** WB не листает выдачу по ?page=N — одна страница на запрос, расширение прокручивает её до want товаров. */
+const searchUrl = (query: string) => `https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search=${encodeURIComponent(query)}`;
 const sellerUrl = (supplierId: number) => `https://www.wildberries.ru/seller/${supplierId}`;
 
 async function collectingJob() {
@@ -105,8 +106,8 @@ export async function nextTask(): Promise<CollectorTask> {
       return { type: "idle", message: "Выдача собрана — сервер проверяет продавцов" };
     }
     const query = cur.cat.queries[cur.q];
-    await touch(`поиск «${query}», стр. ${cur.page}`);
-    return { type: "search", jobId: job.id, categoryId: cur.cat.id, q: cur.q, page: cur.page, query, url: searchUrl(query, cur.page), delay };
+    await touch(`поиск «${query}»`);
+    return { type: "search", jobId: job.id, categoryId: cur.cat.id, q: cur.q, page: cur.page, query, url: searchUrl(query), want: s.browserProducts, delay };
   }
   const [cand] = await db
     .select({ supplierId: leadCandidates.supplierId })
@@ -133,6 +134,8 @@ export type CollectorResult = {
   supplierId?: number;
   data?: unknown;
   items?: { nm: number; name?: string; brand?: string }[];
+  /** Число товаров продавца, прочитанное со страницы продавца. */
+  count?: number;
   blocked?: boolean;
   failed?: string;
 };
@@ -155,12 +158,12 @@ async function productsFrom(result: CollectorResult): Promise<{ products: WbProd
     const parsed = parseProducts(result.data);
     if (parsed.products.length || parsed.total !== null) return parsed;
   }
-  const items = (result.items ?? []).filter((i) => Number.isSafeInteger(i.nm) && i.nm > 0).slice(0, 200);
+  const items = (result.items ?? []).filter((i) => Number.isSafeInteger(i.nm) && i.nm > 0).slice(0, 1000);
   const products: WbProduct[] = [];
   const resolve = resolver();
-  // Только артикулы — продавца берём из карточки (статика WB отдаётся и не из России), по 6 параллельно.
-  for (let i = 0; i < items.length; i += 6) {
-    const batch = await Promise.all(items.slice(i, i + 6).map((it) => resolve(it.nm).catch(() => null)));
+  // Только артикулы — продавца берём из карточки (статика WB отдаётся и не из России), по 8 параллельно.
+  for (let i = 0; i < items.length; i += 8) {
+    const batch = await Promise.all(items.slice(i, i + 8).map((it) => resolve(it.nm).catch(() => null)));
     batch.forEach((p, k) => p && products.push({ ...p, name: p.name || items[i + k].name || "", brand: p.brand || items[i + k].brand || "" }));
   }
   return { products, total: null };
@@ -169,7 +172,6 @@ async function productsFrom(result: CollectorResult): Promise<{ products: WbProd
 export async function applyResult(result: CollectorResult): Promise<{ ok: boolean; message: string }> {
   const job = await collectingJob();
   if (!job || job.id !== Number(result.jobId)) return { ok: false, message: "Задача уже не ждёт этих данных" };
-  const s = normalizeSettings(job.params.settings);
 
   if (result.blocked) {
     await appendJobError(job.id, job.stage, "WB показал проверку «Подозрительная активность» в браузере — расширение остановилось. Пройдите проверку в браузере и запустите расширение снова");
@@ -189,13 +191,13 @@ export async function applyResult(result: CollectorResult): Promise<{ ok: boolea
       products = (await productsFrom(result)).products;
       await upsertCandidates(job.id, cur.cat.id, products.filter((p) => p.supplierId > 0 && !hasStopWord(p.name, cur.cat.stopWords)));
     }
-    const done = result.failed || !products.length || cur.page >= s.browserSearchPages;
-    const cp = { ...((job.checkpoint.collect ?? {}) as Record<string, { q: number; page: number }>), [cur.cat.id]: done ? { q: cur.q + 1, page: 1 } : { q: cur.q, page: cur.page + 1 } };
+    // Запрос пройден целиком за одну прокрученную страницу — дальше следующий.
+    const cp = { ...((job.checkpoint.collect ?? {}) as Record<string, { q: number; page: number }>), [cur.cat.id]: { q: cur.q + 1, page: 1 } };
     const checkpoint = { ...job.checkpoint, collect: cp };
     const [updated] = await db.update(leadJobs).set({ checkpoint, heartbeatAt: new Date(), updatedAt: new Date() }).where(eq(leadJobs.id, job.id)).returning();
     await db.update(leadJobs).set({ progress: await computeProgress(updated, cats, job.progress.requests) }).where(eq(leadJobs.id, job.id));
     if (!cursorOf(updated, cats)) await handBack(job.id, { stage: "filter" });
-    return { ok: true, message: `${cur.cat.name}: «${cur.cat.queries[cur.q]}», стр. ${cur.page} — товаров ${products.length}` };
+    return { ok: true, message: `${cur.cat.name}: «${cur.cat.queries[cur.q]}» — товаров ${products.length}` };
   }
 
   // Страница продавца: число SKU и каталог (для выборки по стране).
@@ -208,8 +210,17 @@ export async function applyResult(result: CollectorResult): Promise<{ ok: boolea
   if (result.failed) {
     for (const c of cands) await rejectCandidate(c.id, "страница продавца не открылась", result.failed.slice(0, 300));
   } else {
-    const { products, total } = await productsFrom(result);
-    // Нет total — если товаров меньше страницы, это и есть весь каталог; иначе число SKU неизвестно (порог не проверяем).
+    // Со страницы продавца — его артикулы: продавец известен, карточки для страны сервер откроет сам.
+    const fromData = result.data !== undefined && result.data !== null ? parseProducts(result.data) : null;
+    const products: WbProduct[] = fromData?.products.length
+      ? fromData.products
+      : (result.items ?? [])
+          .filter((i) => Number.isSafeInteger(i.nm) && i.nm > 0)
+          .slice(0, 200)
+          .map((i) => ({ nm: i.nm, name: i.name ?? "", brand: i.brand ?? "", supplierId, supplier: "", feedbacks: 0 }));
+    const count = Number(result.count);
+    const total = fromData?.total ?? (Number.isSafeInteger(count) && count > 0 ? count : null);
+    // Нет числа товаров — если артикулов меньше страницы, это и есть весь каталог; иначе SKU неизвестно (порог не проверяем).
     const sku = total ?? (products.length && products.length < 100 ? products.length : null);
     for (const c of cands) {
       await db

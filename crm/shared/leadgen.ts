@@ -14,8 +14,8 @@ export const PERMISSIONS: Record<string, string> = {
 export type LeadgenSettings = {
   /** Страниц выдачи WB на один поисковый запрос (сбор с сервера). */
   searchPages: number;
-  /** Страниц выдачи на запрос при сборе расширением в браузере (каждая — открытие страницы, поэтому меньше). */
-  browserSearchPages: number;
+  /** Товаров на запрос при сборе расширением: WB не листает выдачу по страницам, только подгружает при прокрутке. */
+  browserProducts: number;
   /** Пауза расширения между страницами WB, секунд: от и до. */
   browserDelayMin: number;
   browserDelayMax: number;
@@ -52,7 +52,7 @@ export type LeadgenSettings = {
 
 export const DEFAULT_LEADGEN_SETTINGS: LeadgenSettings = {
   searchPages: 20,
-  browserSearchPages: 5,
+  browserProducts: 300,
   browserDelayMin: 6,
   browserDelayMax: 15,
   cardsSample: 20,
@@ -76,7 +76,7 @@ export const DEFAULT_LEADGEN_SETTINGS: LeadgenSettings = {
 
 /** Подписи порогов для страницы настроек (ключ → подпись, подсказка). */
 export const SETTINGS_FIELDS: { key: keyof LeadgenSettings; label: string; hint?: string; step?: number }[] = [
-  { key: "browserSearchPages", label: "Страниц выдачи на запрос (браузер)" },
+  { key: "browserProducts", label: "Товаров на запрос (браузер)", hint: "прокрутка выдачи" },
   { key: "browserDelayMin", label: "Пауза браузера, с, от" },
   { key: "browserDelayMax", label: "Пауза браузера, с, до" },
   { key: "searchPages", label: "Страниц выдачи на запрос (сервер)" },
@@ -116,7 +116,7 @@ export function normalizeSettings(raw: unknown): LeadgenSettings {
   out.chinaShareMin = Math.min(1, out.chinaShareMin);
   out.poolFactor = Math.max(1, out.poolFactor);
   out.searchPages = Math.max(1, Math.round(out.searchPages));
-  out.browserSearchPages = Math.max(1, Math.round(out.browserSearchPages));
+  out.browserProducts = Math.min(1000, Math.max(20, Math.round(out.browserProducts)));
   out.browserDelayMin = Math.max(3, out.browserDelayMin);
   out.browserDelayMax = Math.max(out.browserDelayMin, out.browserDelayMax);
   out.perDay = Math.max(1, Math.round(out.perDay));

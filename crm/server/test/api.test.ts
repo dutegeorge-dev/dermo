@@ -2281,8 +2281,10 @@ describe("Лидогенерация WB", () => {
       let payload: Record<string, unknown>;
       if (task.type === "search") {
         searches++;
-        const products = await sources.search(task.query, task.page);
-        assert.ok(task.url.startsWith("https://www.wildberries.ru/catalog/0/search.aspx?page="));
+        // WB не листает по ?page=N: одна страница на запрос, расширение прокручивает её — приходят товары нескольких «порций».
+        assert.ok(task.url.startsWith("https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search=") && !task.url.includes("page="));
+        assert.equal(task.want, lg.DEFAULT_LEADGEN_SETTINGS.browserProducts);
+        const products = [...(await sources.search(task.query, 1)), ...(await sources.search(task.query, 2)), ...(await sources.search(task.query, 3))];
         if (!usedItems && products.length) {
           // Ответ не перехватился — расширение прислало артикулы со страницы, продавца сервер берёт из карточки.
           usedItems = true;
@@ -2294,7 +2296,11 @@ describe("Лидогенерация WB", () => {
         sellers++;
         assert.equal(task.url, `https://www.wildberries.ru/seller/${task.supplierId}`);
         const c = await sources.sellerCatalog(task.supplierId, 1);
-        payload = { ...task, data: { total: c.total, products: c.products.map((p) => ({ id: p.nm, name: p.name, brand: p.brand, supplierId: p.supplierId, feedbacks: p.feedbacks })) } };
+        payload =
+          sellers % 2
+            ? // Как присылает расширение: артикулы со страницы продавца и «N товаров» из текста.
+              { ...task, items: c.products.map((p) => ({ nm: p.nm, name: p.name })), count: c.total }
+            : { ...task, data: { total: c.total, products: c.products.map((p) => ({ id: p.nm, name: p.name, brand: p.brand, supplierId: p.supplierId, feedbacks: p.feedbacks })) } };
       }
       const res = await collector("POST", "/leadgen/collector/result", token, payload);
       assert.equal(res.statusCode, 200, res.body);
@@ -2305,7 +2311,7 @@ describe("Лидогенерация WB", () => {
     setCardResolver(null);
     const job = (await call(s, "GET", "/leadgen/jobs")).json().jobs.find((j: { id: number }) => j.id === jobId);
     assert.equal(job.status, "done");
-    assert.ok(searches > 0 && searches <= cats.reduce((n, c) => n + c.queries.length, 0) * lg.DEFAULT_LEADGEN_SETTINGS.browserSearchPages);
+    assert.equal(searches, cats.reduce((n, c) => n + c.queries.length, 0), "один заход на поисковый запрос");
     assert.ok(sellers > 0, "страницы продавцов открывались");
     const base = (await call(s, "GET", "/leadgen/sellers?month=2027-05&limit=500")).json();
     assert.equal(base.total, cats.length * 3);
