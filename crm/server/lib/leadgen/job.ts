@@ -478,7 +478,9 @@ async function catalogStep(cand: Candidate, s: LeadgenSettings, src: LeadSources
   const info = (fresh?.info ?? cand.info) as CandidateInfo;
   if (sku !== null && (sku < s.skuMin || sku > s.skuMax)) throw new Reject("SKU вне порога", `SKU ${sku}`);
   let feedbacks = info.feedbacks ?? null;
-  if (feedbacks === null) {
+  // Рейтинг продавца не ответил — сумма по товарам каталога, если в нём есть отзывы (со страницы продавца их нет:
+  // тогда порог не проверяем, а не отсеиваем по нулю).
+  if (feedbacks === null && catalog.some((p) => p.feedbacks > 0)) {
     feedbacks = catalog.reduce((sum, p) => sum + p.feedbacks, 0);
     if (feedbacks < s.feedbacksMin || feedbacks > s.feedbacksMax) throw new Reject("отзывы вне порога", `отзывов ${feedbacks} (по товарам каталога)`);
   }
@@ -500,7 +502,7 @@ async function catalogStep(cand: Candidate, s: LeadgenSettings, src: LeadSources
   const next: CandidateInfo = {
     ...info,
     sku: sku ?? undefined,
-    feedbacks,
+    feedbacks: feedbacks ?? undefined,
     chinaShare,
     cards: withCountry,
     catalog: catalog.slice(0, 30).map((p) => ({ nm: p.nm, name: p.name, brand: p.brand })),
