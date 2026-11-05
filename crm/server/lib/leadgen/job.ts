@@ -485,8 +485,10 @@ async function catalogStep(cand: Candidate, s: LeadgenSettings, src: LeadSources
     if (feedbacks < s.feedbacksMin || feedbacks > s.feedbacksMax) throw new Reject("отзывы вне порога", `отзывов ${feedbacks} (по товарам каталога)`);
   }
 
-  // Страна производства по выборке карточек.
-  const nms = shuffle([...new Set([...catalog.map((p) => p.nm), ...cand.products.map((p) => p.nm)])], rnd).slice(0, s.cardsSample);
+  // Страна производства по выборке карточек. По умолчанию — только для справки: в карточках с серыми декларациями
+  // часто пишут «Россия», а это как раз целевые продавцы (решение владельца). Фильтр — если задан порог chinaShareMin.
+  const filterCountry = s.chinaShareMin > 0;
+  const nms = shuffle([...new Set([...catalog.map((p) => p.nm), ...cand.products.map((p) => p.nm)])], rnd).slice(0, filterCountry ? s.cardsSample : Math.min(s.cardsSample, 10));
   let withCountry = 0;
   let china = 0;
   for (const nm of nms) {
@@ -495,15 +497,15 @@ async function catalogStep(cand: Candidate, s: LeadgenSettings, src: LeadSources
     withCountry++;
     if (isChina(country)) china++;
   }
-  if (withCountry < Math.min(s.minCountryCards, nms.length) || withCountry === 0) throw new Reject("мало данных о стране", `страна указана в ${withCountry} из ${nms.length} карточек`);
-  const chinaShare = china / withCountry;
-  if (chinaShare < s.chinaShareMin) throw new Reject(`Китай < ${Math.round(s.chinaShareMin * 100)} %`, `Китай ${Math.round(chinaShare * 100)} % (${china} из ${withCountry})`);
+  if (filterCountry && (withCountry < Math.min(s.minCountryCards, nms.length) || withCountry === 0)) throw new Reject("мало данных о стране", `страна указана в ${withCountry} из ${nms.length} карточек`);
+  const chinaShare = withCountry ? china / withCountry : null;
+  if (filterCountry && chinaShare !== null && chinaShare < s.chinaShareMin) throw new Reject(`Китай < ${Math.round(s.chinaShareMin * 100)} %`, `Китай ${Math.round(chinaShare * 100)} % (${china} из ${withCountry})`);
 
   const next: CandidateInfo = {
     ...info,
     sku: sku ?? undefined,
     feedbacks: feedbacks ?? undefined,
-    chinaShare,
+    chinaShare: chinaShare ?? undefined,
     cards: withCountry,
     catalog: catalog.slice(0, 30).map((p) => ({ nm: p.nm, name: p.name, brand: p.brand })),
     catalogProducts: undefined,

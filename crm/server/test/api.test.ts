@@ -2136,6 +2136,9 @@ describe("Лидогенерация WB", () => {
     const s = await adminSession();
     const cats = (await call(s, "GET", "/leadgen/categories")).json().categories as { id: number; name: string; queries: string[]; stopWords: string[] }[];
 
+    // Фильтр по стране по умолчанию выключен (решение владельца); здесь включаем — проверить, что он работает.
+    assert.equal(lg.DEFAULT_LEADGEN_SETTINGS.chinaShareMin, 0);
+    assert.equal((await call(s, "PUT", "/leadgen/settings", { ...lg.DEFAULT_LEADGEN_SETTINGS, chinaShareMin: 0.7 })).statusCode, 200);
     // Задача 1 — тестовый прогон с квотой 10.
     const started = await call(s, "POST", "/leadgen/jobs", { month: "2027-03", quota: 10, source: "direct" });
     assert.equal(started.statusCode, 200, started.body);
@@ -2258,6 +2261,8 @@ describe("Лидогенерация WB", () => {
     assert.match(token, /^irbis_[0-9a-f]{48}$/);
     assert.equal((await collector("GET", "/leadgen/collector/next", token)).json().task.type, "idle", "сбора нет — ждём");
 
+    // По умолчанию страна — только для справки, без отсева.
+    await call(s, "PUT", "/leadgen/settings", { ...lg.DEFAULT_LEADGEN_SETTINGS });
     const jobId = (await call(s, "POST", "/leadgen/jobs", { month: "2027-05", quota: 3 })).json().job.id as number;
     const world = fakeWorld(cats);
     const sources = world.make(lg.DEFAULT_LEADGEN_SETTINGS, () => false, () => {});
@@ -2315,7 +2320,9 @@ describe("Лидогенерация WB", () => {
     assert.ok(sellers > 0, "страницы продавцов открывались");
     const base = (await call(s, "GET", "/leadgen/sellers?month=2027-05&limit=500")).json();
     assert.equal(base.total, cats.length * 3);
-    assert.ok(base.sellers.every((x: { skuCount: number; chinaShare: number }) => x.skuCount === 300 && x.chinaShare >= 0.7), "SKU и страна — по каталогу из браузера");
+    assert.ok(base.sellers.every((x: { skuCount: number; chinaShare: number | null }) => x.skuCount === 300 && x.chinaShare !== null), "SKU — со страницы продавца, доля Китая — для справки");
+    const rejected = await db.select().from(schema.leadCandidates).where(eq(schema.leadCandidates.jobId, jobId));
+    assert.ok(!rejected.some((c) => c.reason === "мало данных о стране" || c.reason?.startsWith("Китай <")), "по стране не отсеиваем");
     const status = (await call(s, "GET", "/leadgen/status")).json();
     assert.equal(status.collector.hasKey, true);
     assert.ok(status.collector.lastSeenAt);
