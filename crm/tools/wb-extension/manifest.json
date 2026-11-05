@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Ирбис · сборщик WB",
+  "version": "1.0.0",
+  "description": "Лидогенерация «Ирбиса»: открывает выдачу и страницы продавцов Wildberries в вашем браузере и передаёт найденное в Ирбис.",
+  "permissions": ["storage", "tabs", "alarms"],
+  "host_permissions": ["https://www.wildberries.ru/*", "https://*/crm/api/leadgen/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Ирбис · сборщик WB", "default_popup": "popup.html" },
+  "content_scripts": [
+    { "matches": ["https://www.wildberries.ru/*"], "js": ["inject.js"], "run_at": "document_start", "world": "MAIN" },
+    { "matches": ["https://www.wildberries.ru/*"], "js": ["content.js"], "run_at": "document_start" }
+  ]
+}

@@ -19,7 +19,8 @@ export type LeadCategory = {
 export type LeadJob = {
   id: number;
   month: string;
-  status: "queued" | "running" | "stopping" | "paused" | "failed" | "done";
+  status: "queued" | "running" | "stopping" | "collecting" | "paused" | "failed" | "done";
+  source?: "browser" | "direct";
   stage: "collect" | "filter" | "schedule" | "done";
   progress: JobProgress;
   quotas: Record<string, number>;
@@ -69,6 +70,7 @@ export type LeadStatus = {
   checko: boolean;
   proxy: boolean;
   worker: { at: string | null; alive: boolean; state: string | null };
+  collector: { hasKey: boolean; createdAt: string | null; lastSeenAt: string | null; lastTask: string | null };
   settings: LeadgenSettings;
   months: string[];
   today: string;

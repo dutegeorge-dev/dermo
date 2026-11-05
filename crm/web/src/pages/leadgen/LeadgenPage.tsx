@@ -7,11 +7,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 
-import { DEFAULT_LEADGEN_SETTINGS, JOB_STAGES, JOB_STATUSES, type LeadgenSettings, SETTINGS_FIELDS, TEMPLATE_MARKING, TEMPLATE_PLAIN } from "../../../../shared/leadgen.ts";
+import { DEFAULT_LEADGEN_SETTINGS, JOB_SOURCES, JOB_STAGES, JOB_STATUSES, type JobSource, type LeadgenSettings, SETTINGS_FIELDS, TEMPLATE_MARKING, TEMPLATE_PLAIN } from "../../../../shared/leadgen.ts";
 import { IconPencil, IconPlus } from "../../components/Icons.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { ConfirmDialog, EmptyState, ErrorBox, Modal, PageHeader, Spinner } from "../../components/ui.tsx";
-import { api } from "../../lib/api.ts";
+import { api, apiDownload } from "../../lib/api.ts";
 import { formatDate, formatDateTime } from "../../lib/format.ts";
 import { BaseTab, TodayTab } from "./LeadgenSellers.tsx";
 import type { LeadCategory, LeadJob, LeadStatus, StatsRow } from "./types.ts";
@@ -87,9 +87,10 @@ function StartDialog({ categories, onClose, onStarted }: { categories: LeadCateg
   const qc = useQueryClient();
   const [month, setMonth] = useState(thisMonth());
   const [quota, setQuota] = useState("");
+  const [source, setSource] = useState<JobSource>("browser");
   const active = categories.filter((c) => c.active && c.queries.length);
   const start = useMutation({
-    mutationFn: () => api<{ job: LeadJob }>("/leadgen/jobs", { method: "POST", body: { month, quota: quota ? Number(quota) : null } }),
+    mutationFn: () => api<{ job: LeadJob }>("/leadgen/jobs", { method: "POST", body: { month, quota: quota ? Number(quota) : null, source } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["leadgen"] });
       onStarted();
@@ -124,6 +125,21 @@ function StartDialog({ categories, onClose, onStarted }: { categories: LeadCateg
             <input type="number" min={1} className="input" placeholder="например, 10 для пробы" value={quota} onChange={(e) => setQuota(e.target.value)} />
           </label>
         </div>
+        <fieldset className="space-y-1">
+          <legend className="label">Откуда брать выдачу WB</legend>
+          <label className="flex items-start gap-2">
+            <input type="radio" className="mt-1" checked={source === "browser"} onChange={() => setSource("browser")} />
+            <span>
+              Расширение «Ирбис · сборщик WB» в вашем Chrome <span className="muted">— WB закрыл поиск для серверов; расширение открывает страницы в браузере сотрудника</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2">
+            <input type="radio" className="mt-1" checked={source === "direct"} onChange={() => setSource("direct")} />
+            <span>
+              С сервера <span className="muted">— только если поиск WB отвечает серверу (npm run leadgen:check)</span>
+            </span>
+          </label>
+        </fieldset>
         <div>
           Категорий: {active.length}, отобрать всего: <b>{total}</b>
         </div>
@@ -295,7 +311,7 @@ function CategoryDialog({ category, onClose }: { category: LeadCategory | null; 
 
 // ── Сбор ─────────────────────────────────────────────────────────────────────
 
-const ACTIVE = new Set(["queued", "running", "stopping"]);
+const ACTIVE = new Set(["queued", "running", "stopping", "collecting"]);
 
 function CollectTab({ status, categories, onStart }: { status: LeadStatus; categories: LeadCategory[]; onStart: () => void }) {
   const qc = useQueryClient();
@@ -315,8 +331,9 @@ function CollectTab({ status, categories, onStart }: { status: LeadStatus; categ
         <Check ok={status.worker.alive} label={status.worker.alive ? "воркер работает" : `воркер не запущен${status.worker.at ? ` (был ${formatDateTime(status.worker.at)})` : ""} — служба bars-crm-leadgen`} />
         <Check ok={status.dadata} label={status.dadata ? "DaData: ключ есть" : "DaData: нет DADATA_TOKEN"} />
         <Check ok={status.checko} label={status.checko ? "Checko: ключ есть" : "Checko: нет CHECKO_API_KEY (контакты только с WB)"} />
-        <Check ok label={status.proxy ? "WB через прокси" : "WB напрямую (нужен российский IP)"} />
+        <Check ok label={status.proxy ? "WB с сервера: через прокси" : "WB с сервера: напрямую"} />
       </div>
+      <CollectorKey status={status} />
       {jobs.isLoading && <Spinner />}
       <ErrorBox error={jobs.error ?? action.error} />
       {!current && (
@@ -350,6 +367,60 @@ function CollectTab({ status, categories, onStart }: { status: LeadStatus; categ
   );
 }
 
+function CollectorKey({ status }: { status: LeadStatus }) {
+  const qc = useQueryClient();
+  const [token, setToken] = useState<string | null>(null);
+  const issue = useMutation({
+    mutationFn: () => api<{ token: string }>("/leadgen/collector/token", { method: "POST" }),
+    onSuccess: (d) => {
+      setToken(d.token);
+      void qc.invalidateQueries({ queryKey: ["leadgen", "status"] });
+    },
+  });
+  const c = status.collector;
+  const seen = c.lastSeenAt ? Date.now() - Date.parse(c.lastSeenAt) < 2 * 60_000 : false;
+  return (
+    <div className="panel space-y-2 p-4 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="font-semibold">Сборщик в браузере</div>
+          <div className="text-xs muted">
+            Расширение Chrome «Ирбис · сборщик WB» открывает выдачу и страницы продавцов WB в вашем браузере. Установка: скачать и распаковать архив →
+            chrome://extensions → «Режим разработчика» → «Загрузить распакованное расширение» → папка irbis-wb-extension; в расширении — адрес Ирбиса и ключ.
+            {c.lastSeenAt ? ` Последняя связь: ${formatDateTime(c.lastSeenAt)}${c.lastTask ? ` (${c.lastTask})` : ""}.` : " Ещё не подключался."}
+          </div>
+        </div>
+        <span className="flex items-center gap-2">
+          <Check ok={seen} label={seen ? "на связи" : "не на связи"} />
+          <button type="button" className="btn btn-sm" onClick={() => void apiDownload("/leadgen/collector/extension.zip").catch(() => {})}>
+            Скачать расширение
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={issue.isPending}
+            onClick={() => (!c.hasKey || window.confirm("Выпустить новый ключ? Старый в расширении перестанет работать.")) && issue.mutate()}
+          >
+            {c.hasKey ? "Новый ключ" : "Выпустить ключ"}
+          </button>
+        </span>
+      </div>
+      {token && (
+        <div className="rounded-md bg-amber-50 p-2 text-xs dark:bg-amber-900/30">
+          Ключ показывается один раз — вставьте его в расширение (поле «Ключ сборщика»), адрес Ирбиса — <b>{window.location.origin}/crm</b>:
+          <div className="mt-1 flex items-center gap-2">
+            <code className="break-all font-mono text-sm">{token}</code>
+            <button type="button" className="btn btn-sm" onClick={() => void navigator.clipboard?.writeText(token)}>
+              Копировать
+            </button>
+          </div>
+        </div>
+      )}
+      <ErrorBox error={issue.error} />
+    </div>
+  );
+}
+
 function Check({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span className={`rounded px-2 py-1 ${ok ? "bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-200" : "bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"}`}>
@@ -372,7 +443,7 @@ function JobView({ job, categories, busy, onAction }: { job: LeadJob; categories
             Сбор № {job.id} на {job.month}
           </div>
           <div className="text-sm">
-            <b>{JOB_STATUSES[job.status]}</b> · этап: {JOB_STAGES[job.stage]} · отобрано {total} из {quota}
+            <b>{JOB_STATUSES[job.status]}</b> · этап: {JOB_STAGES[job.stage]} · отобрано {total} из {quota} · {JOB_SOURCES[job.source ?? "direct"]}
           </div>
           <div className="text-xs muted">
             {job.startedAt && `начат ${formatDateTime(job.startedAt)}`}
@@ -383,7 +454,7 @@ function JobView({ job, categories, busy, onAction }: { job: LeadJob; categories
           </div>
         </div>
         <div className="flex gap-2">
-          {(job.status === "running" || job.status === "queued") && (
+          {(job.status === "running" || job.status === "queued" || job.status === "collecting") && (
             <button type="button" className="btn" disabled={busy} onClick={() => onAction("stop")}>
               Остановить
             </button>
@@ -406,6 +477,12 @@ function JobView({ job, categories, busy, onAction }: { job: LeadJob; categories
           )}
         </div>
       </div>
+      {job.status === "collecting" && (
+        <div className="mt-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
+          {job.stage === "collect" ? "Сервер ждёт выдачу WB" : `Сервер ждёт страницы продавцов (${rows.reduce((s, r) => s + (r.p?.waiting ?? 0), 0)})`} от расширения «Ирбис · сборщик WB». Откройте его в Chrome и нажмите «Запустить» —
+          браузер с вкладкой WB должен быть открыт.
+        </div>
+      )}
       {job.progress.scheduled && job.progress.scheduled.sellers > 0 && (
         <div className="mt-2 text-sm">
           Разложено {job.progress.scheduled.sellers} продавцов: с {formatDate(job.progress.scheduled.from)} по {formatDate(job.progress.scheduled.to)}
