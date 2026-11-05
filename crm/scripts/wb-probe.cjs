@@ -7,16 +7,24 @@
  *   NODE_PATH=/tmp/node_modules node /var/www/tlkbars/repo/crm/scripts/wb-probe.cjs "сковорода"
  *
  * Playwright в зависимости Ирбиса не входит — ставится отдельно, только для этой проверки.
+ *
+ * На своём компьютере — видимое окно установленного Google Chrome (отдельный временный профиль, без входа в WB):
+ *   npm i playwright@1
+ *   node wb-probe.cjs "гиря" --headed
+ *
+ * Браузер ничем не маскируется: если WB не пускает автоматизированный браузер — так и будет видно.
  */
 
 const { chromium } = require("playwright");
 
-const query = process.argv[2] || "сковорода";
+const args = process.argv.slice(2);
+const headed = args.includes("--headed");
+const query = args.find((a) => !a.startsWith("--")) || "сковорода";
 const proxy = process.env.WB_PROXY ? { server: process.env.WB_PROXY } : undefined;
 const INTERESTING = /wb\.ru|wbbasket\.ru|wildberries\.ru\/(webapi|__internal)|suppliers-shipment/;
 
 (async () => {
-  const browser = await chromium.launch({ proxy });
+  const browser = await chromium.launch(headed ? { headless: false, channel: "chrome", proxy } : { proxy });
   const page = await browser.newPage({ locale: "ru-RU", viewport: { width: 1366, height: 900 } });
   const seen = new Map();
   page.on("response", async (res) => {
