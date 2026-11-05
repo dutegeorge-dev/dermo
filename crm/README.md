@@ -410,6 +410,7 @@ sudo systemctl start bars-crm
 | `GET/PUT /shipments/:number/spec` | Спецификация для перевозчика: данные (поля, строки по позициям, чего не хватает, предупреждения) / параметры (получатель, станция, описания) |
 | `POST /shipments/:number/spec.xlsx` (multipart `file` — шаблон перевозчика, необязательно) | Сформировать Excel, сохранить документом `carrier_spec` и отдать |
 | `GET /shipments/:number/customs-pack`, `GET /shipments/:number/customs-pack.zip` | Пакет документов для таможни: состав и недостающее / ZIP с описью |
+| `GET /shipments/:number/documents.zip` | Все файлы всех документов сделки одним архивом — по папкам групп, с платёжками |
 | `GET /shipments/:number/kp.docx` | КП в Word по шаблону `templates/kp.docx` (свой — `CRM_UPLOAD_DIR/templates/kp.docx`) |
 | `GET/PUT /settings/company`, `GET/POST/DELETE /settings/templates/commission_order[.docx]` | Реквизиты компании; шаблон поручения (admin) |
 | `GET /search?q=` | Глобальный поиск: сделки, клиенты, страницы, справочник; сниппеты с `<mark>` |

@@ -352,6 +352,10 @@
     «Прочее» (владелец: «все документы не учту»). Поле «Название документа» в форме любого документа; пусто — по
     типу. Видно в заголовке, списках, сделке, журнале (`documentLabel`), поиске; ИИ при разборе предлагает его сам
     (`title` в черновике), если документ не из стандартных типов.
+30. **«Скачать все (ZIP)» в блоке «Документы» сделки (ноябрь 2026)** — владельцу нужны все документы разом, не
+    только пакет на шаге таможни: `GET /shipments/:n/documents.zip` — каждый файл каждого документа сделки (оригинал,
+    подписанный, сформированный, платёжки — и разнесённые оплаты) по папкам групп («1 С клиентом», «2 С поставщиком»…),
+    имя — «Название № … от … [— оплата] — файл». Пакет для таможни (отбор и опись) — как был.
 
 ## 5. Архитектура
 
@@ -457,7 +461,7 @@ crm/
                         quotes (ставки доставки CRUD, GET /cbr-rates, расчёты товара и КП /quotes/:id/kp.docx)
                         products (+ GET /products/duplicates, POST /products/merge)
                         calc (GET/POST /shipments/:n/calc, kp.docx, GET /tnved)
-                        cargo (GET/PUT /shipments/:n/spec, spec.xlsx, customs-pack[.zip])
+                        cargo (GET/PUT /shipments/:n/spec, spec.xlsx, customs-pack[.zip], documents.zip — все документы сделки)
                         calendar (свои события календаря: POST/PATCH/DELETE /calendar/events; в GET /calendar — calendarCustomEvents)
                         payments (POST /payments, DELETE /payments/:id — оплата на несколько счетов; файл — files.ts POST /payments/:id/files)
                         estimates (раздел «Расчёт»: CRUD /estimates, POST /estimates/parse — ИИ по тексту заявки, /estimates/:id/kp.docx)

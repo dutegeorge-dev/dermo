@@ -8,11 +8,12 @@ import type { FastifyInstance } from "fastify";
 import JSZip from "jszip";
 
 import { DEFAULT_SPEC_PARAMS, type SpecParams } from "../../shared/cargo.ts";
-import { DOC_TYPES } from "../../shared/documents.ts";
+import { DOC_GROUPS, DOC_TYPES, type DocGroup, docSpec } from "../../shared/documents.ts";
 import { db, type DbOrTx } from "../db/client.ts";
 import { attachments, counterparties, documentItems, documents, paymentAllocations, shipments } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { DEFAULT_MAPPING, defaultTemplate, mapTemplate, renderSpec, specData } from "../lib/carrier-spec.ts";
+import { shipmentDocuments } from "../lib/finance.ts";
 import { body, currentUser, HttpError } from "../lib/http.ts";
 import { paymentExplanation, shipmentPayments } from "../lib/payments.ts";
 import { addShipmentEvent, parseShipmentNumber } from "../lib/shipments.ts";
@@ -192,6 +193,44 @@ export async function cargoRoutes(app: FastifyInstance): Promise<void> {
     const sh = await shipmentByNumber(db, (request.params as { number: string }).number);
     const { files, present, missing, explanation } = await customsPack(db, sh);
     return { files: files.length, present, missing, explanation };
+  });
+
+  /**
+   * Все документы сделки одним архивом (кнопка в блоке «Документы»): каждый файл каждого документа — оригинал,
+   * подписанный, сформированный, платёжки — по папкам групп («С клиентом», «С поставщиком», «Перевозка»…).
+   */
+  app.get("/shipments/:number/documents.zip", async (request, reply) => {
+    const sh = await shipmentByNumber(db, (request.params as { number: string }).number);
+    const docs = await shipmentDocuments(db, sh.id);
+    const ids = docs.flatMap((d) => d.files.map((f) => f.id));
+    if (!ids.length) throw new HttpError(400, "В сделке ещё нет файлов документов");
+    const keys = new Map((await db.select({ id: attachments.id, key: attachments.storageKey }).from(attachments).where(inArray(attachments.id, ids))).map((r) => [r.id, r.key]));
+    const zip = new JSZip();
+    const used = new Set<string>();
+    const missing: string[] = [];
+    const groups = Object.keys(DOC_GROUPS) as DocGroup[];
+    for (const d of docs) {
+      const group = (docSpec(d.type)?.group ?? "other") as DocGroup;
+      const folder = `${groups.indexOf(group) + 1} ${DOC_GROUPS[group]}`;
+      const label = [d.title || (DOC_TYPES[d.type as keyof typeof DOC_TYPES]?.label ?? d.type), d.number ? `№ ${d.number}` : "б/н", d.date && `от ${d.date.split("-").reverse().join(".")}`].filter(Boolean).join(" ");
+      for (const f of d.files) {
+        const key = keys.get(f.id);
+        if (!key) continue;
+        const kind = f.label === "payment" ? " — оплата" : f.label === "signed" ? " — подписанный" : "";
+        let name = `${folder}/${safeName(`${label}${kind} — ${f.filename}`)}`;
+        for (let i = 2; used.has(name); i++) name = `${folder}/${i} ${safeName(`${label}${kind} — ${f.filename}`)}`;
+        used.add(name);
+        try {
+          zip.file(name, await readStored(key));
+        } catch {
+          missing.push(`${label}: файл «${f.filename}» не найден на диске`);
+        }
+      }
+    }
+    if (missing.length) zip.file("Не найдено.txt", `\ufeff${missing.join("\r\n")}`);
+    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    const filename = `Документы ${safeName(sh.title)}${sh.containerNo ? ` ${sh.containerNo}` : ""}.zip`;
+    return reply.header("content-type", "application/zip").header("content-disposition", disposition(filename, `documents-${sh.number}.zip`)).send(buffer);
   });
 
   app.get("/shipments/:number/customs-pack.zip", async (request, reply) => {

@@ -1008,6 +1008,13 @@ describe("Упаковочный лист, спецификация для пе�
     assert.ok(names.some((n) => n.startsWith("2 Инвойсы поставщика/") && n.includes("оплата")), names.join("\n"));
     assert.ok(names.some((n) => n.startsWith("4 Спецификация/")));
     assert.match(await zip.file("Опись.txt")!.async("string"), /Не хватает/);
+
+    // Все документы сделки одним архивом — по папкам групп, с платёжками.
+    const allRes = await app.inject({ method: "GET", url: `${API}/shipments/${no}/documents.zip`, headers: { cookie: s.cookie } });
+    assert.equal(allRes.statusCode, 200);
+    const all = Object.keys((await JSZip.loadAsync(allRes.rawPayload)).files);
+    assert.ok(all.some((n) => n.startsWith("2 С поставщиком/") && n.includes("оплата")), all.join("\n"));
+    assert.ok(all.some((n) => n.startsWith("2 С поставщиком/") && !n.includes("оплата") && n.endsWith("invoice.pdf")), all.join("\n"));
   });
 
   test("база фабрик: кандидатов видят админ и нашедший, дубли по WeChat, цены → товары, «сделать поставщиком»", async () => {

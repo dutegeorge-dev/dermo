@@ -78,3 +78,4 @@ export const IconSparkles = make(["M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.
 export const IconChat = make(["M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"], "IconChat");
 export const IconSend = make(["M22 2 11 13", "M22 2 15 22l-4-9-9-4Z"], "IconSend");
 export const IconCalculator = make(["M5 2h14v20H5z", "M8 6h8v4H8z", "M8 14h.01", "M12 14h.01", "M16 14h.01", "M8 18h.01", "M12 18h.01", "M16 18h.01"], "IconCalculator");
+export const IconDownload = make(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5", "M12 15V3"], "IconDownload");
