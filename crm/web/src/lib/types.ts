@@ -56,7 +56,7 @@ export type SearchResult = {
   shipments: { number: number; containerNo: string | null; title: string; client: string | null; status: string; stage: number }[];
   deals: { key: string; title: string; client: string | null; status: string; outcome: string | null }[];
   clients: { id: number; name: string; inn: string | null; role: CounterpartyRole }[];
-  documents: { id: number; type: string; number: string | null; date: string | null; party: string | null }[];
+  documents: { id: number; type: string; title: string | null; number: string | null; date: string | null; party: string | null }[];
   products: { id: number; name: string; hsCode: string | null }[];
   pages: { id: number; title: string; spaceKey: string; spaceName: string; snippet: string; updatedAt: string }[];
   callTopics: { id: string; title: string; ask: string[]; snippet: string }[];
@@ -125,6 +125,8 @@ export type FinanceRow = {
 export type DealDocument = {
   id: number;
   type: string;
+  /** Своё название («Претензия») — вместо названия типа. */
+  title: string | null;
   number: string | null;
   date: string | null;
   seqNo: number | null;
@@ -220,6 +222,8 @@ export type CounterpartyRow = Pick<Counterparty, "id" | "role" | "contractorType
 export type DocumentRow = {
   id: number;
   type: string;
+  /** Своё название («Претензия») — вместо названия типа. */
+  title: string | null;
   number: string | null;
   date: string | null;
   seqNo: number | null;

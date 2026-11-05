@@ -111,12 +111,13 @@ export async function parseFields(tx: DbOrTx, input: Record<string, unknown>): P
 /** Подпись документа для журнала: «Договор комиссии № 01 от 2026-03-09». */
 export async function documentLabel(tx: DbOrTx, id: number): Promise<string> {
   const [doc] = await tx
-    .select({ type: documents.type, number: documents.number, date: documents.date })
+    .select({ type: documents.type, title: documents.title, number: documents.number, date: documents.date })
     .from(documents)
     .where(eq(documents.id, id));
   if (!doc) return `#${id}`;
   const spec = docSpec(doc.type);
-  return [spec?.label ?? doc.type, doc.number && `№ ${doc.number}`, doc.date && `от ${doc.date.split("-").reverse().join(".")}`]
+  // Своё название («Претензия») — вместо названия типа.
+  return [doc.title || spec?.label || doc.type, doc.number && `№ ${doc.number}`, doc.date && `от ${doc.date.split("-").reverse().join(".")}`]
     .filter(Boolean)
     .join(" ");
 }

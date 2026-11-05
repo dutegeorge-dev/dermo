@@ -7,8 +7,9 @@ import type { CounterpartyRole, DocumentRow } from "../../lib/types.ts";
 
 export const docTypeLabel = (type: string) => docSpec(type)?.label ?? type;
 
-export function docTitle(d: { type: string; number: string | null; date: string | null }): string {
-  return [docTypeLabel(d.type), d.number && `№ ${d.number}`, d.date && `от ${formatDay(d.date)}`].filter(Boolean).join(" ");
+/** «Претензия № 1 от 26.08.2026»: своё название документа, если есть, иначе тип. */
+export function docTitle(d: { type: string; title?: string | null; number: string | null; date: string | null }): string {
+  return [d.title || docTypeLabel(d.type), d.number && `№ ${d.number}`, d.date && `от ${formatDay(d.date)}`].filter(Boolean).join(" ");
 }
 
 export function formatDay(date: string | null | undefined): string {

@@ -11,7 +11,7 @@ import { Link } from "react-router";
 
 import { formatMoney } from "../../../../shared/documents.ts";
 import { daysBetween, FLAGS, type FlagKey, MILESTONES, type MilestoneSpec, SHIPMENT_STAGES, type StageSpec } from "../../../../shared/shipments.ts";
-import { api, apiDownload, BASE, errorMessage } from "../../lib/api.ts";
+import { api, BASE, downloadLink, errorMessage } from "../../lib/api.ts";
 import type { ShipmentResponse } from "../../lib/types.ts";
 import { formatDay, StatusChip } from "../docs/common.tsx";
 import { IconCheck } from "../Icons.tsx";
@@ -725,7 +725,7 @@ function CustomsPack({ number }: { number: number }) {
             setBusy(true);
             setError(null);
             try {
-              await apiDownload(`/shipments/${number}/customs-pack.zip`);
+              downloadLink(`/shipments/${number}/customs-pack.zip`);
             } catch (e) {
               setError(errorMessage(e));
             } finally {

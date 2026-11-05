@@ -8,7 +8,7 @@ import { CLIENT_CONTRACT_BY_SCHEME, CONTRACTOR_TYPES, DOC_GROUPS, type DocGroup,
 import { api, BASE, fileUrl } from "../../lib/api.ts";
 import type { DealDocument, DocumentRow, FinanceRow, Money, ShipmentResponse } from "../../lib/types.ts";
 import { docTitle, docTypeLabel, formatDay, PaymentChip, StatusChip } from "../docs/common.tsx";
-import { IconFile, IconPlus } from "../Icons.tsx";
+import { IconDownload, IconFile, IconPlus } from "../Icons.tsx";
 import { ErrorBox } from "../ui.tsx";
 import { useShipmentActions } from "./common.tsx";
 import { CounterpartyPicker, ensureCounterparty, type Picked } from "../crm/CounterpartyPicker.tsx";
@@ -124,6 +124,11 @@ export function ShipmentDocs({ data, save }: { data: ShipmentResponse; save: Sav
         <h2 className="text-sm font-semibold">Документы</h2>
         {!order && sh.scheme === "commission" && <span className="text-xs muted">поручение — в «Расчёте для клиента» внизу</span>}
         <span className="flex-1" />
+        {data.documents.some((d) => d.files.length > 0) && (
+          <a className="btn btn-sm" href={`${BASE}/api/shipments/${sh.number}/documents.zip`} download title="Все файлы всех документов сделки одним архивом — по папкам, с платёжками">
+            <IconDownload size={12} /> Скачать все (ZIP)
+          </a>
+        )}
         {data.documents.some((d) => d.paymentStatus !== null) && (
           <button type="button" className="btn btn-sm" title="Одна платёжка на несколько инвойсов / часть инвойса другой сделки" onClick={() => setPaying(true)}>
             Оплата на несколько счетов
@@ -312,7 +317,7 @@ function DocCard({ doc: d, onProof }: { doc: DealDocument; onProof: (f: File) =>
       <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
         <div className="min-w-0 flex-1">
           <Link to={`/documents/${d.id}`} className="font-medium hover:underline">
-            {docTypeLabel(d.type)} № {d.number ?? "б/н"}
+            {d.title || docTypeLabel(d.type)} № {d.number ?? "б/н"}
           </Link>
           {d.date && <span className="muted"> от {formatDay(d.date)}</span>}
           {d.counterpartyName && <div className="truncate text-xs muted">{d.counterpartyName}</div>}

@@ -84,10 +84,10 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY c.name
       LIMIT 10`);
 
-    const docRows = await db.execute<{ id: number; type: string; number: string | null; date: string | null; party: string | null }>(sql`
-      SELECT d.id, d.type, d.number, d.date::text, c.name AS party FROM documents d
+    const docRows = await db.execute<{ id: number; type: string; title: string | null; number: string | null; date: string | null; party: string | null }>(sql`
+      SELECT d.id, d.type, d.title, d.number, d.date::text, c.name AS party FROM documents d
       LEFT JOIN counterparties c ON c.id = d.counterparty_id
-      WHERE d.number ILIKE ${like}
+      WHERE d.number ILIKE ${like} OR d.title ILIKE ${like}
          OR EXISTS (SELECT 1 FROM document_items i WHERE i.document_id = d.id AND i.name ILIKE ${like})
       ORDER BY d.date DESC NULLS LAST, d.id DESC
       LIMIT 10`);
