@@ -11,6 +11,8 @@
  * На своём компьютере — видимое окно установленного Google Chrome (отдельный временный профиль, без входа в WB):
  *   npm i playwright@1
  *   node wb-probe.cjs "гиря" --headed
+ * Нет Google Chrome — откроется Microsoft Edge; другой браузер на Chromium — --exe="C:\путь\к\browser.exe".
+ * Консоль портит кириллицу (Windows с китайской / английской кодировкой) — запросом можно не указывать, по умолчанию «гиря».
  *
  * Браузер ничем не маскируется: если WB не пускает автоматизированный браузер — так и будет видно.
  */
@@ -19,12 +21,30 @@ const { chromium } = require("playwright");
 
 const args = process.argv.slice(2);
 const headed = args.includes("--headed");
-const query = args.find((a) => !a.startsWith("--")) || "сковорода";
+const exe = args.find((a) => a.startsWith("--exe="))?.slice(6).replace(/^"|"$/g, "");
+const typed = args.find((a) => !a.startsWith("--"));
+// Консоль не в UTF-8 передаёт кириллицу как «????» — тогда берём запрос по умолчанию.
+const query = typed && !/^\?+$/.test(typed) ? typed : "гиря";
 const proxy = process.env.WB_PROXY ? { server: process.env.WB_PROXY } : undefined;
 const INTERESTING = /wb\.ru|wbbasket\.ru|wildberries\.ru\/(webapi|__internal)|suppliers-shipment/;
 
 (async () => {
-  const browser = await chromium.launch(headed ? { headless: false, channel: "chrome", proxy } : { proxy });
+  let browser;
+  if (!headed) browser = await chromium.launch({ proxy });
+  else if (exe) browser = await chromium.launch({ headless: false, executablePath: exe, proxy });
+  else {
+    // Установленный Google Chrome, нет его — Microsoft Edge (есть в любой Windows 10/11).
+    for (const channel of ["chrome", "msedge"]) {
+      try {
+        browser = await chromium.launch({ headless: false, channel, proxy });
+        console.log(`Браузер: ${channel === "chrome" ? "Google Chrome" : "Microsoft Edge"}`);
+        break;
+      } catch (e) {
+        if (channel === "msedge") throw new Error(`Не нашёлся ни Chrome, ни Edge — укажите браузер: --exe="C:\\путь\\к\\browser.exe"\n${e.message}`);
+      }
+    }
+  }
+  console.log(`Запрос: «${query}»`);
   const page = await browser.newPage({ locale: "ru-RU", viewport: { width: 1366, height: 900 } });
   const seen = new Map();
   page.on("response", async (res) => {
