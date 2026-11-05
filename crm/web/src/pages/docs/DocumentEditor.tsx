@@ -131,6 +131,7 @@ function EditorForm({ initial }: { initial: Initial }) {
   const [newVolume, setNewVolume] = useState("");
   const [parentId, setParentId] = useState<number | null>(ex?.parentId ?? null);
   const [number, setNumber] = useState(ex?.number ?? "");
+  const [title, setTitle] = useState(ex?.title ?? "");
   const [date, setDate] = useState(ex?.date ?? new Date().toISOString().slice(0, 10));
   const [currency, setCurrency] = useState(ex?.currency ?? (type === "customs_declaration" ? "RUB" : spec.party === "supplier" ? "CNY" : "RUB"));
   const [amount, setAmount] = useState(ex?.amount != null ? String(ex.amount) : "");
@@ -212,6 +213,7 @@ function EditorForm({ initial }: { initial: Initial }) {
     setAiFill(d.counterparty?.id && d.counterpartyFill ? { id: d.counterparty.id, values: d.counterpartyFill } : null);
     if (d.client && dSpec.party !== "client") setClient(d.client);
     if (d.number) setNumber(d.number);
+    if (d.title) setTitle(d.title);
     if (d.date) setDate(d.date);
     if (d.currency) setCurrency(d.currency);
     if (d.amount != null) setAmount(String(d.amount));
@@ -336,6 +338,7 @@ function EditorForm({ initial }: { initial: Initial }) {
       const body: Record<string, unknown> = {
         type,
         number: number || null,
+        title: title.trim() || null,
         date: date || null,
         counterpartyId,
         clientId: spec.party === "client" ? null : clientId,
@@ -499,6 +502,15 @@ function EditorForm({ initial }: { initial: Initial }) {
                 ))}
               </select>
               {"hint" in spec && spec.hint && <span className="mt-1 block text-xs muted">{spec.hint}</span>}
+            </Field>
+            <Field label="Название документа" wide>
+              <input
+                className="input"
+                value={title}
+                placeholder={type === "other" ? "Претензия, акт сверки, письмо…" : `${spec.label} — можно своё название`}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+              <span className="mt-1 block text-xs muted">Пусто — называется по типу. Своё название видно в списках, в сделке и в поиске.</span>
             </Field>
 
             {spec.party && (

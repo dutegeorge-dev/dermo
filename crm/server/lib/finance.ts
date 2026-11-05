@@ -25,6 +25,7 @@ export async function shipmentDocuments(db: DbOrTx, shipmentId: number) {
     .select({
       id: documents.id,
       type: documents.type,
+      title: documents.title,
       number: documents.number,
       date: documents.date,
       seqNo: documents.seqNo,

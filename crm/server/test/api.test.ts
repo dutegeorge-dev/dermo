@@ -617,6 +617,20 @@ describe("Сделки (отгрузки) и календарь", () => {
     assert.equal(ours((await call(s, "GET", "/shipments")).json().shipments).length, 0);
     assert.equal(ours((await call(s, "GET", "/shipments?status=closed")).json().shipments).length, 1);
   });
+  test("своё название документа: «Претензия» вместо «Прочее» — в карточке, журнале и поиске", async () => {
+    const s = await adminSession();
+    const res = await call(s, "POST", "/documents", { type: "other", title: "Претензия", number: "1", date: "2026-08-26" });
+    assert.equal(res.statusCode, 200, res.body);
+    const id = res.json().document.id as number;
+    assert.equal((await call(s, "GET", `/documents/${id}`)).json().document.title, "Претензия");
+    assert.ok((await call(s, "GET", "/search?q=претензия")).json().documents.some((d: { id: number }) => d.id === id));
+    assert.equal((await call(s, "PATCH", `/documents/${id}`, { title: "Претензия поставщику" })).statusCode, 200);
+    assert.equal((await call(s, "GET", `/documents/${id}`)).json().document.title, "Претензия поставщику");
+    assert.equal((await call(s, "PATCH", `/documents/${id}`, { title: "" })).statusCode, 200);
+    assert.equal((await call(s, "GET", `/documents/${id}`)).json().document.title, null, "пусто — снова по типу");
+    assert.equal((await call(s, "DELETE", `/documents/${id}`)).statusCode, 200);
+  });
+
   test("свои события календаря: встреча, поездка, оплата — создать, изменить, выполнено, удалить", async () => {
     const s = await adminSession();
     // Ошибки ввода.

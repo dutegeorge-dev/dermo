@@ -312,7 +312,7 @@ function DocCard({ doc: d, onProof }: { doc: DealDocument; onProof: (f: File) =>
       <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
         <div className="min-w-0 flex-1">
           <Link to={`/documents/${d.id}`} className="font-medium hover:underline">
-            {docTypeLabel(d.type)} № {d.number ?? "б/н"}
+            {d.title || docTypeLabel(d.type)} № {d.number ?? "б/н"}
           </Link>
           {d.date && <span className="muted"> от {formatDay(d.date)}</span>}
           {d.counterpartyName && <div className="truncate text-xs muted">{d.counterpartyName}</div>}

@@ -348,6 +348,10 @@
 останавливает, если начали кодить большое без обсуждения. Ценит простоту и
 «всё видно на одном экране». После изменений — пуш в `main` (разрешено) и
 короткая инструкция, что выполнить на сервере.
+29. **Своё название документа (ноябрь 2026)** — `documents.title`: «Претензия», «Акт сверки», «Письмо…» вместо
+    «Прочее» (владелец: «все документы не учту»). Поле «Название документа» в форме любого документа; пусто — по
+    типу. Видно в заголовке, списках, сделке, журнале (`documentLabel`), поиске; ИИ при разборе предлагает его сам
+    (`title` в черновике), если документ не из стандартных типов.
 
 ## 5. Архитектура
 
@@ -524,7 +528,7 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   currency, note — что за не разнесённый остаток; файл — attachments owner_type `payment`), `payment_allocations`
   (payment_id, document_id, amount). Обычная оплата одного счёта сюда не пишется.
 
-**Миграции:** … **0018** `calendar_events`; **0017** `users.telegram_id` (бот заявок); **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0019** `documents.title`; **0018** `calendar_events`; **0017** `users.telegram_id` (бот заявок); **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).

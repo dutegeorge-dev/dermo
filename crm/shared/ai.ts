@@ -6,6 +6,8 @@ import type { CostLine, DocType } from "./documents.ts";
 /** Черновик для формы документа (web: DocumentEditor). */
 export type DocumentDraft = {
   type: DocType;
+  /** Своё название документа («Претензия»), если это не стандартный тип. */
+  title?: string | null;
   number: string | null;
   date: string | null;
   currency: string | null;

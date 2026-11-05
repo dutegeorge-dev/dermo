@@ -73,7 +73,7 @@ export function GlobalSearch() {
         key: `doc-${d.id}`,
         to: `/documents/${d.id}`,
         kind: "document" as const,
-        title: [docSpec(d.type)?.label ?? d.type, d.number && `№ ${d.number}`].filter(Boolean).join(" "),
+        title: [d.title || (docSpec(d.type)?.label ?? d.type), d.number && `№ ${d.number}`].filter(Boolean).join(" "),
         sub: ["Документ", d.party, d.date && d.date.split("-").reverse().join(".")].filter(Boolean).join(" · "),
         snippet: "",
       })),

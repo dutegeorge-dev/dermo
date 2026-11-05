@@ -67,12 +67,13 @@ export const DRAFT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: [
-    "docType", "number", "date", "currency", "amount", "counterparty", "contractorType", "clientName", "contractNumber",
+    "docType", "title", "number", "date", "currency", "amount", "counterparty", "contractorType", "clientName", "contractNumber",
     "relatedNumbers", "cargoTitle", "containerNo", "weightKg", "volumeM3", "incoterms", "paymentTerms", "validUntil", "costCategory",
     "items", "costs", "models", "summary",
   ],
   properties: {
     docType: { type: "string", enum: Object.keys(DOC_TYPES) },
+    title: STR,
     number: STR,
     date: STR,
     currency: optEnum(CURRENCIES),
@@ -128,6 +129,7 @@ export const DRAFT_SCHEMA = {
 
 export type ModelDraft = {
   docType: string;
+  title?: string | null;
   number: string | null;
   date: string | null;
   currency: string | null;
@@ -187,6 +189,7 @@ docType: ${(Object.entries(DOC_TYPES) as [DocType, { label: string }][]).map(([k
 - incoterms кратко («EXW Xinle»); paymentTerms кратко по-русски («30% депозит, 70% до погрузки»). validUntil — срок действия. costCategory — для счетов подрядчиков (transport, broker, terminal…).
 - cargoTitle — короткое название груза по-русски («Искусственная трава 20 и 35 мм»).
 - summary — одно короткое предложение по-русски (до 25 слов): что за документ, от кого, на что, сумма.
+- title — как документ называется, по-русски коротко («Претензия», «Акт сверки», «Письмо о переносе отгрузки»), если это не стандартный тип из списка (docType other) или его название заметно уточняет тип; иначе "".
 - Номера переписывай символ в символ. Нет значения — пустая строка "" (у чисел — null). Ничего не придумывай.`;
 
 /** Содержимое для модели: текст, если его можно достать кодом; иначе — сам файл. */
@@ -589,6 +592,7 @@ export async function resolveDraft(tx: DbOrTx, raw: ModelDraft): Promise<Documen
 
   return {
     type,
+    title: typeof raw.title === "string" && raw.title.trim() ? raw.title.trim().slice(0, 200) : null,
     number,
     date: isDate(raw.date) ? raw.date : null,
     currency: raw.currency && (CURRENCIES as readonly string[]).includes(raw.currency) ? raw.currency : null,

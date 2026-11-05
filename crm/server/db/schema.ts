@@ -640,6 +640,8 @@ export const documents = pgTable(
   {
     id: serial("id").primaryKey(),
     type: text("type").notNull(),
+    /** Своё название документа («Претензия», «Акт сверки») — вместо названия типа; пусто — по типу. */
+    title: text("title"),
     number: text("number"),
     date: date("date"),
     /** Вторая сторона документа (клиент, поставщик или подрядчик). */

@@ -22,6 +22,7 @@ export function documentListQuery(tx: DbOrTx) {
     .select({
       id: documents.id,
       type: documents.type,
+      title: documents.title,
       number: documents.number,
       date: documents.date,
       seqNo: documents.seqNo,
@@ -92,6 +93,7 @@ export async function parseDocumentFields(tx: DbOrTx, input: Record<string, unkn
   if (!spec) throw new HttpError(400, "Неизвестный тип документа");
   const v: Partial<DocInsert> = {};
   if ("number" in input) v.number = str(input.number, 100);
+  if ("title" in input) v.title = str(input.title, 200);
   if ("date" in input) v.date = dateOrNull(input.date, "Дата");
   if ("counterpartyId" in input) v.counterpartyId = await existing(tx, counterparties, input.counterpartyId, "Контрагент");
   if ("clientId" in input) v.clientId = await existing(tx, counterparties, input.clientId, "Клиент");
