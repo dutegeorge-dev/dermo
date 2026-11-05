@@ -72,7 +72,8 @@ function strings(v: unknown): string[] {
 }
 
 /**
- * Контакты из ответа Checko. Основной путь — data.Контакты: { Тел: [...], Емэйл: [...], ВебСайт: "..." }.
+ * Контакты из ответа Checko. Основной путь — data.Контакты: { Тел: [...], Емэйл: [...], ВебСайт: "...", Телеграм: "..." }
+ * (сверено с живым ответом /v2/company, ноябрь 2026; Телеграм не берём).
  * Если Checko переименует поля — ищем по смыслу имени ключа (тел / phone, email / емэйл / почт, сайт / web).
  */
 export function parseCheckoContacts(json: unknown): RawContacts {
@@ -81,7 +82,8 @@ export function parseCheckoContacts(json: unknown): RawContacts {
   const out: RawContacts = { phones: [], emails: [], sites: [] };
   for (const [key, value] of Object.entries(block ?? {})) {
     const k = key.toLowerCase();
-    if (/тел|phone/.test(k)) out.phones.push(...strings(value));
+    if (/телеграм|telegram|whatsapp|ватсап|vk|вконтакте/.test(k)) continue; // мессенджеры — не телефоны и не сайт
+    if (/^тел|телефон|phone/.test(k)) out.phones.push(...strings(value));
     else if (/емэйл|email|e-mail|почт|mail/.test(k)) out.emails.push(...strings(value));
     else if (/сайт|web|site|url/.test(k)) out.sites.push(...strings(value));
   }

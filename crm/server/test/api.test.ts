@@ -2088,7 +2088,7 @@ describe("Лидогенерация WB", () => {
     assert.deepEqual(parseProducts({ products: [{ id: 5, name: "a", brand: "b", supplierId: 7, feedbacks: 3 }], total: 9 }), { products: [{ nm: 5, name: "a", brand: "b", supplierId: 7, supplier: "", feedbacks: 3 }], total: 9 });
     assert.equal(parseProducts({ data: { products: [{ id: 1, nmFeedbacks: 4 }] } }).products[0].feedbacks, 4);
     assert.equal(parseCardCountry({ options: [{ name: "Страна производства", value: "Китай" }] }, "Страна производства"), "Китай");
-    const ck = parseCheckoContacts({ data: { Контакты: { Тел: ["+7 495 111-22-33"], Емэйл: ["a@b.ru"], ВебСайт: "b.ru" } }, meta: { status: "ok" } });
+    const ck = parseCheckoContacts({ data: { Контакты: { Тел: ["+7 495 111-22-33"], Емэйл: ["a@b.ru"], ВебСайт: "b.ru", Телеграм: "https://t.me/demo" } }, meta: { status: "ok" } });
     assert.deepEqual(ck, { phones: ["+7 495 111-22-33"], emails: ["a@b.ru"], sites: ["b.ru"] });
     const dd = parseDadata({ suggestions: [{ value: "ООО «Демо»", data: { type: "LEGAL", ogrn: "1", state: { status: "ACTIVE", registration_date: Date.UTC(2020, 0, 15) }, management: { name: "Демо И.", post: "ДИРЕКТОР" }, okved: "47.91", address: { value: "г Москва", data: { region_with_type: "г Москва" } }, name: { short_with_opf: "ООО \"Демо\"" } } }] });
     assert.deepEqual([dd?.kind, dd?.regDate, dd?.managerName, dd?.region], ["ul", "2020-01-15", "Демо И.", "г Москва"]);
