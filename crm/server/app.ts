@@ -44,7 +44,16 @@ const API_PREFIX = `${config.basePath}/api`;
 
 /** Маршруты API, доступные без входа. */
 /** Без сессии: вход, проверка здоровья, импорт заявок (у него своя проверка — токен в заголовке). */
-const PUBLIC_API = new Set([`${API_PREFIX}/auth/login`, `${API_PREFIX}/health`, `${API_PREFIX}/intake/leads`]);
+const PUBLIC_API = new Set([
+  `${API_PREFIX}/auth/login`,
+  `${API_PREFIX}/health`,
+  `${API_PREFIX}/intake/leads`,
+  `${API_PREFIX}/leadgen/collector/next`,
+  `${API_PREFIX}/leadgen/collector/result`,
+]);
+
+/** Доступ по ключу в заголовке Authorization (не cookie): CSRF им не грозит, Origin — chrome-extension://… */
+const TOKEN_API = new Set([`${API_PREFIX}/leadgen/collector/next`, `${API_PREFIX}/leadgen/collector/result`]);
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -120,7 +129,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
           throw new HttpError(401, "Требуется вход");
         }
 
-        if (!SAFE_METHODS.has(request.method)) {
+        if (!SAFE_METHODS.has(request.method) && !TOKEN_API.has(url)) {
           if (!originAllowed(request)) throw new HttpError(403, "Запрос с чужого сайта отклонён");
           if (request.sessionInfo) {
             const token = request.headers["x-csrf-token"];

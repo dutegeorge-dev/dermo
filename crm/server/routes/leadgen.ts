@@ -3,15 +3,20 @@
  * статусы, «Итоги», экспорт. Доступ — админ или сотрудник с правом leadgen.
  */
 
+import fs from "node:fs";
+import path from "node:path";
+
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import JSZip from "jszip";
 
-import { isoDay, JOB_STATUSES, LEADGEN_PERMISSION, SELLER_STATUSES, type SellerStatus } from "../../shared/leadgen.ts";
-import { config } from "../config.ts";
+import { isoDay, JOB_STATUSES, type JobSource, LEADGEN_PERMISSION, SELLER_STATUSES, type SellerStatus } from "../../shared/leadgen.ts";
+import { CRM_ROOT, config } from "../config.ts";
 import { db } from "../db/client.ts";
 import { leadCategories, leadJobs, leadSellers, settings as settingsTable } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
 import { body, HttpError, intParam, requirePermission } from "../lib/http.ts";
+import { applyResult, checkCollectorToken, collectorState, type CollectorResult, issueCollectorToken, nextTask } from "../lib/leadgen/collector.ts";
 import { STALE_MS, WORKER_KEY } from "../lib/leadgen/worker.ts";
 import {
   exportSellers,
@@ -58,7 +63,7 @@ function categoryValues(input: Partial<CategoryInput>, partial: boolean): Partia
   return out;
 }
 
-const ACTIVE_JOB = ["queued", "running", "stopping"];
+const ACTIVE_JOB = ["queued", "running", "stopping", "collecting"];
 
 async function jobDto(id?: number) {
   const rows = await db
@@ -74,6 +79,7 @@ async function jobDto(id?: number) {
     stage: j.stage,
     progress: j.progress,
     quotas: j.params.quotas,
+    source: j.params.source ?? "direct",
     categoryIds: j.params.categoryIds,
     errors: j.errors.slice(-50),
     retryAt: (j.checkpoint.retryAt as string | null) ?? null,
@@ -96,6 +102,10 @@ export async function leadgenRoutes(app: FastifyInstance): Promise<void> {
       proxy: Boolean(config.leadgen.wbProxy),
       worker: { at: at ?? null, alive: Boolean(at && Date.now() - Date.parse(at) < STALE_MS), state: (worker?.value as { state?: string } | undefined)?.state ?? null },
       settings: await getLeadgenSettings(db),
+      collector: await (async () => {
+        const c = await collectorState();
+        return { hasKey: Boolean(c.hash), createdAt: c.createdAt, lastSeenAt: c.lastSeenAt, lastTask: c.lastTask };
+      })(),
       months: (await db.selectDistinct({ m: leadSellers.batchMonth }).from(leadSellers).orderBy(desc(leadSellers.batchMonth))).map((r) => r.m),
       today: isoDay(new Date()),
     };
@@ -162,7 +172,8 @@ export async function leadgenRoutes(app: FastifyInstance): Promise<void> {
   /** «Собрать базу на месяц»: month (YYYY-MM), необязательно quota — одна квота на все категории (тестовый прогон). */
   app.post("/leadgen/jobs", async (request) => {
     const user = guard(request);
-    const input = body<{ month: string; quota: number | null; categoryIds: number[] }>(request);
+    const input = body<{ month: string; quota: number | null; categoryIds: number[]; source: JobSource }>(request);
+    const source: JobSource = input.source === "direct" ? "direct" : "browser";
     const month = String(input.month ?? "");
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new HttpError(400, "Укажите месяц");
     if (!config.leadgen.dadataToken) throw new HttpError(400, "Не задан DADATA_TOKEN в crm/.env — без реквизитов DaData сбор невозможен");
@@ -180,7 +191,7 @@ export async function leadgenRoutes(app: FastifyInstance): Promise<void> {
       .insert(leadJobs)
       .values({
         month,
-        params: { categoryIds: cats.map((c) => c.id), quotas: Object.fromEntries(cats.map((c) => [c.id, quota ?? c.quota])), settings },
+        params: { categoryIds: cats.map((c) => c.id), quotas: Object.fromEntries(cats.map((c) => [c.id, quota ?? c.quota])), settings, source },
         progress: { categories: {}, requests: { wb: 0, dadata: 0, checko: 0, site: 0 } },
         createdBy: user.id,
       })
@@ -194,7 +205,7 @@ export async function leadgenRoutes(app: FastifyInstance): Promise<void> {
     const id = intParam((request.params as { id: string }).id);
     const [job] = await db.select().from(leadJobs).where(eq(leadJobs.id, id));
     if (!job) throw new HttpError(404, "Задача не найдена");
-    const next = job.status === "running" ? "stopping" : job.status === "queued" || job.status === "failed" ? "paused" : null;
+    const next = job.status === "running" ? "stopping" : ["queued", "failed", "collecting"].includes(job.status) ? "paused" : null;
     if (!next) throw new HttpError(409, "Задача не идёт");
     await db
       .update(leadJobs)
@@ -231,6 +242,39 @@ export async function leadgenRoutes(app: FastifyInstance): Promise<void> {
       .where(eq(leadJobs.id, id));
     await audit(db, { userId: user.id, action: "update", entityType: "lead_job", entityId: id, summary: `Лидогенерация: завершил сбор № ${id} досрочно`, ip: request.ip });
     return { job: (await jobDto(id))[0] };
+  });
+
+  // ── Сборщик в браузере (расширение Chrome) ──
+  /** Новый ключ для расширения: показывается один раз, старый перестаёт работать. */
+  app.post("/leadgen/collector/token", async (request) => {
+    const user = guard(request);
+    const token = await issueCollectorToken(user.id);
+    await audit(db, { userId: user.id, action: "update", entityType: "leadgen", entityId: null, summary: "Лидогенерация: выпустил новый ключ сборщика в браузере", ip: request.ip });
+    return { token };
+  });
+
+  /** Само расширение zip-архивом (папка crm/tools/wb-extension) — «Загрузить распакованное» в chrome://extensions. */
+  app.get("/leadgen/collector/extension.zip", async (request, reply) => {
+    guard(request);
+    const dir = path.join(CRM_ROOT, "tools", "wb-extension");
+    const zip = new JSZip();
+    for (const name of await fs.promises.readdir(dir)) zip.file(`irbis-wb-extension/${name}`, await fs.promises.readFile(path.join(dir, name)));
+    const buf = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    return reply.header("content-disposition", 'attachment; filename="irbis-wb-extension.zip"').type("application/zip").send(buf);
+  });
+
+  /** Расширение: что открыть дальше (по ключу сборщика, без сессии). */
+  app.get("/leadgen/collector/next", async (request) => {
+    await checkCollectorToken(request.headers.authorization);
+    return { task: await nextTask() };
+  });
+
+  /** Расширение: что WB отдал на открытой странице. */
+  app.post("/leadgen/collector/result", { bodyLimit: 8 * 1024 * 1024 }, async (request) => {
+    await checkCollectorToken(request.headers.authorization);
+    const input = body<CollectorResult>(request);
+    if (input.type !== "search" && input.type !== "seller") throw new HttpError(400, "Неизвестный тип результата");
+    return applyResult(input as CollectorResult);
   });
 
   // ── База ──

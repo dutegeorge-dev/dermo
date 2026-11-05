@@ -2116,7 +2116,7 @@ describe("Лидогенерация WB", () => {
     const cats = (await call(s, "GET", "/leadgen/categories")).json().categories as { id: number; name: string; queries: string[]; stopWords: string[] }[];
 
     // Задача 1 — тестовый прогон с квотой 10.
-    const started = await call(s, "POST", "/leadgen/jobs", { month: "2027-03", quota: 10 });
+    const started = await call(s, "POST", "/leadgen/jobs", { month: "2027-03", quota: 10, source: "direct" });
     assert.equal(started.statusCode, 200, started.body);
     const job1 = started.json().job.id as number;
     assert.equal((await call(s, "POST", "/leadgen/jobs", { month: "2027-04" })).statusCode, 409, "второй сбор, пока первый не закончен, — нельзя");
@@ -2167,7 +2167,7 @@ describe("Лидогенерация WB", () => {
     assert.ok(candidates.every((c) => c.products.every((p) => !stops.some((w) => p.name.toLowerCase().includes(w)))), "товары со стоп-словами отброшены");
 
     // Повторный прогон — ни одного ИНН из прошлой выгрузки.
-    const job2 = (await call(s, "POST", "/leadgen/jobs", { month: "2027-04", quota: 10 })).json().job.id as number;
+    const job2 = (await call(s, "POST", "/leadgen/jobs", { month: "2027-04", quota: 10, source: "direct" })).json().job.id as number;
     assert.equal(await runJob(job2, fakeWorld(cats).make, { rnd: lcg(4), today: "2026-11-04" }), "done");
     const second = (await call(s, "GET", "/leadgen/sellers?month=2027-04&limit=500")).json();
     assert.equal(second.total, 60);
@@ -2224,5 +2224,78 @@ describe("Лидогенерация WB", () => {
     const withEmail = (await call(s, "GET", `/leadgen/sellers?email=1&category=${cats[0].id}&limit=500`)).json();
     assert.ok(withEmail.sellers.every((x: { categoryId: number; contacts: { type: string; valid: boolean }[] }) => x.categoryId === cats[0].id && x.contacts.some((c) => c.type === "email" && c.valid)));
     assert.equal((await call(s, "GET", "/leadgen/sellers?status=replied_pos")).json().total, 1);
+  });
+  test("сбор через расширение в браузере: ключ, задания, выдача, страницы продавцов, отбор", async () => {
+    const s = await adminSession();
+    const cats = (await call(s, "GET", "/leadgen/categories")).json().categories as { id: number; name: string; queries: string[]; stopWords: string[] }[];
+    const { setCardResolver } = await import("../lib/leadgen/collector.ts");
+    const collector = (method: "GET" | "POST", url: string, token: string, payload?: unknown) =>
+      app.inject({ method, url: `${API}${url}`, headers: { authorization: `Bearer ${token}`, origin: "chrome-extension://abcdef" }, ...(payload ? { payload: payload as object } : {}) });
+
+    assert.equal((await collector("GET", "/leadgen/collector/next", "irbis_wrong")).statusCode, 401, "без ключа — нельзя");
+    const token = (await call(s, "POST", "/leadgen/collector/token")).json().token as string;
+    assert.match(token, /^irbis_[0-9a-f]{48}$/);
+    assert.equal((await collector("GET", "/leadgen/collector/next", token)).json().task.type, "idle", "сбора нет — ждём");
+
+    const jobId = (await call(s, "POST", "/leadgen/jobs", { month: "2027-05", quota: 3 })).json().job.id as number;
+    const world = fakeWorld(cats);
+    const sources = world.make(lg.DEFAULT_LEADGEN_SETTINGS, () => false, () => {});
+    // Сервер для режима браузера сам WB не ищет и каталог не открывает.
+    const serverOnly: typeof world.make = (...a) => ({ ...world.make(...a), search: async () => assert.fail("поиск — только из браузера"), sellerCatalog: async () => assert.fail("каталог — только из браузера") });
+    assert.equal(await runJob(jobId, serverOnly, { rnd: lcg(5), today: "2026-11-04" }), "collecting");
+
+    let searches = 0;
+    let sellers = 0;
+    let usedItems = false;
+    setCardResolver(async (nm) => ({ nm, name: `Товар ${nm}`, brand: `DemoBrand${Math.floor(nm / 1000)}`, supplierId: Math.floor(nm / 1000), supplier: "", feedbacks: 0 }));
+    for (let guard = 0; guard < 2000; guard++) {
+      const job = (await call(s, "GET", "/leadgen/jobs")).json().jobs.find((j: { id: number }) => j.id === jobId);
+      if (job.status === "done") break;
+      if (job.status === "queued") {
+        assert.notEqual(await runJob(jobId, serverOnly, { rnd: lcg(6 + guard), today: "2026-11-04" }), "failed");
+        continue;
+      }
+      const task = (await collector("GET", "/leadgen/collector/next", token)).json().task;
+      if (task.type === "idle") continue;
+      let payload: Record<string, unknown>;
+      if (task.type === "search") {
+        searches++;
+        const products = await sources.search(task.query, task.page);
+        assert.ok(task.url.startsWith("https://www.wildberries.ru/catalog/0/search.aspx?page="));
+        if (!usedItems && products.length) {
+          // Ответ не перехватился — расширение прислало артикулы со страницы, продавца сервер берёт из карточки.
+          usedItems = true;
+          payload = { ...task, items: products.map((p) => ({ nm: p.nm, name: p.name })) };
+        } else {
+          payload = { ...task, data: { products: products.map((p) => ({ id: p.nm, name: p.name, brand: p.brand, supplierId: p.supplierId, feedbacks: p.feedbacks })) } };
+        }
+      } else {
+        sellers++;
+        assert.equal(task.url, `https://www.wildberries.ru/seller/${task.supplierId}`);
+        const c = await sources.sellerCatalog(task.supplierId, 1);
+        payload = { ...task, data: { total: c.total, products: c.products.map((p) => ({ id: p.nm, name: p.name, brand: p.brand, supplierId: p.supplierId, feedbacks: p.feedbacks })) } };
+      }
+      const res = await collector("POST", "/leadgen/collector/result", token, payload);
+      assert.equal(res.statusCode, 200, res.body);
+      assert.equal(res.json().ok, true, res.body);
+      // Повтор той же страницы не засчитывается дважды.
+      if (searches === 1 && task.type === "search") assert.equal((await collector("POST", "/leadgen/collector/result", token, payload)).json().ok, false);
+    }
+    setCardResolver(null);
+    const job = (await call(s, "GET", "/leadgen/jobs")).json().jobs.find((j: { id: number }) => j.id === jobId);
+    assert.equal(job.status, "done");
+    assert.ok(searches > 0 && searches <= cats.reduce((n, c) => n + c.queries.length, 0) * lg.DEFAULT_LEADGEN_SETTINGS.browserSearchPages);
+    assert.ok(sellers > 0, "страницы продавцов открывались");
+    const base = (await call(s, "GET", "/leadgen/sellers?month=2027-05&limit=500")).json();
+    assert.equal(base.total, cats.length * 3);
+    assert.ok(base.sellers.every((x: { skuCount: number; chinaShare: number }) => x.skuCount === 300 && x.chinaShare >= 0.7), "SKU и страна — по каталогу из браузера");
+    const status = (await call(s, "GET", "/leadgen/status")).json();
+    assert.equal(status.collector.hasKey, true);
+    assert.ok(status.collector.lastSeenAt);
+    const ext = await call(s, "GET", "/leadgen/collector/extension.zip");
+    assert.equal(ext.statusCode, 200);
+    const JSZip = (await import("jszip")).default;
+    const manifest = JSON.parse(await (await JSZip.loadAsync(ext.rawPayload)).file("irbis-wb-extension/manifest.json")!.async("string"));
+    assert.equal(manifest.manifest_version, 3);
   });
 });

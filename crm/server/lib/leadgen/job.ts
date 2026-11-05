@@ -73,6 +73,8 @@ type CandidateInfo = {
   chinaShare?: number;
   cards?: number;
   catalog?: { nm: number; name: string; brand: string }[];
+  /** Каталог продавца, присланный расширением из браузера (до проверки страны). */
+  catalogProducts?: WbProduct[];
   requisites?: Requisites;
   contacts?: { type: "phone" | "email" | "site"; value: string; source: "wb" | "checko" | "site"; valid: boolean; note: string | null; at: string }[];
   why?: string;
@@ -138,6 +140,7 @@ export async function computeProgress(job: Job, cats: Category[], requests: JobP
       passed: sum((r) => ["pool", "selected", "no_contacts"].includes(r.status)),
       withContacts: sum((r) => r.status === "selected"),
       selected: sum((r) => r.status === "selected"),
+      waiting: sum((r) => r.status === "need_seller" || r.status === "seller_done"),
       rejected,
     };
   }
@@ -204,12 +207,25 @@ export async function runJob(jobId: number, makeSources: MakeSources, opts: RunO
   try {
     sources = makeSources(settings, () => stop.flag, log);
     if (!cats.length) throw new Error("Нет категорий для сбора — включите хотя бы одну");
+    const browser = job.params.source === "browser";
     if (job.stage === "collect") {
+      if (browser) {
+        // Выдачу WB присылает расширение в браузере (collector.ts) — ждём его.
+        await save({ status: "collecting" }, true);
+        log(`Лидогенерация: задача ${job.id} ждёт сборщик в браузере (выдача WB)`);
+        return "collecting";
+      }
       await collect(job, cats, settings, sources, save, checkStop, log);
       await save({ stage: "filter" }, true);
     }
     if (job.stage === "filter") {
-      for (const cat of cats) await filterCategory(job, cat, settings, sources, save, checkStop, rnd, log, today);
+      let waiting = false;
+      for (const cat of cats) if ((await filterCategory(job, cat, settings, sources, save, checkStop, rnd, log, today)) === "wait") waiting = true;
+      if (waiting) {
+        await save({ status: "collecting" }, true);
+        log(`Лидогенерация: задача ${job.id} ждёт сборщик в браузере (страницы продавцов)`);
+        return "collecting";
+      }
       await save({ stage: "schedule" }, true);
     }
     if (job.stage === "schedule") {
@@ -277,7 +293,7 @@ async function collect(job: Job, cats: Category[], s: LeadgenSettings, src: Lead
   }
 }
 
-async function upsertCandidates(jobId: number, categoryId: number, products: WbProduct[]) {
+export async function upsertCandidates(jobId: number, categoryId: number, products: WbProduct[]) {
   const bySupplier = new Map<number, WbProduct[]>();
   for (const p of products) bySupplier.set(p.supplierId, [...(bySupplier.get(p.supplierId) ?? []), p]);
   if (!bySupplier.size) return;
@@ -299,7 +315,12 @@ async function upsertCandidates(jobId: number, categoryId: number, products: WbP
 
 // ── Шаги 2–4. Фильтры, реквизиты, контакты ───────────────────────────────────
 
-async function filterCategory(job: Job, cat: Category, s: LeadgenSettings, src: LeadSources, save: Save, checkStop: () => void, rnd: () => number, log: (m: string) => void, today: string) {
+/** Продавец «в работе» после первых фильтров: в пуле, ждёт страницу продавца, отобран и т.п. — для склейки по ИНН. */
+const ALIVE = ["pool", "selected", "no_contacts", "need_seller", "seller_done"];
+
+/** Категория: "wait" — нужны страницы продавцов от расширения в браузере (задача ждёт сборщик). */
+async function filterCategory(job: Job, cat: Category, s: LeadgenSettings, src: LeadSources, save: Save, checkStop: () => void, rnd: () => number, log: (m: string) => void, today: string): Promise<"done" | "wait"> {
+  const browser = job.params.source === "browser";
   const quota = job.params.quotas[cat.id] ?? cat.quota;
   const countBy = async () => {
     const rows = await db
@@ -323,13 +344,21 @@ async function filterCategory(job: Job, cat: Category, s: LeadgenSettings, src: 
     checkStop();
     const counts = await countBy();
     const selected = counts.selected ?? 0;
-    if (selected >= quota) break;
+    if (selected >= quota) return "done";
     const pooled = await next("pool");
     if (pooled) {
       await step(job, pooled, "contacts", () => contactsStep(job, cat, pooled, src, rnd));
       await save();
       continue;
     }
+    const sellerDone = await next("seller_done");
+    if (sellerDone) {
+      const info = sellerDone.info as CandidateInfo;
+      await step(job, sellerDone, "filter", () => catalogStep(sellerDone, s, src, rnd, info.catalogProducts ?? [], info.sku ?? null));
+      await save();
+      continue;
+    }
+    if ((counts.need_seller ?? 0) > 0) return "wait";
     // Пул пуст — набираем новый с запасом: (сколько осталось) × poolFactor прошедших фильтры.
     const need = Math.ceil((quota - selected) * s.poolFactor);
     let passed = 0;
@@ -339,7 +368,16 @@ async function filterCategory(job: Job, cat: Category, s: LeadgenSettings, src: 
       const cand = await next("new");
       if (!cand) break;
       any = true;
-      const ok = await step(job, cand, "filter", () => filterStep(job, cand, s, src, rnd, today));
+      const ok = await step(job, cand, "filter", async () => {
+        if (!(await sellerStep(job, cand, s, src, today))) return false;
+        if (browser) {
+          // Каталог продавца (SKU и товары для страны) откроет расширение в браузере.
+          await db.update(leadCandidates).set({ status: "need_seller", updatedAt: new Date() }).where(eq(leadCandidates.id, cand.id));
+          return true;
+        }
+        const catalog = await fetchCatalog(cand.supplierId, s, src);
+        return catalogStep(cand, s, src, rnd, catalog.products, catalog.sku);
+      });
       if (ok) passed++;
       await save();
     }
@@ -349,7 +387,7 @@ async function filterCategory(job: Job, cat: Category, s: LeadgenSettings, src: 
         await appendJobError(job.id, "filter", msg);
         log(`Лидогенерация: ${msg}`);
       }
-      break;
+      return "done";
     }
   }
 }
@@ -361,24 +399,26 @@ async function step(job: Job, cand: Candidate, stage: string, fn: () => Promise<
   } catch (error) {
     if (error instanceof Stopped) throw error;
     if (error instanceof Reject) {
-      await db
-        .update(leadCandidates)
-        .set({ status: "rejected", reason: error.reason, info: sql`${leadCandidates.info} || ${JSON.stringify({ why: error.why || error.reason })}::jsonb`, updatedAt: new Date() })
-        .where(eq(leadCandidates.id, cand.id));
+      await rejectCandidate(cand.id, error.reason, error.why);
       return false;
     }
     if (error instanceof FetchError && error.transient) throw error;
     const message = error instanceof Error ? error.message : String(error);
     await appendJobError(job.id, stage, `продавец WB ${cand.supplierId}: ${message}`);
-    await db
-      .update(leadCandidates)
-      .set({ status: "rejected", reason: "ошибка", info: sql`${leadCandidates.info} || ${JSON.stringify({ why: message.slice(0, 300) })}::jsonb`, updatedAt: new Date() })
-      .where(eq(leadCandidates.id, cand.id));
+    await rejectCandidate(cand.id, "ошибка", message.slice(0, 300));
     return false;
   }
 }
 
-async function filterStep(job: Job, cand: Candidate, s: LeadgenSettings, src: LeadSources, rnd: () => number, today: string): Promise<boolean> {
+export async function rejectCandidate(id: number, reason: string, why = ""): Promise<void> {
+  await db
+    .update(leadCandidates)
+    .set({ status: "rejected", reason, info: sql`${leadCandidates.info} || ${JSON.stringify({ why: why || reason })}::jsonb`, updatedAt: new Date() })
+    .where(eq(leadCandidates.id, id));
+}
+
+/** Фильтры по профилю продавца: российский ИНН, не в базе, не дубль ИНН, отзывы, DaData. */
+async function sellerStep(job: Job, cand: Candidate, s: LeadgenSettings, src: LeadSources, today: string): Promise<boolean> {
   const sid = cand.supplierId;
   const wb = await src.sellerInfo(sid);
   if (!wb) throw new Reject("нет профиля на WB");
@@ -395,39 +435,53 @@ async function filterStep(job: Job, cand: Candidate, s: LeadgenSettings, src: Le
   const [twin] = await db
     .select()
     .from(leadCandidates)
-    .where(and(eq(leadCandidates.jobId, job.id), eq(leadCandidates.inn, inn), ne(leadCandidates.id, cand.id), inArray(leadCandidates.status, ["pool", "selected", "no_contacts"])))
+    .where(and(eq(leadCandidates.jobId, job.id), eq(leadCandidates.inn, inn), ne(leadCandidates.id, cand.id), inArray(leadCandidates.status, ALIVE)))
     .limit(1);
   if (twin) {
     await mergeTwin(twin, cand, sid);
     throw new Reject("дубль ИНН", `второй кабинет продавца WB ${twin.supplierId}`);
   }
 
-  // SKU в каталоге продавца.
-  const first = await src.sellerCatalog(sid, 1);
-  const catalog = [...first.products];
-  let sku = first.total;
-  if (sku === null) {
-    // Эндпоинт без total — считаем страницами (до skuMax + 1).
-    for (let page = 2; first.products.length && catalog.length <= s.skuMax && page <= 30; page++) {
-      const more = await src.sellerCatalog(sid, page);
-      if (!more.products.length) break;
-      catalog.push(...more.products);
-    }
-    sku = catalog.length;
-  }
-  if (sku < s.skuMin || sku > s.skuMax) throw new Reject("SKU вне порога", `SKU ${sku}`);
+  // Отзывы о продавце (рейтинг продавца WB); нет ответа — посчитаем по товарам каталога на следующем шаге.
+  const feedbacks = await src.sellerFeedbacks(sid);
+  if (feedbacks !== null && (feedbacks < s.feedbacksMin || feedbacks > s.feedbacksMax)) throw new Reject("отзывы вне порога", `отзывов ${feedbacks}`);
 
-  // Отзывы о продавце: из рейтинга продавца, иначе сумма по товарам каталога.
-  let feedbacks = await src.sellerFeedbacks(sid);
-  if (feedbacks === null) {
-    for (let page = 2; catalog.length < Math.min(sku, 1000) && page <= 10; page++) {
-      const more = await src.sellerCatalog(sid, page);
-      if (!more.products.length) break;
-      catalog.push(...more.products);
-    }
-    feedbacks = catalog.reduce((sum, p) => sum + p.feedbacks, 0);
+  // Реквизиты по ИНН — DaData.
+  const requisites = await src.dadata(inn);
+  if (!requisites) throw new Reject("нет в ЕГРЮЛ / ЕГРИП", "DaData не нашла ИНН");
+  if (BAD_EGR_STATUS.has(requisites.status)) throw new Reject("ликвидация / банкротство", requisites.status);
+  if (!requisites.regDate) throw new Reject("нет даты регистрации");
+  if (monthsBetween(requisites.regDate, today) < s.minAgeMonths) throw new Reject(`моложе ${s.minAgeMonths} мес.`, `зарегистрирован ${requisites.regDate}`);
+
+  const info: CandidateInfo = { wb, supplierIds: [sid], ...(feedbacks !== null ? { feedbacks } : {}), requisites };
+  await db.update(leadCandidates).set({ inn, info, updatedAt: new Date() }).where(eq(leadCandidates.id, cand.id));
+  return true;
+}
+
+/** Каталог продавца с сервера (API WB): SKU и товары для выборки по стране. */
+async function fetchCatalog(sid: number, s: LeadgenSettings, src: LeadSources): Promise<{ sku: number | null; products: WbProduct[] }> {
+  const first = await src.sellerCatalog(sid, 1);
+  const products = [...first.products];
+  if (first.total !== null) return { sku: first.total, products };
+  // Эндпоинт без total — считаем страницами (до skuMax + 1).
+  for (let page = 2; first.products.length && products.length <= s.skuMax && page <= 30; page++) {
+    const more = await src.sellerCatalog(sid, page);
+    if (!more.products.length) break;
+    products.push(...more.products);
   }
-  if (feedbacks < s.feedbacksMin || feedbacks > s.feedbacksMax) throw new Reject("отзывы вне порога", `отзывов ${feedbacks}`);
+  return { sku: products.length, products };
+}
+
+/** SKU, отзывы (если рейтинг не ответил) и доля «Китай» по карточкам → в пул. sku null — неизвестно (порог не проверяется). */
+async function catalogStep(cand: Candidate, s: LeadgenSettings, src: LeadSources, rnd: () => number, catalog: WbProduct[], sku: number | null): Promise<boolean> {
+  const [fresh] = await db.select().from(leadCandidates).where(eq(leadCandidates.id, cand.id));
+  const info = (fresh?.info ?? cand.info) as CandidateInfo;
+  if (sku !== null && (sku < s.skuMin || sku > s.skuMax)) throw new Reject("SKU вне порога", `SKU ${sku}`);
+  let feedbacks = info.feedbacks ?? null;
+  if (feedbacks === null) {
+    feedbacks = catalog.reduce((sum, p) => sum + p.feedbacks, 0);
+    if (feedbacks < s.feedbacksMin || feedbacks > s.feedbacksMax) throw new Reject("отзывы вне порога", `отзывов ${feedbacks} (по товарам каталога)`);
+  }
 
   // Страна производства по выборке карточек.
   const nms = shuffle([...new Set([...catalog.map((p) => p.nm), ...cand.products.map((p) => p.nm)])], rnd).slice(0, s.cardsSample);
@@ -443,24 +497,16 @@ async function filterStep(job: Job, cand: Candidate, s: LeadgenSettings, src: Le
   const chinaShare = china / withCountry;
   if (chinaShare < s.chinaShareMin) throw new Reject(`Китай < ${Math.round(s.chinaShareMin * 100)} %`, `Китай ${Math.round(chinaShare * 100)} % (${china} из ${withCountry})`);
 
-  // Реквизиты по ИНН — DaData.
-  const requisites = await src.dadata(inn);
-  if (!requisites) throw new Reject("нет в ЕГРЮЛ / ЕГРИП", "DaData не нашла ИНН");
-  if (BAD_EGR_STATUS.has(requisites.status)) throw new Reject("ликвидация / банкротство", requisites.status);
-  if (!requisites.regDate) throw new Reject("нет даты регистрации");
-  if (monthsBetween(requisites.regDate, today) < s.minAgeMonths) throw new Reject(`моложе ${s.minAgeMonths} мес.`, `зарегистрирован ${requisites.regDate}`);
-
-  const info: CandidateInfo = {
-    wb,
-    supplierIds: [sid],
-    sku,
+  const next: CandidateInfo = {
+    ...info,
+    sku: sku ?? undefined,
     feedbacks,
     chinaShare,
     cards: withCountry,
     catalog: catalog.slice(0, 30).map((p) => ({ nm: p.nm, name: p.name, brand: p.brand })),
-    requisites,
+    catalogProducts: undefined,
   };
-  await db.update(leadCandidates).set({ status: "pool", reason: null, inn, info, updatedAt: new Date() }).where(eq(leadCandidates.id, cand.id));
+  await db.update(leadCandidates).set({ status: "pool", reason: null, info: next, updatedAt: new Date() }).where(eq(leadCandidates.id, cand.id));
   return true;
 }
 

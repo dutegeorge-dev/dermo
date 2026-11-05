@@ -39,7 +39,7 @@ import type { ShipmentCalc } from "../../shared/customs.ts";
 import type { ShipmentCash } from "../../shared/shipments.ts";
 import type { EstimateParams, EstimateResult } from "../../shared/estimate.ts";
 import type { CatalogResult, FactoryProfile } from "../../shared/factories.ts";
-import type { JobError, JobProgress, LeadgenSettings, ProductSample } from "../../shared/leadgen.ts";
+import type { JobError, JobProgress, JobSource, LeadgenSettings, ProductSample } from "../../shared/leadgen.ts";
 import type { FreightRate, QuoteParams, QuoteResult } from "../../shared/quote.ts";
 
 /** Полнотекстовый индекс PostgreSQL. */
@@ -960,7 +960,7 @@ export const leadJobs = pgTable(
     /** Курсор продолжения: на каком запросе / странице остановились. */
     checkpoint: jsonb("checkpoint").$type<Record<string, unknown>>().notNull().default({}),
     /** Параметры запуска: категории, квоты (тестовый прогон — своя квота), пороги на момент запуска. */
-    params: jsonb("params").$type<{ categoryIds: number[]; quotas: Record<string, number>; settings: LeadgenSettings }>().notNull(),
+    params: jsonb("params").$type<{ categoryIds: number[]; quotas: Record<string, number>; settings: LeadgenSettings; source?: JobSource }>().notNull(),
     errors: jsonb("errors").$type<JobError[]>().notNull().default([]),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -989,7 +989,8 @@ export const leadCandidates = pgTable(
     products: jsonb("products").$type<{ nm: number; name: string; brand: string; feedbacks: number }[]>().notNull().default([]),
     /** Случайный порядок проверки — выборка случайная, а не топ выдачи. */
     rank: doublePrecision("rank").notNull().default(sql`random()`),
-    /** new → pool (прошёл фильтры) → selected / no_contacts; rejected — отсеян (reason). */
+    /** new → pool (прошёл фильтры) → selected / no_contacts; rejected — отсеян (reason).
+     *  Сбор в браузере: new → need_seller (ждёт страницу продавца от расширения) → seller_done → pool. */
     status: text("status").notNull().default("new"),
     reason: text("reason"),
     inn: text("inn"),

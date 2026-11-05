@@ -12,8 +12,13 @@ export const PERMISSIONS: Record<string, string> = {
 };
 
 export type LeadgenSettings = {
-  /** Страниц выдачи WB на один поисковый запрос. */
+  /** Страниц выдачи WB на один поисковый запрос (сбор с сервера). */
   searchPages: number;
+  /** Страниц выдачи на запрос при сборе расширением в браузере (каждая — открытие страницы, поэтому меньше). */
+  browserSearchPages: number;
+  /** Пауза расширения между страницами WB, секунд: от и до. */
+  browserDelayMin: number;
+  browserDelayMax: number;
   /** Сколько карточек продавца смотреть для «Страны производства». */
   cardsSample: number;
   /** Минимум карточек с указанной страной, чтобы считать долю. */
@@ -47,6 +52,9 @@ export type LeadgenSettings = {
 
 export const DEFAULT_LEADGEN_SETTINGS: LeadgenSettings = {
   searchPages: 20,
+  browserSearchPages: 5,
+  browserDelayMin: 6,
+  browserDelayMax: 15,
   cardsSample: 20,
   minCountryCards: 5,
   chinaShareMin: 0.7,
@@ -68,7 +76,10 @@ export const DEFAULT_LEADGEN_SETTINGS: LeadgenSettings = {
 
 /** Подписи порогов для страницы настроек (ключ → подпись, подсказка). */
 export const SETTINGS_FIELDS: { key: keyof LeadgenSettings; label: string; hint?: string; step?: number }[] = [
-  { key: "searchPages", label: "Страниц выдачи на запрос" },
+  { key: "browserSearchPages", label: "Страниц выдачи на запрос (браузер)" },
+  { key: "browserDelayMin", label: "Пауза браузера, с, от" },
+  { key: "browserDelayMax", label: "Пауза браузера, с, до" },
+  { key: "searchPages", label: "Страниц выдачи на запрос (сервер)" },
   { key: "cardsSample", label: "Карточек на продавца (страна)" },
   { key: "minCountryCards", label: "Минимум карточек со страной" },
   { key: "chinaShareMin", label: "Доля «Китай» не меньше", hint: "0,7 = 70 %", step: 0.05 },
@@ -105,6 +116,9 @@ export function normalizeSettings(raw: unknown): LeadgenSettings {
   out.chinaShareMin = Math.min(1, out.chinaShareMin);
   out.poolFactor = Math.max(1, out.poolFactor);
   out.searchPages = Math.max(1, Math.round(out.searchPages));
+  out.browserSearchPages = Math.max(1, Math.round(out.browserSearchPages));
+  out.browserDelayMin = Math.max(3, out.browserDelayMin);
+  out.browserDelayMax = Math.max(out.browserDelayMin, out.browserDelayMax);
   out.perDay = Math.max(1, Math.round(out.perDay));
   return out;
 }
@@ -129,12 +143,20 @@ export const STATUS_ACTIONS: SellerStatus[] = ["sent", "followup_sent", "replied
 export const JOB_STATUSES = {
   queued: "В очереди",
   running: "Идёт",
+  collecting: "Ждёт сборщик в браузере",
   stopping: "Останавливается",
   paused: "Остановлена",
   failed: "Ошибка — можно продолжить",
   done: "Готово",
 } as const;
 export type JobStatus = keyof typeof JOB_STATUSES;
+
+/** Откуда берётся выдача WB: расширение в браузере сотрудника или запросы с сервера (нужен доступ к API WB). */
+export const JOB_SOURCES = {
+  browser: "Расширение в браузере",
+  direct: "С сервера",
+} as const;
+export type JobSource = keyof typeof JOB_SOURCES;
 
 export const JOB_STAGES = {
   collect: "Сбор продавцов с WB",
@@ -161,6 +183,8 @@ export type CategoryProgress = {
   withContacts: number;
   /** Отобрано в базу. */
   selected: number;
+  /** Сбор в браузере: ждут, пока расширение откроет страницу продавца. */
+  waiting?: number;
   /** Причины отсева: причина → сколько. */
   rejected: Record<string, number>;
 };

@@ -190,14 +190,26 @@ export class WbClient {
     return (hit ?? this.routes[this.routes.length - 1]).host;
   }
 
-  /** Страна производства товара; undefined — карточки нет. */
-  async cardCountry(nm: number): Promise<string | null | undefined> {
+  private async card(nm: number): Promise<unknown | null> {
     const vol = Math.floor(nm / 100000);
     const part = Math.floor(nm / 1000);
     const url = this.ep.card.url.replace("{basket}", await this.basketHost(vol));
-    const res = await this.http.json(fill(url, { vol, part, nm }), { headers: this.headers() });
-    if (res.data === null) return undefined;
-    return parseCardCountry(res.data, this.ep.card.countryOption);
+    return (await this.http.json(fill(url, { vol, part, nm }), { headers: this.headers() })).data;
+  }
+
+  /** Страна производства товара; undefined — карточки нет. */
+  async cardCountry(nm: number): Promise<string | null | undefined> {
+    const data = await this.card(nm);
+    if (data === null) return undefined;
+    return parseCardCountry(data, this.ep.card.countryOption);
+  }
+
+  /** Товар по карточке (продавец, название, бренд) — когда из браузера пришли только артикулы. */
+  async cardProduct(nm: number): Promise<WbProduct | null> {
+    const data = (await this.card(nm)) as { imt_name?: string; selling?: { supplier_id?: number; brand_name?: string } } | null;
+    const supplierId = Number(data?.selling?.supplier_id);
+    if (!data || !supplierId) return null;
+    return { nm, name: str(data.imt_name), brand: str(data.selling?.brand_name), supplierId, supplier: "", feedbacks: 0 };
   }
 
   productUrl(nm: number): string {
