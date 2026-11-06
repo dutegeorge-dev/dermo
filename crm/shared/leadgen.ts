@@ -9,6 +9,7 @@ export const LEADGEN_PERMISSION = "leadgen";
 /** Права, которые можно выдать сотруднику (users.permissions). */
 export const PERMISSIONS: Record<string, string> = {
   [LEADGEN_PERMISSION]: "Лидогенерация WB",
+  mail: "Рассылка",
 };
 
 export type LeadgenSettings = {
@@ -107,6 +108,8 @@ export const SELLER_STATUSES = {
   new: { label: "Не писали", color: "slate" },
   sent: { label: "Написал", color: "blue" },
   followup_sent: { label: "Повтор отправлен", color: "indigo" },
+  /** Ответ пришёл на письмо рассылки — положительный / отрицательный ставит человек. */
+  replied: { label: "Ответил", color: "green" },
   replied_pos: { label: "Ответил +", color: "green" },
   replied_neg: { label: "Ответил −", color: "amber" },
   bounced: { label: "Возврат / ошибка", color: "red" },

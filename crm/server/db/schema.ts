@@ -943,6 +943,12 @@ export const leadCategories = pgTable("lead_categories", {
   template: text("template").notNull().default(""),
   active: boolean("active").notNull().default(true),
   sort: integer("sort").notNull().default(0),
+  /** Рассылка: адрес посадочной страницы категории — https://<домен>/wb/<slug>. */
+  slug: text("slug").notNull().default(""),
+  /** Рассылка: {category} — как категория пишется в письме («Ввоз … из Китая»: «фитнес-инвентаря»). */
+  mailName: text("mail_name").notNull().default(""),
+  /** Рассылка: {marking_note} — фраза о маркировке целиком («С 1 декабря … только с кодами Честного знака.»). */
+  mailNote: text("mail_note").notNull().default(""),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -1047,6 +1053,8 @@ export const leadSellers = pgTable(
     /** Статус работы (SELLER_STATUSES). */
     status: text("status").notNull().default("new"),
     firstLine: text("first_line").notNull().default(""),
+    /** Рассылка: токен персональной ссылки ?l=<токен> (случайный, уникальный). */
+    linkToken: text("link_token").unique(),
     firstSentAt: timestamp("first_sent_at", { withTimezone: true }),
     /** Взят в работу («Отобрать в работу»): null — лежит в базе, писать ему не планировали. */
     pickedAt: timestamp("picked_at", { withTimezone: true }),
@@ -1121,4 +1129,162 @@ export const leadEvents = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("lead_events_seller_idx").on(t.sellerInn, t.createdAt)],
+);
+
+// ── Рассылка (раздел «Рассылка», shared/mail.ts, server/lib/mail/) ──────────────────────────────────────────────────
+
+/** Холодные домены рассылки (tlkbars.ru — никогда). */
+export const mailDomains = pgTable("mail_domains", {
+  id: serial("id").primaryKey(),
+  domain: text("domain").notNull().unique(),
+  /** Посадочные страницы: https://<домен>/wb/ — к нему добавляется slug категории. */
+  landingBaseUrl: text("landing_base_url").notNull(),
+  /** active / paused / burned. */
+  status: text("status").notNull().default("active"),
+  /** Селектор DKIM для проверки DNS (этап 2). */
+  dkimSelector: text("dkim_selector").notNull().default("mail"),
+  dnsCheck: jsonb("dns_check").$type<Record<string, unknown>>(),
+  dnsCheckedAt: timestamp("dns_checked_at", { withTimezone: true }),
+  note: text("note").notNull().default(""),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const mailboxes = pgTable("mailboxes", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  fromName: text("from_name").notNull().default(""),
+  domainId: integer("domain_id")
+    .notNull()
+    .references(() => mailDomains.id, { onDelete: "restrict" }),
+  smtpHost: text("smtp_host").notNull(),
+  smtpPort: integer("smtp_port").notNull().default(465),
+  /** true — SSL с порога (465); false — STARTTLS (587). */
+  smtpSecure: boolean("smtp_secure").notNull().default(true),
+  smtpUser: text("smtp_user").notNull(),
+  imapHost: text("imap_host").notNull(),
+  imapPort: integer("imap_port").notNull().default(993),
+  imapUser: text("imap_user").notNull(),
+  /** Пароль приложения — AES-256-GCM (ключ MAILBOX_SECRET_KEY), в интерфейс не отдаётся. */
+  passwordEnc: text("password_enc").notNull(),
+  signature: text("signature").notNull().default(""),
+  dailyLimit: integer("daily_limit").notNull().default(30),
+  warmupStart: date("warmup_start"),
+  /** warming / active / paused / burned. */
+  status: text("status").notNull().default("warming"),
+  pauseReason: text("pause_reason"),
+  pausedUntil: timestamp("paused_until", { withTimezone: true }),
+  /** Курсор IMAP: UIDVALIDITY папки INBOX и последний прочитанный UID. */
+  imapUidValidity: bigint("imap_uid_validity", { mode: "number" }),
+  imapLastUid: bigint("imap_last_uid", { mode: "number" }),
+  imapCheckedAt: timestamp("imap_checked_at", { withTimezone: true }),
+  imapError: text("imap_error"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const mailTemplates = pgTable("mail_templates", {
+  id: serial("id").primaryKey(),
+  /** null — для всех категорий. */
+  categoryId: integer("category_id").references(() => leadCategories.id, { onDelete: "cascade" }),
+  /** Для «всех категорий»: null — любые, true — только с маркировкой, false — только без. */
+  forMarking: boolean("for_marking"),
+  /** first / followup. */
+  touch: text("touch").notNull().default("first"),
+  name: text("name").notNull().default(""),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  active: boolean("active").notNull().default(true),
+  version: integer("version").notNull().default(1),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** Каждое письмо: план дня, журнал (dry-run), отправленные — тема, тело, ящик, шаблон, варианты целиком. */
+export const mailMessages = pgTable(
+  "mail_messages",
+  {
+    id: serial("id").primaryKey(),
+    sellerInn: text("seller_inn")
+      .notNull()
+      .references(() => leadSellers.inn, { onDelete: "cascade", onUpdate: "cascade" }),
+    queueId: integer("queue_id").references(() => leadQueue.id, { onDelete: "set null" }),
+    mailboxId: integer("mailbox_id")
+      .notNull()
+      .references(() => mailboxes.id, { onDelete: "restrict" }),
+    contactId: integer("contact_id").references(() => leadContacts.id, { onDelete: "set null" }),
+    /** Кому по плану (email продавца); в режиме test фактически уходит на тестовый адрес (sent_to). */
+    toEmail: text("to_email").notNull(),
+    sentTo: text("sent_to"),
+    /** first / followup / manual. */
+    touch: text("touch").notNull(),
+    templateId: integer("template_id").references(() => mailTemplates.id, { onDelete: "set null" }),
+    templateVersion: integer("template_version"),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    /** Выбранные варианты {a|b|c}: номер варианта по порядку блоков, отдельно для темы и тела. */
+    variants: jsonb("variants").$type<{ subject: number[]; body: number[] }>().notNull().default({ subject: [], body: [] }),
+    messageId: text("message_id").notNull().unique(),
+    inReplyTo: text("in_reply_to"),
+    /** planned / sending / sent / dry_run / failed / cancelled. */
+    status: text("status").notNull().default("planned"),
+    /** Режим, в котором письмо обработано: dry_run / test / live. */
+    mode: text("mode"),
+    planDay: date("plan_day").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("mail_messages_due_idx").on(t.status, t.scheduledAt),
+    index("mail_messages_seller_idx").on(t.sellerInn, t.touch),
+    index("mail_messages_mailbox_idx").on(t.mailboxId, t.planDay),
+  ],
+);
+
+/** Входящие из ящиков рассылки: ответы, возвраты, автоответы. Сами письма в ящике не трогаем. */
+export const mailInbound = pgTable(
+  "mail_inbound",
+  {
+    id: serial("id").primaryKey(),
+    mailboxId: integer("mailbox_id")
+      .notNull()
+      .references(() => mailboxes.id, { onDelete: "cascade" }),
+    uidValidity: bigint("uid_validity", { mode: "number" }).notNull(),
+    uid: bigint("uid", { mode: "number" }).notNull(),
+    messageId: text("message_id"),
+    fromEmail: text("from_email").notNull().default(""),
+    fromName: text("from_name").notNull().default(""),
+    subject: text("subject").notNull().default(""),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    /** human / auto / bounce / unknown. */
+    kind: text("kind").notNull(),
+    /** Письмо, на которое это ответ (по In-Reply-To / References / адресу). */
+    replyToMessageId: integer("reply_to_message_id").references(() => mailMessages.id, { onDelete: "set null" }),
+    sellerInn: text("seller_inn").references(() => leadSellers.inn, { onDelete: "set null", onUpdate: "cascade" }),
+    /** Адрес, на который письмо не доставлено (возврат). */
+    bouncedEmail: text("bounced_email"),
+    text: text("text").notNull().default(""),
+    /** Похоже на отказ («нет», «не актуально»…) — подсказка человеку. */
+    refusalHint: boolean("refusal_hint").notNull().default(false),
+    /** Человек разобрал: replied_pos / replied_neg / stop. */
+    resolution: text("resolution"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("mail_inbound_uq").on(t.mailboxId, t.uidValidity, t.uid), index("mail_inbound_seller_idx").on(t.sellerInn)],
+);
+
+/** Стоп-лист: ИНН и / или email. Проверяется перед каждой отправкой и при отборе продавцов. */
+export const doNotContact = pgTable(
+  "do_not_contact",
+  {
+    id: serial("id").primaryKey(),
+    inn: text("inn"),
+    email: text("email"),
+    reason: text("reason").notNull().default(""),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("do_not_contact_inn_idx").on(t.inn), index("do_not_contact_email_idx").on(t.email)],
 );

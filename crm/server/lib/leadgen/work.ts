@@ -23,6 +23,7 @@ import {
 import type { DbOrTx } from "../../db/client.ts";
 import { leadCategories, leadContacts, leadEvents, leadQueue, leadSellers, settings as settingsTable } from "../../db/schema.ts";
 import { HttpError } from "../http.ts";
+import { addToStopList } from "../mail/stoplist.ts";
 
 export const SETTINGS_KEY = "leadgen";
 
@@ -279,7 +280,7 @@ export async function todayList(tx: DbOrTx, day: string, s: LeadgenSettings): Pr
 }
 
 /** Смена статуса: история, отметка касаний в очереди, повтор через followupDays после первого письма. */
-export async function setSellerStatus(tx: DbOrTx, inn: string, status: SellerStatus, userId: number, comment: string | null, s: LeadgenSettings, now = new Date()): Promise<void> {
+export async function setSellerStatus(tx: DbOrTx, inn: string, status: SellerStatus, userId: number | null, comment: string | null, s: LeadgenSettings, now = new Date()): Promise<void> {
   if (!(status in SELLER_STATUSES)) throw new HttpError(400, "Неизвестный статус");
   const [seller] = await tx.select().from(leadSellers).where(eq(leadSellers.inn, inn));
   if (!seller) throw new HttpError(404, "Продавец не найден");
@@ -318,6 +319,14 @@ export async function setSellerStatus(tx: DbOrTx, inn: string, status: SellerSta
   }
   await tx.update(leadSellers).set(patch).where(eq(leadSellers.inn, inn));
   await tx.insert(leadEvents).values({ sellerInn: inn, type: status, comment: comment?.trim().slice(0, 2000) || null, userId, createdAt: now });
+  // Стоп-лист рассылки: «Не писать» и отказ с просьбой не писать — для всех ящиков и доменов.
+  if (status === "do_not_contact" || (status === "replied_neg" && /не\s*пис|отпиш|не\s*беспоко/i.test(comment ?? ""))) {
+    await addToStopList(tx, { inn, reason: status === "do_not_contact" ? "«Не писать»" : `отказ: ${comment?.trim().slice(0, 200)}`, userId });
+  }
+  if (status !== "sent" && status !== "followup_sent" && status !== "new") {
+    // Запланированные письма рассылки этому продавцу больше не нужны.
+    await tx.execute(sql`update mail_messages set status = 'cancelled', error = ${`статус: ${SELLER_STATUSES[status].label}`} where seller_inn = ${inn} and status = 'planned'`);
+  }
 }
 
 // ── «Итоги» ──────────────────────────────────────────────────────────────────
@@ -337,6 +346,7 @@ export async function stats(tx: DbOrTx, month?: string): Promise<StatsRow[]> {
       bounced: sql<number>`count(*) filter (where ${ev("bounced")})::int`,
       positive: sql<number>`count(*) filter (where ${ev("replied_pos")})::int`,
       negative: sql<number>`count(*) filter (where ${ev("replied_neg")} and not ${ev("replied_pos")})::int`,
+      unrated: sql<number>`count(*) filter (where ${ev("replied")} and not ${ev("replied_pos")} and not ${ev("replied_neg")})::int`,
       doNotContact: sql<number>`count(*) filter (where ${leadSellers.status} = 'do_not_contact')::int`,
     })
     .from(leadSellers)
@@ -346,8 +356,8 @@ export async function stats(tx: DbOrTx, month?: string): Promise<StatsRow[]> {
     .groupBy(leadSellers.categoryId, leadCategories.name);
   return rows
     .sort((a, b) => a.sort - b.sort)
-    .map(({ sort: _sort, ...r }) => {
-      const replies = r.positive + r.negative;
+    .map(({ sort: _sort, unrated, ...r }) => {
+      const replies = r.positive + r.negative + unrated;
       return { ...r, replies, bouncedPct: pct(r.bounced, r.sent), repliesPct: pct(replies, r.sent), positivePct: pct(r.positive, r.sent) };
     });
 }
