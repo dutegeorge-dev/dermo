@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { LEADGEN_PERMISSION } from "../../../shared/leadgen.ts";
+import { MAIL_PERMISSION } from "../../../shared/mail.ts";
 import { BASE } from "../lib/api.ts";
 import { useAuth } from "../lib/auth.tsx";
 import { useTheme } from "../lib/theme.ts";
@@ -30,6 +31,7 @@ import {
   IconPhone,
   IconSun,
   IconTarget,
+  IconMail,
   IconUser,
   IconUsers,
   IconX,
@@ -116,6 +118,11 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         {(user.role === "admin" || user.permissions?.includes(LEADGEN_PERMISSION)) && (
           <NavItem to="/leadgen" icon={<IconTarget />}>
             Лидогенерация
+          </NavItem>
+        )}
+        {(user.role === "admin" || user.permissions?.includes(MAIL_PERMISSION)) && (
+          <NavItem to="/mail" icon={<IconMail />}>
+            Рассылка
           </NavItem>
         )}
       </nav>
