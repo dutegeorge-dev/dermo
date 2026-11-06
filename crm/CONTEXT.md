@@ -10,7 +10,7 @@
 > Технический справочник (таблицы, API, команды) — `crm/README.md`.
 > Публичный сайт (11ty) — `PROJECT-MAP.md` в корне.
 >
-> Актуально на: ноябрь 2026, лидогенерация WB (миграция 0021 — последняя).
+> Актуально на: ноябрь 2026, рассылка, этап 1 (миграция 0022 — последняя).
 > Меняете поведение — обновите этот файл в том же коммите.
 
 ---
@@ -384,6 +384,21 @@
     Подробно — `server/lib/leadgen/README.md`. Не сделано, но заложено: SMTP-рассылка
     и разбор ответов по IMAP, клики по посадочным (`?l=`), Ozon.
 
+31. **Рассылка, этап 1 (ноябрь 2026)** — раздел «Рассылка» (`/mail`, право `mail`, ящики и режим — админ).
+    Задача владельца: автоматически писать продавцам из очереди лидогенерации с нескольких холодных доменов и ящиков,
+    масштабироваться с 30 до сотен писем в день без спама и без риска для tlkbars.ru. **tlkbars.ru (и поддомены, info@,
+    sales@) — никогда**: не сохраняются в домене / ящике / подписи / шаблоне, письмо с упоминанием не уходит. Этап 1:
+    домены и ящики (пароль приложения — AES-256-GCM, `MAILBOX_SECRET_KEY`; Яндекс 360, хосты — в полях ящика), шаблоны
+    (только текст, `{a|b}` по ИНН, подстановки, персональная ссылка `?l=<токен>` на холодный домен, версии), план дня в
+    окне 09:30–17:30 МСК (повторы — с ящика первого письма, первые — пропорционально остатку лимита, ±40 %, ≥ 4 мин,
+    не влезло — на следующий рабочий день), режимы **dry-run (по умолчанию) / test / live**, повтор в той же цепочке
+    (`In-Reply-To` / `References`), IMAP раз в 5 минут (ответ → «Ответил» (новый статус `replied`) и повтор снят;
+    возврат → адрес невалидный, другой адрес или «Возврат»; автоответ — ничего), стоп-лист `do_not_contact` (при отправке,
+    плане, отборе и сборе). Решения автора (не из ТЗ): в режиме test статусы продавцов не меняются (иначе тест «пишет»
+    реальным лидам); «Тест цепочки» — первое письмо и повтор сразу на тестовый адрес; повтор — через «Повтор через, дней»
+    лидогенерации (календарные дни → ближайший рабочий), как и было. Этапы 2–3 (прогрев, здоровье и автопауза, DNS / DBL,
+    «Мощность», «Итоги», переходы, общий ящик, Telegram) — следующие ветки. Подробно — `server/lib/mail/README.md`.
+
 Стиль работы с владельцем: пишет по-русски коротко и эмоционально, присылает
 скриншоты со стрелками. Любит, когда сначала коротко согласовали, потом сделали;
 останавливает, если начали кодить большое без обсуждения. Ценит простоту и
@@ -508,6 +523,9 @@ crm/
                         (DaData, Checko), site.ts (контакты с сайта, MX), job.ts (runJob: сбор collect → enrich в базу без отсева; отбор pick → schedule,
                         чекпоинты, LeadSources — подменяются в тестах), worker.ts (цикл, advisory lock, realSources),
                         work.ts («Сегодня», статусы и повторы, итоги, список, экспорт XLSX/CSV, настройки)
+      mail/             рассылка (README.md): crypto.ts (пароли ящиков AES-GCM), render.ts (шаблон, варианты, подстановки, ссылка,
+                        Message-ID, настройки), planner.ts (план дня), sender.ts (отправка, режимы, цепочка, SMTP подменяется
+                        в тестах), inbound.ts (IMAP, классификация, автостатусы), stoplist.ts, worker.ts (служба bars-crm-mail)
       settings.ts call-script.ts text.ts
     routes/             auth users kb files calls search audit deals counterparties documents orders products settings shipments ai
                         factories (список, дубли, карточка, цены, «сделать поставщиком», GET /products/:id/offers);
@@ -520,6 +538,8 @@ crm/
                         calendar (свои события календаря: POST/PATCH/DELETE /calendar/events; в GET /calendar — calendarCustomEvents)
                         payments (POST /payments, DELETE /payments/:id — оплата на несколько счетов; файл — files.ts POST /payments/:id/files)
                         estimates (раздел «Расчёт»: CRUD /estimates, POST /estimates/parse — ИИ по тексту заявки, /estimates/:id/kp.docx)
+    routes/mail.ts      /mail/* (право mail; ящики, домены, режим — админ): статус, план, журнал, шаблоны, предпросмотр, тест
+                        цепочки, входящие, стоп-лист; cli/mail-worker.ts — npm run mail:worker
     routes/leadgen.ts   /leadgen/* (право leadgen): категории, задачи сбора, база, сегодня, статусы, итоги, экспорт
     cli/leadgen-worker.ts  npm run leadgen:worker (служба bars-crm-leadgen); cli/leadgen-check.ts — npm run leadgen:check
     cli/tnved.ts        npm run tnved:update [--if-empty] [--file]
@@ -538,6 +558,7 @@ crm/
                         factories/CatalogsPage (/factories/catalogs — загрузка каталогов и скриншотов, проверка группами по
                         контакту, категории),
                         factories/FreightRatesPage (/freight-rates: ставки, «вставить из переписки»),
+                        mail/MailPage (/mail: План, Входящие, Шаблоны, Стоп-лист, Ящики),
                         leadgen/LeadgenPage (/leadgen: вкладки, «Собрать базу на месяц», Категории, Сбор, Итоги) +
                         leadgen/LeadgenSellers (Сегодня, База, карточка продавца),
                         estimates/EstimatesPage (/estimates — список), estimates/EstimatePage (/estimates/new|:id — заявка → ИИ,
@@ -591,7 +612,7 @@ deploy/                 (в корне репо) nginx, systemd/bars-crm.service
   currency, note — что за не разнесённый остаток; файл — attachments owner_type `payment`), `payment_allocations`
   (payment_id, document_id, amount). Обычная оплата одного счёта сюда не пишется.
 
-**Миграции:** … **0021** `lead_sellers`: в работе / контакты Checko (база без отсева); **0020** лидогенерация WB: `lead_*` (+ 6 категорий), `users.permissions`; **0019** `documents.title`; **0018** `calendar_events`; **0017** `users.telegram_id` (бот заявок); **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
+**Миграции:** … **0022** рассылка: `mail_*`, `do_not_contact`, `lead_sellers.link_token`, `lead_categories.slug / mail_name / mail_note`, 3 шаблона; **0021** `lead_sellers`: в работе / контакты Checko (база без отсева); **0020** лидогенерация WB: `lead_*` (+ 6 категорий), `users.permissions`; **0019** `documents.title`; **0018** `calendar_events`; **0017** `users.telegram_id` (бот заявок); **0016** `catalog_shots`; **0015** `catalogs`, `catalog_senders`; **0014** `shipments.cash`, `shipments.estimate_id`; **0013** `estimates`; **0012** `payments`, `payment_allocations`; **0011** `freight_rates`, `product_quotes`; **0010** `factories`, `product_offers`; **0009** согласование галочек оплат и оплаты документов (данные); **0008** `shipments.spec`; **0007** справочник `tnved`, `products.vat10`, `shipments.calc`. Ранее: 0000 init → 0001 этапы воронки → 0002 новые этапы владельца → 0003 документы (clients →
 counterparties) → 0004 сделки-отгрузки → **0005** перенос всего «неклиентского» из воронки в сделки (с переносом
 данных и созданием сделок для лидов с документами) → **0006** этап «Заказ сформирован» (депозит стал milestone
 `deposit`, колонка `deposit_date` удалена, этапы +1).

@@ -1,0 +1,44 @@
+# Воркер рассылки (раздел «Рассылка» в Ирбисе, каталог crm/).
+#
+# План дня в начале окна, отправка писем с холодных ящиков, сбор ответов по IMAP раз в 5 минут.
+# Остановка / перезапуск безопасны: запланированные письма ждут в БД, курсор IMAP хранится у ящика.
+# Ключ шифрования паролей ящиков (MAILBOX_SECRET_KEY) служба читает сама из crm/.env.
+#
+# Установка:
+#   sudo cp deploy/systemd/bars-crm-mail.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bars-crm-mail
+#   journalctl -u bars-crm-mail -f
+
+[Unit]
+Description=ТЛК БАРС — Ирбис: воркер рассылки
+Documentation=https://github.com/dutegeorge-dev/dermo/blob/main/crm/server/lib/mail/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/tlkbars/repo/crm
+ExecStart=/usr/bin/node --import tsx server/cli/mail-worker.ts
+Environment=NODE_ENV=production
+
+Restart=always
+RestartSec=10s
+TimeoutStopSec=30s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bars-crm-mail
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

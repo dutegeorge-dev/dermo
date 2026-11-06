@@ -118,6 +118,7 @@ npm run crm:dev
 Лидогенерация WB (в `crm/`): `npm run leadgen:worker` — воркер сбора (в проде служба `bars-crm-leadgen`),
 `npm run leadgen:check [-- --query "гантели" --registry]` — отвечают ли эндпоинты WB / DaData / Checko с этого сервера,
 `scripts/wb-probe.cjs` — найти новые эндпоинты WB через Playwright. Подробно — `server/lib/leadgen/README.md`.
+Рассылка (в `crm/`): `npm run mail:worker` — воркер (в проде служба `bars-crm-mail`). Подробно — `server/lib/mail/README.md`.
 
 В `crm/`: `npm run typecheck`, `npm run db:generate` (новая миграция после правки `server/db/schema.ts`), `npm start` (прод-запуск).
 
@@ -340,6 +341,12 @@ sudo systemctl start bars-crm
 | `lead_contacts` | `seller_inn`, `type` (phone/email/site), `value` (+7XXXXXXXXXX / нижний регистр), `source` (wb/checko/site), `valid` (email: синтаксис + MX), `note`, `received_at` |
 | `lead_queue` | Касания: `seller_inn`, `planned_date`, `position` (порядок в дне), `touch` (first/followup), `status` (planned/done/cancelled), `sent_at`, `note` |
 | `lead_events` | История статусов продавца: `seller_inn`, `type`, `comment`, `user_id`, `created_at` |
+| `mail_domains` | Рассылка: холодные домены — `domain`, `landing_base_url` (https://<домен>/wb/), `status` active/paused/burned, `dkim_selector`, `dns_check`, `note` (tlkbars.ru не принимается) |
+| `mailboxes` | Ящики: email, `from_name`, `domain_id`, SMTP host/port/secure/user, IMAP host/port/user, `password_enc` (AES-256-GCM, MAILBOX_SECRET_KEY), `signature`, `daily_limit`, `warmup_start`, `status` warming/active/paused/burned, `pause_reason`, `paused_until`, курсор IMAP (`imap_uid_validity`, `imap_last_uid`) |
+| `mail_templates` | Шаблоны: `category_id` (null — все) + `for_marking`, `touch` first/followup, `subject`, `body` (текст, `{a|b}` и подстановки), `active`, `version` |
+| `mail_messages` | План / журнал / отправленные целиком: продавец, `queue_id`, ящик, `to_email` / `sent_to`, `touch`, шаблон и версия, тема, текст, `variants`, `message_id`, `in_reply_to`, `status` planned/sending/sent/dry_run/failed/cancelled, `mode`, `plan_day`, `scheduled_at`, `sent_at`, `error` |
+| `mail_inbound` | Входящие ящиков: UID, отправитель, тема, `kind` human/auto/bounce, `reply_to_message_id`, `seller_inn`, `bounced_email`, текст без цитаты, `refusal_hint`, `resolution` |
+| `do_not_contact` | Стоп-лист рассылки: `inn` и / или `email`, причина, кто, когда |
 | `calendar_events` | Свои события календаря: `type` (meeting / trip / payment / call / task / other), `title`, `date`, `time`, `end_date` (поездка), `notes`, `amount` + `currency` (оплата), `shipment_id`, `counterparty_id`, `assignee_id`, `done`, `done_at` |
 | `estimates` | Раздел «Расчёт»: заявки клиентов на их товары — `title`, `client_name`, `scheme` (`commission` / `teu`), `request` (текст заявки), `params` / `result` (jsonb, `shared/estimate.ts`; `params.markup` — наличные сверху расчёта, только админам), `freight`, `rates`, `rates_date` |
 | `payments` | Оплата на несколько счетов (одна платёжка → несколько инвойсов, в т. ч. другой сделки): `shipment_id`, `counterparty_id` (получатель), `number`, `date`, `amount`, `currency`, `note` (что за не разнесённый остаток). Файл — `attachments` с `owner_type='payment'`. Обычная оплата одного счёта сюда не пишется |
@@ -427,6 +434,12 @@ sudo systemctl start bars-crm
 | `GET /leadgen/today?day=` | На день: первые письма (≤ `perDay`, по плану) и подошедшие повторы |
 | `GET /leadgen/stats?month=` | Итоги по категориям: отправлено, возвраты, ответы, положительные, % от отправленных |
 | `GET /leadgen/export.xlsx\|csv?<фильтры базы>` | Выгрузка: все поля продавца и все контакты (XLSX — листы «Продавцы» и «Контакты») |
+| `GET /mail/status`, `PUT /mail/settings` (админ), `POST /mail/pause` `{paused}`, `POST /mail/plan` | Рассылка (право mail): состояние, режим dry_run/test/live и окно, пауза всей рассылки, план дня сейчас |
+| `GET /mail/messages?day&status&mailbox&inn`, `GET /mail/messages/:id`, `POST /mail/messages/:id/cancel` | План и журнал писем |
+| `GET/POST /mail/domains`, `PATCH/DELETE /mail/domains/:id`, `POST /mail/mailboxes`, `PATCH/DELETE /mail/mailboxes/:id`, `POST /mail/mailboxes/:id/check` `{testTo}`, `POST /mail/mailboxes/:id/poll` | Домены и ящики (админ; пароль не отдаётся), «Проверить подключение», опрос входящих |
+| `GET/POST /mail/templates`, `PATCH/DELETE /mail/templates/:id`, `POST /mail/preview` `{inn, mailboxId, touch, templateId?}`, `POST /mail/test-chain` `{inn, mailboxId}` | Шаблоны (правка текста — новая версия), предпросмотр, тест цепочки на тестовый адрес |
+| `GET /mail/inbound?kind&unresolved&days`, `POST /mail/inbound/:id/resolve` `{resolution: replied_pos\|replied_neg\|stop}` | Входящие и разбор ответа |
+| `GET/POST /mail/stoplist`, `DELETE /mail/stoplist/:id` (админ), `GET /mail/categories`, `PATCH /mail/categories/:id` `{slug, mailName, mailNote}` | Стоп-лист; категории в письмах |
 | `GET /calendar` | События календаря: даты сделок в работе и свои события (`kind: "custom"`) |
 | `POST /calendar/events` `{type, title, date, time?, endDate?, notes?, amount?, currency?, shipmentId?, counterpartyId?, assigneeId?}`, `PATCH/DELETE /calendar/events/:id` (`done` — выполнено) | Свои события календаря: встреча, поездка, оплата, звонок, задача, другое |
 | `GET/POST /products`, `GET/PATCH/DELETE /products/:id`, `POST /products/:id/merge` | Товары (`hsCode` — 10 цифр, `vat10`); карточка со ставкой из ТН ВЭД; объединение дублей |

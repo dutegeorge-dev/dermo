@@ -105,6 +105,12 @@ export const config = {
     /** Запускать воркер сбора внутри bars-crm (разработка). В проде — отдельная служба bars-crm-leadgen. */
     inlineWorker: envBool("CRM_LEADGEN_INLINE", false),
   },
+  /** Рассылка: ключ шифрования паролей ящиков (AES-256-GCM) — только из окружения. */
+  mail: {
+    secretKey: process.env.MAILBOX_SECRET_KEY?.trim() || undefined,
+    /** Воркер рассылки внутри bars-crm (разработка). В проде — служба bars-crm-mail. */
+    inlineWorker: envBool("CRM_MAIL_INLINE", false),
+  },
   loginLimit: {
     /** Неудачных попыток на один логин за окно. */
     perLogin: envNumber("CRM_LOGIN_LIMIT_PER_LOGIN", 5),
