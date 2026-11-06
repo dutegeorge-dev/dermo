@@ -30,6 +30,8 @@ process.env.CRM_INTAKE_TOKEN = "test-intake-token-0123456789abcdef";
 process.env.DADATA_TOKEN = "test-dadata-token";
 process.env.CHECKO_API_KEY = "";
 process.env.WB_PROXY = "";
+// Рассылка: ключ шифрования паролей ящиков (тестовый).
+process.env.MAILBOX_SECRET_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 const { config, CRM_ROOT } = await import("../config.ts");
 const { db, pool } = await import("../db/client.ts");
@@ -2007,7 +2009,7 @@ const { extractContacts } = await import("../lib/leadgen/site.ts");
 const { parseProducts, parseCardCountry } = await import("../lib/leadgen/wb.ts");
 const { redact } = await import("../lib/leadgen/http.ts");
 const schema = await import("../db/schema.ts");
-const { eq } = await import("drizzle-orm");
+const { eq, and } = await import("drizzle-orm");
 
 describe("Лидогенерация WB", () => {
 
@@ -2356,3 +2358,251 @@ describe("Лидогенерация WB", () => {
     assert.equal(manifest.manifest_version, 3);
   });
 });
+
+const mailShared = await import("../../shared/mail.ts");
+const { planDay } = await import("../lib/mail/planner.ts");
+const { sendDue, sendOne, setTransportFactory } = await import("../lib/mail/sender.ts");
+const { pollMailbox, setImapFetcher } = await import("../lib/mail/inbound.ts");
+const { decryptSecret } = await import("../lib/mail/crypto.ts");
+
+describe("Рассылка (этап 1)", () => {
+  const lcgMail = (seed: number) => () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+
+  test("чистые функции: варианты, имя и отчество, подстановки, запрет tlkbars.ru, окно, отказ", () => {
+    const a = mailShared.spin("{Добрый день|Здравствуйте|Привет}, {brand}! {А|Б}", "7700000001:first");
+    assert.deepEqual(a, mailShared.spin("{Добрый день|Здравствуйте|Привет}, {brand}! {А|Б}", "7700000001:first"), "тот же лид — тот же вариант");
+    assert.match(a.text, /^(Добрый день|Здравствуйте|Привет), \{brand\}! (А|Б)$/);
+    assert.equal(a.choices.length, 2);
+    assert.equal(mailShared.namePatronymic("Иванов Иван Иванович"), "Иван Иванович");
+    assert.equal(mailShared.namePatronymic("АЛИЕВ РАШИД ГЕЙДАР ОГЛЫ"), "Рашид Гейдар оглы");
+    assert.equal(mailShared.namePatronymic("ООО Ромашка"), "");
+    assert.equal(mailShared.namePatronymic("Smith John"), "");
+    const vars = { name_patronymic: "", brand: "Demo", product: "гантели", category: "фитнес-инвентаря", marking_note: "", link: "https://x.ru/wb/f?l=abc", signature: "Иван", first_subject: "Тема" };
+    assert.equal(mailShared.fillVars("Здравствуйте, {name_patronymic}!\n\nВидел ваши {product}. {marking_note} Ок.\n\n{signature}", vars), "Добрый день!\n\nВидел ваши гантели. Ок.\n\nИван");
+    assert.equal(mailShared.fillVars("{name_patronymic}, напомню о себе.", vars), "Напомню о себе.");
+    for (const bad of ["см. tlkbars.ru", "https://www.tlkbars.ru/x", "пишите info@tlkbars.ru", "TLKBARS.RU"]) assert.equal(mailShared.mentionsMainDomain(bad), true, bad);
+    for (const ok of ["https://tlkbars-import.ru/wb/", "ivan@tlkbars-import.ru", "mytlkbars.ru"]) assert.equal(mailShared.mentionsMainDomain(ok), false, ok);
+    const start = Date.UTC(2026, 10, 6, 6, 30);
+    const end = Date.UTC(2026, 10, 6, 14, 30);
+    const times = mailShared.spreadTimes(30, start, end, { minGapMs: 4 * 60_000, jitter: 0.4, rnd: lcgMail(1) });
+    assert.equal(times.length, 30);
+    assert.ok(times.every((t, i) => t >= start && t < end && (i === 0 || t - times[i - 1] >= 4 * 60_000)));
+    assert.equal(mailShared.spreadTimes(200, start, end, { minGapMs: 4 * 60_000, jitter: 0.4, rnd: lcgMail(2) }).length <= 120, true, "в окно 8 ч — не больше 120 писем с ящика");
+    assert.equal(mailShared.zonedTime("2026-11-06", "09:30", "Europe/Moscow").toISOString(), "2026-11-06T06:30:00.000Z");
+    assert.equal(mailShared.looksLikeRefusal("Нет, спасибо.\n> Видел ваши"), true);
+    assert.equal(mailShared.looksLikeRefusal("Не актуально"), true);
+    assert.equal(mailShared.looksLikeRefusal("Да, интересно, пришлите расчёт"), false);
+  });
+
+  test("ящики, шаблоны, план дня, dry-run / test / live, цепочка, входящие, стоп-лист", async () => {
+    const s = await adminSession();
+    // Домен и ящик. tlkbars.ru — никогда.
+    assert.equal((await call(s, "POST", "/mail/domains", { domain: "tlkbars.ru" })).statusCode, 400);
+    assert.equal((await call(s, "POST", "/mail/domains", { domain: "mail.tlkbars.ru" })).statusCode, 400);
+    const dom = await call(s, "POST", "/mail/domains", { domain: "tlkbars-import.ru" });
+    assert.equal(dom.statusCode, 200, dom.body);
+    const domainId = dom.json().domain.id as number;
+    assert.equal(dom.json().domain.landingBaseUrl, "https://tlkbars-import.ru/wb/");
+    const mb = await call(s, "POST", "/mail/mailboxes", { email: "ivan@tlkbars-import.ru", fromName: "Иван Демо", domainId, password: "app-pass-123", signature: "Иван Демо\nИмпорт из Китая", dailyLimit: 30 });
+    assert.equal(mb.statusCode, 200, mb.body);
+    const mailboxId = mb.json().mailbox.id as number;
+    const [row] = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, mailboxId));
+    assert.match(row.passwordEnc, /^v1:/);
+    assert.ok(!row.passwordEnc.includes("app-pass-123"), "пароль хранится зашифрованным");
+    assert.equal(decryptSecret(row.passwordEnc), "app-pass-123");
+    assert.deepEqual([row.smtpHost, row.smtpPort, row.imapHost, row.imapPort, row.status], ["smtp.yandex.ru", 465, "imap.yandex.ru", 993, "warming"]);
+    const st0 = (await call(s, "GET", "/mail/status")).json();
+    assert.equal(st0.settings.mode, "dry_run", "по умолчанию — dry-run");
+    assert.ok(st0.mailboxes.length === 1 && !("passwordEnc" in st0.mailboxes[0]) && !JSON.stringify(st0).includes("app-pass"), "пароль наружу не отдаётся");
+    assert.equal((await call(s, "PATCH", `/mail/mailboxes/${mailboxId}`, { signature: "сайт: tlkbars.ru" })).statusCode, 400, "подпись с tlkbars.ru — нельзя");
+    assert.equal((await call(s, "POST", "/mail/templates", { touch: "first", subject: "Привет", body: "Наш сайт https://tlkbars.ru" })).statusCode, 400);
+    assert.equal((await call(s, "POST", "/mail/templates", { touch: "first", subject: "Привет", body: "Здравствуйте, {name}" })).statusCode, 400, "неизвестная подстановка");
+    assert.equal((await call(s, "GET", "/mail/templates")).json().templates.length, 3, "3 шаблона засеяны");
+
+    // Проверка подключения (SMTP — подменён).
+    const sent: { to: string; subject: string; text: string; messageId: string; inReplyTo?: string; references?: string; headers: Record<string, string> }[] = [];
+    let smtpError: Error | null = null;
+    setTransportFactory(() => ({
+      async send(mail) {
+        if (smtpError) throw smtpError;
+        sent.push(mail);
+        return { response: "250 ok" };
+      },
+      async verify() {},
+    }));
+    setImapFetcher(async () => ({ uidValidity: 1, lastUid: 0, messages: [] }));
+
+    // Предпросмотр: подстановки, варианты, персональная ссылка.
+    const queued = await db.execute<{ inn: string }>(sql`select q.seller_inn as inn from lead_queue q where q.status = 'planned' and q.touch = 'first' order by q.planned_date, q.position limit 1`);
+    const inn0 = queued.rows[0].inn;
+    const pv = (await call(s, "POST", "/mail/preview", { inn: inn0, mailboxId })).json();
+    assert.equal(JSON.stringify(pv), JSON.stringify((await call(s, "POST", "/mail/preview", { inn: inn0, mailboxId })).json()), "повторный рендер — то же письмо");
+    assert.ok(!/[{}]/.test(pv.subject + pv.body), "все подстановки и варианты раскрыты");
+    assert.match(pv.body, /^(Добрый день|Здравствуйте), Иван Петрович!/);
+    assert.match(pv.body, /https:\/\/tlkbars-import\.ru\/wb\/[a-z-]+\?l=[A-Za-z0-9]{10}/);
+    assert.match(pv.body, /Иван Демо\nИмпорт из Китая$/);
+    assert.equal(pv.from, "Иван Демо <ivan@tlkbars-import.ru>");
+
+    // План дня (пятница 06.11.2026, 10:00 МСК), dry-run: 30 писем в окне, остальное — на понедельник.
+    const now = new Date("2026-11-06T07:00:00Z");
+    const plan = await planDay(db, now, { rnd: lcgMail(3) });
+    assert.equal(plan.planned, 30);
+    assert.ok(plan.deferred > 0 && plan.deferredTo === "2026-11-09", JSON.stringify(plan));
+    assert.equal((await planDay(db, now, { rnd: lcgMail(4) })).planned, 0, "повторный план не дублирует");
+    const msgs = await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.planDay, "2026-11-06")).orderBy(schema.mailMessages.scheduledAt);
+    assert.equal(msgs.length, 30);
+    assert.ok(msgs.every((m, i) => m.scheduledAt >= now && m.scheduledAt < new Date("2026-11-06T14:30:00Z") && (i === 0 || m.scheduledAt.getTime() - msgs[i - 1].scheduledAt.getTime() >= 4 * 60_000)), "в окне, не чаще раза в 4 минуты");
+    assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 1));
+    assert.ok(msgs.every((m) => m.variants.subject.length === 1 && m.variants.body.length >= 1), "выбранные варианты сохранены");
+
+    // dry-run: журнал, без отправки.
+    const r1 = await sendDue(msgs[0].scheduledAt);
+    assert.deepEqual(r1.map((r) => r.status), ["dry_run"]);
+    assert.equal(sent.length, 0);
+    assert.deepEqual(await sendDue(new Date(msgs[0].scheduledAt.getTime() + 60_000)), [], "не чаще раза в 4 минуты");
+    // test: на тестовый адрес, воронка не меняется.
+    assert.equal((await call(s, "PUT", "/mail/settings", { mode: "test", testAddress: "QA@Example.org" })).statusCode, 200);
+    const r2 = await sendDue(new Date(msgs[1].scheduledAt.getTime() + 5 * 60_000));
+    assert.deepEqual(r2.map((r) => r.status), ["sent"]);
+    assert.equal(sent.at(-1)!.to, "qa@example.org");
+    assert.equal(sent.at(-1)!.headers["List-Unsubscribe"], "<mailto:ivan@tlkbars-import.ru?subject=unsubscribe>");
+    const [seller1] = await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, msgs[1].sellerInn));
+    assert.equal(seller1.status, "new", "в тесте статусы не меняются");
+
+    // live: продавцам; первое письмо → «Написал» и повтор в очереди.
+    await call(s, "PUT", "/mail/settings", { mode: "live" });
+    const live = msgs.slice(2, 6);
+    for (const m of live) assert.equal((await sendOne(m.id, new Date("2026-11-06T12:00:00Z"))).status, "sent");
+    const liveSent = sent.slice(-4);
+    assert.deepEqual(liveSent.map((x) => x.to), live.map((m) => m.toEmail), "каждое — одному получателю, на его адрес");
+    assert.ok(liveSent.every((x) => !x.inReplyTo));
+    const [sA] = await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, live[0].sellerInn));
+    assert.equal(sA.status, "sent");
+    const fq = await db.select().from(schema.leadQueue).where(and(eq(schema.leadQueue.sellerInn, live[0].sellerInn), eq(schema.leadQueue.touch, "followup")));
+    assert.deepEqual(fq.map((q) => [q.status, q.plannedDate]), [["planned", "2026-11-10"]], "повтор — через 4 дня, на рабочий");
+
+    // tlkbars.ru в письме — отправка блокируется.
+    await db.update(schema.mailMessages).set({ body: `${msgs[6].body}\nhttps://tlkbars.ru` }).where(eq(schema.mailMessages.id, msgs[6].id));
+    const blocked = await sendOne(msgs[6].id);
+    assert.equal(blocked.status, "failed");
+    assert.equal(blocked.error, mailShared.MAIN_DOMAIN_ERROR);
+    assert.equal(sent.length, 5, "письмо с tlkbars.ru не ушло");
+
+    // Стоп-лист: продавцу с запланированным письмом — не пишем ни с какого ящика.
+    assert.equal((await call(s, "POST", "/mail/stoplist", { inn: msgs[7].sellerInn, reason: "просил не писать" })).statusCode, 200);
+    assert.equal((await sendOne(msgs[7].id)).status, "skipped", "запланированное письмо снято сразу");
+    const [m7] = await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.id, msgs[7].id));
+    assert.equal(m7.status, "cancelled");
+    assert.ok((await call(s, "GET", "/mail/stoplist")).json().stoplist.some((x: { inn: string; email: string | null }) => x.inn === msgs[7].sellerInn && x.email), "в стоп-лист — ИНН и его email");
+
+    // Повтор (вторник 10.11): с того же ящика, Re: <тема первого>, In-Reply-To / References — Message-ID первого.
+    const plan2 = await planDay(db, new Date("2026-11-10T07:00:00Z"), { rnd: lcgMail(5) });
+    assert.equal(plan2.followups, 4);
+    assert.ok(!(await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.planDay, "2026-11-10"))).some((m) => m.sellerInn === msgs[7].sellerInn), "стоп-лист — не в плане");
+    const fus = await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.planDay, "2026-11-10"), eq(schema.mailMessages.touch, "followup")));
+    for (const f of fus) {
+      const first = live.find((m) => m.sellerInn === f.sellerInn)!;
+      assert.equal(f.mailboxId, first.mailboxId);
+      assert.equal(f.inReplyTo, first.messageId);
+      assert.equal(f.subject, `Re: ${first.subject}`);
+      assert.equal(f.toEmail, first.toEmail);
+    }
+    const fuA = fus.find((f) => f.sellerInn === live[0].sellerInn)!;
+    assert.equal((await sendOne(fuA.id, new Date("2026-11-10T08:00:00Z"))).status, "sent");
+    assert.deepEqual([sent.at(-1)!.inReplyTo, sent.at(-1)!.references], [live[0].messageId, live[0].messageId], "повтор — в той же цепочке");
+    assert.equal((await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, live[0].sellerInn)))[0].status, "followup_sent");
+
+    // Входящие (IMAP подменён): ответ человека, возврат, автоответ, неизвестный.
+    const raw = (h: Record<string, string>, text: string) => Buffer.from(`${Object.entries({ "MIME-Version": "1.0", Date: "Tue, 10 Nov 2026 12:00:00 +0300", "Content-Type": "text/plain; charset=utf-8", ...h }).map(([k, v]) => `${k}: ${v}`).join("\r\n")}\r\n\r\n${text}\r\n`);
+    const [B, C, D] = live.slice(1, 4);
+    const bounce = Buffer.from(
+      [
+        "From: Mail Delivery System <mailer-daemon@yandex.ru>",
+        "To: ivan@tlkbars-import.ru",
+        "Subject: Undelivered Mail Returned to Sender",
+        "MIME-Version: 1.0",
+        'Content-Type: multipart/report; report-type=delivery-status; boundary="b1"',
+        "",
+        "--b1",
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        `<${C.toEmail}>: host mx said: 550 5.1.1 User unknown`,
+        "--b1",
+        "Content-Type: message/delivery-status",
+        "",
+        "Reporting-MTA: dns; mx.yandex.ru",
+        "",
+        `Final-Recipient: rfc822; ${C.toEmail}`,
+        "Action: failed",
+        "Status: 5.1.1",
+        "--b1",
+        "Content-Type: text/rfc822-headers",
+        "",
+        `Message-ID: ${C.messageId}`,
+        `Subject: ${C.subject}`,
+        "--b1--",
+        "",
+      ].join("\r\n"),
+    );
+    setImapFetcher(async () => ({
+      uidValidity: 1,
+      lastUid: 14,
+      messages: [
+        { uid: 10, source: raw({ From: `Продавец <${B.toEmail}>`, To: "ivan@tlkbars-import.ru", Subject: `Re: ${B.subject}`, "Message-ID": "<r1@seller.ru>", "In-Reply-To": B.messageId, References: B.messageId }, "Нет, не актуально, спасибо.\r\n\r\n> Видел ваши товары") },
+        { uid: 11, source: bounce },
+        { uid: 12, source: raw({ From: `Продавец <${D.toEmail}>`, Subject: `Автоматический ответ: ${D.subject}`, "Auto-Submitted": "auto-replied", "In-Reply-To": D.messageId, "Message-ID": "<a1@seller.ru>" }, "Я в отпуске до понедельника.") },
+        { uid: 13, source: raw({ From: "Кто-то <someone@else.ru>", Subject: "Вопрос", "Message-ID": "<x1@else.ru>" }, "Здравствуйте, вы кто?") },
+      ],
+    }));
+    const polled = await pollMailbox(mailboxId, new Date("2026-11-10T09:00:00Z"));
+    assert.deepEqual(polled, { fetched: 4, processed: 4 });
+    assert.deepEqual(await pollMailbox(mailboxId), { fetched: 4, processed: 0 }, "уже разобранные не дублируются");
+    const inbound = (await call(s, "GET", "/mail/inbound?days=365")).json().inbound as { kind: string; sellerInn: string | null; refusalHint: boolean; text: string; bouncedEmail: string | null }[];
+    const human = inbound.find((x) => x.kind === "human" && x.sellerInn === B.sellerInn)!;
+    assert.ok(human && human.refusalHint && human.text === "Нет, не актуально, спасибо.", "ответ без цитаты, подсказка «похоже на отказ»");
+    const [sB] = await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, B.sellerInn));
+    assert.equal(sB.status, "replied", "ответил");
+    const fuB = fus.find((f) => f.sellerInn === B.sellerInn)!;
+    assert.equal((await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.id, fuB.id)))[0].status, "cancelled", "повтор отменён");
+    assert.ok((await db.select().from(schema.leadEvents).where(eq(schema.leadEvents.sellerInn, B.sellerInn))).some((e) => e.type === "replied" && e.comment?.includes("не актуально")), "ответ — в истории продавца");
+    const bounced = inbound.find((x) => x.kind === "bounce")!;
+    assert.deepEqual([bounced.sellerInn, bounced.bouncedEmail], [C.sellerInn, C.toEmail]);
+    const [cContact] = await db.select().from(schema.leadContacts).where(and(eq(schema.leadContacts.sellerInn, C.sellerInn), eq(schema.leadContacts.value, C.toEmail)));
+    assert.equal(cContact.valid, false, "адрес возврата — невалидный");
+    const cOther = await db.select().from(schema.leadContacts).where(and(eq(schema.leadContacts.sellerInn, C.sellerInn), eq(schema.leadContacts.type, "email"), eq(schema.leadContacts.valid, true)));
+    const [sC] = await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, C.sellerInn));
+    if (cOther.length) assert.ok((await db.select().from(schema.leadQueue).where(and(eq(schema.leadQueue.sellerInn, C.sellerInn), eq(schema.leadQueue.status, "planned"), eq(schema.leadQueue.touch, "first")))).length === 1, "есть другой адрес — письмо на него");
+    else assert.equal(sC.status, "bounced", "другого адреса нет — возврат");
+    assert.equal((await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.id, fus.find((f) => f.sellerInn === C.sellerInn)!.id)))[0].status, "cancelled", "повтор на вернувшийся адрес отменён");
+    const [sD] = await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, D.sellerInn));
+    assert.equal(sD.status, "sent", "автоответ статус не меняет");
+    assert.equal(inbound.find((x) => x.kind === "auto")!.sellerInn, D.sellerInn);
+    assert.equal(inbound.find((x) => x.text.includes("вы кто"))!.sellerInn, null);
+
+    // Отказ — в стоп-лист по кнопке; такого продавца больше не берём в отбор.
+    const humanRow = (await db.select().from(schema.mailInbound).where(eq(schema.mailInbound.sellerInn, B.sellerInn)))[0];
+    assert.equal((await call(s, "POST", `/mail/inbound/${humanRow.id}/resolve`, { resolution: "stop" })).statusCode, 200);
+    const [sB2] = await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, B.sellerInn));
+    assert.equal(sB2.status, "replied_neg");
+    assert.ok((await db.select().from(schema.doNotContact).where(eq(schema.doNotContact.inn, B.sellerInn))).length > 0);
+
+    // SMTP-отказ «спам» — ящик на паузу на 48 часов.
+    smtpError = Object.assign(new Error("554 5.7.1 Message rejected under suspicion of SPAM"), { responseCode: 554 });
+    const next = (await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.status, "planned"), eq(schema.mailMessages.planDay, "2026-11-10"))))[0];
+    assert.equal((await sendOne(next.id, new Date("2026-11-10T10:00:00Z"))).status, "failed");
+    const [paused] = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, mailboxId));
+    assert.equal(paused.status, "paused");
+    assert.equal(paused.pausedUntil?.toISOString(), "2026-11-12T10:00:00.000Z");
+    smtpError = null;
+
+    // «Пауза всей рассылки».
+    await call(s, "PUT", "/mail/settings", { mode: "dry_run" });
+    assert.equal((await call(s, "POST", "/mail/pause", { paused: true })).json().settings.paused, true);
+    assert.deepEqual(await sendDue(new Date("2026-11-13T08:00:00Z")), []);
+    assert.equal((await planDay(db, new Date("2026-11-13T07:00:00Z"))).note, "рассылка на паузе");
+    await call(s, "POST", "/mail/pause", { paused: false });
+    setTransportFactory(null);
+    setImapFetcher(null);
+  });
+});
+

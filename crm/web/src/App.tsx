@@ -31,6 +31,7 @@ import { CalendarPage } from "./pages/shipments/CalendarPage.tsx";
 import { ShipmentPage } from "./pages/shipments/ShipmentPage.tsx";
 import { ShipmentsPage } from "./pages/shipments/ShipmentsPage.tsx";
 import { LeadgenPage } from "./pages/leadgen/LeadgenPage.tsx";
+import { MailPage } from "./pages/mail/MailPage.tsx";
 import { NotFoundPage } from "./pages/misc.tsx";
 import { ProfilePage } from "./pages/ProfilePage.tsx";
 import { UsersPage } from "./pages/UsersPage.tsx";
@@ -93,6 +94,7 @@ const router = createBrowserRouter(
             { path: "products", element: <ProductsPage /> },
             { path: "products/:id", element: <ProductPage /> },
             { path: "leadgen", element: <LeadgenPage /> },
+            { path: "mail", element: <MailPage /> },
             { path: "profile", element: <ProfilePage /> },
             {
               element: <AdminOnly />,

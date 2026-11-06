@@ -11,6 +11,7 @@ import { pool } from "./db/client.ts";
 import { kickCatalogQueue, resetCatalogQueue, sweepPartialUploads } from "./lib/catalogs.ts";
 import { purgeExpiredSessions } from "./lib/session.ts";
 import { startLeadgenWorker } from "./lib/leadgen/worker.ts";
+import { startMailWorker } from "./lib/mail/worker.ts";
 import { startTelegramBot } from "./lib/telegram-bot.ts";
 
 const app = await buildApp({ logger: true });
@@ -28,12 +29,14 @@ sweep.unref();
 
 let stopBot = () => {};
 let stopLeadgen: () => Promise<void> = async () => {};
+let stopMail: () => Promise<void> = async () => {};
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, async () => {
     app.log.info(`${signal}: останавливаемся`);
     stopBot();
     await stopLeadgen();
+    await stopMail();
     await app.close();
     await pool.end();
     process.exit(0);
@@ -52,4 +55,9 @@ stopBot = startTelegramBot(app.log);
 // Сбор базы для лидогенерации WB — обычно отдельная служба bars-crm-leadgen; внутри сервера — при CRM_LEADGEN_INLINE=true.
 if (config.leadgen.inlineWorker) {
   stopLeadgen = startLeadgenWorker({ info: (m) => app.log.info(m), error: (m) => app.log.error(m) });
+}
+
+// Рассылка (план дня, отправка, IMAP) — обычно служба bars-crm-mail; внутри сервера — при CRM_MAIL_INLINE=true.
+if (config.mail.inlineWorker) {
+  stopMail = startMailWorker({ info: (m) => app.log.info(m), error: (m) => app.log.error(m) });
 }

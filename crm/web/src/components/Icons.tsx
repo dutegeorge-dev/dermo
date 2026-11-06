@@ -80,3 +80,4 @@ export const IconSend = make(["M22 2 11 13", "M22 2 15 22l-4-9-9-4Z"], "IconSend
 export const IconCalculator = make(["M5 2h14v20H5z", "M8 6h8v4H8z", "M8 14h.01", "M12 14h.01", "M16 14h.01", "M8 18h.01", "M12 18h.01", "M16 18h.01"], "IconCalculator");
 export const IconTarget = make(["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z", "M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"], "IconTarget");
 export const IconDownload = make(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5", "M12 15V3"], "IconDownload");
+export const IconMail = make(["M3 6h18v12H3z", "m3 7 9 6 9-6"], "IconMail");

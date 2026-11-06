@@ -47,6 +47,7 @@ import type { RawContacts, Requisites } from "./registry.ts";
 import { checkEmail } from "./site.ts";
 import type { WbProduct, WbSellerInfo } from "./wb.ts";
 import { filterWhere, parseSellerFilter } from "./work.ts";
+import { isStopped, notStoppedInn } from "../mail/stoplist.ts";
 
 export interface LeadSources {
   search(query: string, page: number): Promise<WbProduct[]>;
@@ -414,6 +415,8 @@ async function enrichOne(job: Job, cat: Category, cand: Candidate, src: LeadSour
         address: req?.address ?? (wb.address || null),
         egrStatus: req?.status ?? "NOT_FOUND",
         feedbacksTotal: feedbacks,
+        // В стоп-листе рассылки (отказался раньше) — сразу «Не писать».
+        status: (await isStopped(db, inn)) ? "do_not_contact" : "new",
         products,
         categoryId: cat.id,
         batchMonth: job.month,
@@ -481,6 +484,7 @@ async function pickAll(job: Job, cats: Category[], src: LeadSources, save: Save,
             sql`${leadSellers.status} <> 'do_not_contact'`,
             sql`${leadSellers.contactsStatus} is distinct from 'none'`,
             sql`${leadSellers.contactsJobId} is distinct from ${job.id}`,
+            notStoppedInn(leadSellers.inn),
           ),
         )
         .orderBy(sql`md5(${leadSellers.inn} || ${String(job.id)})`)

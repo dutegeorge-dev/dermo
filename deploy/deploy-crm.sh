@@ -55,6 +55,10 @@ systemctl restart bars-crm
 if systemctl list-unit-files bars-crm-leadgen.service --no-legend 2>/dev/null | grep -q bars-crm-leadgen; then
   systemctl restart bars-crm-leadgen
 fi
+# Воркер рассылки — если служба установлена (crm/server/lib/mail/README.md).
+if systemctl list-unit-files bars-crm-mail.service --no-legend 2>/dev/null | grep -q bars-crm-mail; then
+  systemctl restart bars-crm-mail
+fi
 
 echo "→ 5/5 проверка"
 for _ in $(seq 1 20); do

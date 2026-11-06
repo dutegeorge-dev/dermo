@@ -1,0 +1,101 @@
+/**
+ * Воркер рассылки (служба bars-crm-mail, `npm run mail:worker`; в разработке — CRM_MAIL_INLINE=true в bars-crm):
+ * - раз в 20 с: в рабочий день после начала окна — план дня (один раз в день), отправка подошедших писем;
+ * - раз в 5 минут: входящие всех ящиков (IMAP).
+ * Одновременно работает один воркер (advisory lock в PostgreSQL). Пароли и тела писем в лог не пишутся.
+ */
+
+import os from "node:os";
+
+import { eq } from "drizzle-orm";
+
+import { isWorkday } from "../../../shared/leadgen.ts";
+import { dayInZone } from "../../../shared/mail.ts";
+import { db, pool } from "../../db/client.ts";
+import { settings as settingsTable } from "../../db/schema.ts";
+import { pollAll } from "./inbound.ts";
+import { planDay, windowOf } from "./planner.ts";
+import { getMailSettings, getMailState } from "./render.ts";
+import { sendDue } from "./sender.ts";
+
+export const MAIL_WORKER_KEY = "mail_worker";
+const LOCK_ID = 7_342_002;
+const TICK_MS = 20_000;
+const IMAP_MS = 5 * 60_000;
+
+/** План дня, если окно началось, день рабочий и плана на сегодня ещё не было. */
+export async function maybePlan(now = new Date()): Promise<boolean> {
+  const s = await getMailSettings(db);
+  if (s.paused) return false;
+  const day = dayInZone(now, s.timezone);
+  if (!isWorkday(day, { workdays: s.workdays, holidays: s.holidays })) return false;
+  const w = windowOf(day, s);
+  if (now < w.start || now >= w.end) return false;
+  const state = await getMailState<{ lastPlanDay?: string }>(db);
+  if (state.lastPlanDay === day) return false;
+  await planDay(db, now);
+  return true;
+}
+
+async function heartbeat(state: string): Promise<void> {
+  const value = { at: new Date().toISOString(), host: os.hostname(), pid: process.pid, state };
+  await db.insert(settingsTable).values({ key: MAIL_WORKER_KEY, value }).onConflictDoUpdate({ target: settingsTable.key, set: { value, updatedAt: new Date() } });
+}
+
+type Logger = { info: (msg: string) => void; error: (msg: string) => void };
+
+export function startMailWorker(logger: Logger): () => Promise<void> {
+  let stopping = false;
+  let wake: (() => void) | null = null;
+  const nap = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const t = setTimeout(resolve, ms);
+      wake = () => {
+        clearTimeout(t);
+        resolve();
+      };
+    });
+  const loop = (async () => {
+    const client = await pool.connect();
+    let locked = false;
+    let lastImap = 0;
+    try {
+      while (!stopping) {
+        if (!locked) {
+          locked = (await client.query<{ ok: boolean }>("select pg_try_advisory_lock($1) as ok", [LOCK_ID])).rows[0]?.ok ?? false;
+          if (!locked) {
+            await nap(30_000);
+            continue;
+          }
+          logger.info("Рассылка: воркер запущен");
+        }
+        try {
+          await heartbeat("работает");
+          if (await maybePlan()) logger.info("Рассылка: план дня построен");
+          for (const r of await sendDue()) logger.info(`Рассылка: письмо ${r.messageId} — ${r.status}${r.error ? ` (${r.error.slice(0, 200)})` : ""}`);
+          if (Date.now() - lastImap >= IMAP_MS) {
+            lastImap = Date.now();
+            await pollAll(new Date(), logger.info);
+          }
+        } catch (error) {
+          logger.error(`Рассылка: ошибка воркера — ${error instanceof Error ? error.message : String(error)}`);
+        }
+        await nap(TICK_MS);
+      }
+    } finally {
+      if (locked) await client.query("select pg_advisory_unlock($1)", [LOCK_ID]).catch(() => {});
+      client.release();
+    }
+  })();
+  return async () => {
+    stopping = true;
+    (wake as (() => void) | null)?.();
+    await Promise.race([loop, new Promise((r) => setTimeout(r, 10_000))]);
+  };
+}
+
+export async function workerAlive(): Promise<{ at: string | null; alive: boolean }> {
+  const [row] = await db.select().from(settingsTable).where(eq(settingsTable.key, MAIL_WORKER_KEY));
+  const at = (row?.value as { at?: string } | undefined)?.at ?? null;
+  return { at, alive: Boolean(at && Date.now() - Date.parse(at) < 2 * 60_000) };
+}
