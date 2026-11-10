@@ -57,7 +57,7 @@ if (config.leadgen.inlineWorker) {
   stopLeadgen = startLeadgenWorker({ info: (m) => app.log.info(m), error: (m) => app.log.error(m) });
 }
 
-// Рассылка (план дня, отправка, IMAP) — обычно служба bars-crm-mail; внутри сервера — при CRM_MAIL_INLINE=true.
+// Рассылка (только план дня) — обычно служба bars-crm-mail; внутри сервера — при CRM_MAIL_INLINE=true.
 if (config.mail.inlineWorker) {
   stopMail = startMailWorker({ info: (m) => app.log.info(m), error: (m) => app.log.error(m) });
 }

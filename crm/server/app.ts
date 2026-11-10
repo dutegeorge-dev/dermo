@@ -38,6 +38,7 @@ import { fileRoutes } from "./routes/files.ts";
 import { kbRoutes } from "./routes/kb.ts";
 import { leadgenRoutes } from "./routes/leadgen.ts";
 import { mailRoutes } from "./routes/mail.ts";
+import { mailAgentRoutes } from "./routes/mail-agent.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { userRoutes } from "./routes/users.ts";
 
@@ -51,10 +52,17 @@ const PUBLIC_API = new Set([
   `${API_PREFIX}/intake/leads`,
   `${API_PREFIX}/leadgen/collector/next`,
   `${API_PREFIX}/leadgen/collector/result`,
+  `${API_PREFIX}/mail/agent/next`,
+  `${API_PREFIX}/mail/agent/result`,
 ]);
 
-/** Доступ по ключу в заголовке Authorization (не cookie): CSRF им не грозит, Origin — chrome-extension://… */
-const TOKEN_API = new Set([`${API_PREFIX}/leadgen/collector/next`, `${API_PREFIX}/leadgen/collector/result`]);
+/** Доступ по ключу в заголовке Authorization (не cookie): CSRF им не грозит. */
+const TOKEN_API = new Set([
+  `${API_PREFIX}/leadgen/collector/next`,
+  `${API_PREFIX}/leadgen/collector/result`,
+  `${API_PREFIX}/mail/agent/next`,
+  `${API_PREFIX}/mail/agent/result`,
+]);
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -168,6 +176,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
       await api.register(aiRoutes, { prefix: "/ai" });
       await api.register(intakeRoutes);
       await api.register(leadgenRoutes);
+      await api.register(mailAgentRoutes);
       await api.register(mailRoutes);
     },
     { prefix: API_PREFIX },

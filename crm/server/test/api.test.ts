@@ -2393,12 +2393,17 @@ describe("Рассылка (этап 1)", () => {
     assert.equal(mailShared.looksLikeRefusal("Нет, спасибо.\n> Видел ваши"), true);
     assert.equal(mailShared.looksLikeRefusal("Не актуально"), true);
     assert.equal(mailShared.looksLikeRefusal("Да, интересно, пришлите расчёт"), false);
-    const work = { workdays: [1, 2, 3, 4, 5], holidays: [] };
-    assert.equal(mailShared.warmupWorkday("2026-11-06", "2026-11-06", work), 1);
-    assert.equal(mailShared.warmupWorkday("2026-11-06", "2026-11-09", work), 2, "выходные не увеличивают прогрев");
-    assert.deepEqual(["2026-11-06", "2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12"].map((day) => mailShared.warmupDailyLimit(30, "2026-11-06", day, work)), [10, 15, 20, 25, 30]);
-    assert.equal(mailShared.warmupDailyLimit(12, "2026-11-06", "2026-11-09", work), 12, "целевой лимит не превышается");
-    assert.equal(mailShared.warmupDailyLimit(30, "2026-11-10", "2026-11-09", work), 0, "до начала прогрева не отправляем");
+    assert.deepEqual(mailShared.WARMUP_STAGE_LIMITS, [5, 10, 15, 20, 25]);
+    assert.deepEqual([1, 2, 3, 4, 5, 6].map(mailShared.warmupStageLimit), [5, 10, 15, 20, 25, 25], "только ступени, без ежедневного +5");
+    const eligible = { stage: 1, sendingDays: 5, sent: 25, recentErrors: 0, bounceRate: 0, ready: true, active: true };
+    assert.equal(mailShared.warmupHoldReason(eligible), null);
+    assert.match(mailShared.warmupHoldReason({ ...eligible, sendingDays: 4 })!, /5 фактических live-дней/);
+    assert.match(mailShared.warmupHoldReason({ ...eligible, sent: 24 })!, /25 live-писем/);
+    assert.match(mailShared.warmupHoldReason({ ...eligible, recentErrors: 1 })!, /последние три/);
+    assert.match(mailShared.warmupHoldReason({ ...eligible, bounceRate: 0.031 })!, /выше допустимых 3%/);
+    assert.match(mailShared.warmupHoldReason({ ...eligible, ready: false })!, /SMTP и IMAP/);
+    assert.match(mailShared.warmupHoldReason({ ...eligible, active: false })!, /на паузе/);
+    assert.equal(mailShared.warmupHoldReason({ ...eligible, stage: 5, sent: 0, sendingDays: 0 }), null);
     assert.deepEqual(mailShared.normalizeRunMailboxIds([3, "2", 3, -1, 0, "bad"]), [3, 2]);
     assert.equal(mailShared.MAX_MAILBOXES_PER_RUN, 30);
   });
@@ -2443,19 +2448,22 @@ describe("Рассылка (этап 1)", () => {
     }));
     setImapFetcher(async () => ({ uidValidity: 1, lastUid: 0, messages: [] }));
 
-    // Предпросмотр: подстановки, варианты, персональная ссылка.
+    // Предпросмотр: подстановки, варианты и новый текст без ссылки.
     const queued = await db.execute<{ inn: string }>(sql`select q.seller_inn as inn from lead_queue q where q.status = 'planned' and q.touch = 'first' order by q.planned_date, q.position limit 1`);
     const inn0 = queued.rows[0].inn;
     const pv = (await call(s, "POST", "/mail/preview", { inn: inn0, mailboxId })).json();
     assert.equal(JSON.stringify(pv), JSON.stringify((await call(s, "POST", "/mail/preview", { inn: inn0, mailboxId })).json()), "повторный рендер — то же письмо");
     assert.ok(!/[{}]/.test(pv.subject + pv.body), "все подстановки и варианты раскрыты");
     assert.match(pv.body, /^(Добрый день|Здравствуйте), Иван Петрович!/);
-    assert.match(pv.body, /https:\/\/tlkbars-import\.ru\/wb\/[a-z-]+\?l=[A-Za-z0-9]{10}/);
+    assert.match(pv.body, /Менять поставщика не предлагаю/);
+    assert.match(pv.body, /артикул товара на WB/);
+    assert.ok(!pv.body.includes("https://"), "в новом первом письме нет ссылки");
     assert.match(pv.body, /Иван Демо\nИмпорт из Китая$/);
     assert.equal(pv.from, "Иван Демо <ivan@tlkbars-import.ru>");
 
-    // Явный запуск дня с выбранным ящиком (пятница 06.11.2026, 10:00 МСК), dry-run: 30 писем.
+    // Явный запуск дня с выбранным ящиком (пятница 06.11.2026, 10:00 МСК), особый лимит для расширенного сценария.
     const now = new Date("2026-11-06T07:00:00Z");
+    assert.equal((await call(s, "POST", `/mail/mailboxes/${mailboxId}/limit-override`, { limit: 30, reason: "интеграционная проверка очереди" })).statusCode, 200);
     const { run, plan } = await startDailyRun(now, null, [mailboxId], { rnd: lcgMail(3) });
     assert.deepEqual(run.mailboxIds, [mailboxId]);
     assert.deepEqual((await getDailyRun(db, "2026-11-06"))?.mailboxIds, [mailboxId]);
@@ -2467,7 +2475,7 @@ describe("Рассылка (этап 1)", () => {
     const msgs = await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.planDay, "2026-11-06")).orderBy(schema.mailMessages.scheduledAt);
     assert.equal(msgs.length, 30);
     assert.ok(msgs.every((m, i) => m.scheduledAt >= now && m.scheduledAt < new Date("2026-11-06T14:30:00Z") && (i === 0 || m.scheduledAt.getTime() - msgs[i - 1].scheduledAt.getTime() >= 4 * 60_000)), "в окне, не чаще раза в 4 минуты");
-    assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 1));
+    assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 2));
     assert.ok(msgs.every((m) => m.variants.subject.length === 1 && m.variants.body.length >= 1), "выбранные варианты сохранены");
 
     // dry-run: журнал, без отправки. Пустой выбор ящиков запрещает отправку.
@@ -2485,10 +2493,15 @@ describe("Рассылка (этап 1)", () => {
     const [seller1] = await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, msgs[1].sellerInn));
     assert.equal(seller1.status, "new", "в тесте статусы не меняются");
 
-    // live: продавцам; первое письмо → «Написал» и повтор в очереди.
+    // live: продавцам; до проверки агентом SMTP не вызывается, dry-run и test прогрев не продвигают.
     await call(s, "PUT", "/mail/settings", { mode: "live" });
+    assert.match((await sendOne(msgs[8].id)).error ?? "", /проверки SMTP и IMAP/);
+    assert.equal(sent.length, 1);
+    await db.update(schema.mailboxes).set({ smtpVerifiedAt: now, imapVerifiedAt: now, warmupStageStartedAt: new Date("2026-11-06T06:00:00Z") }).where(eq(schema.mailboxes.id, mailboxId));
     const live = msgs.slice(2, 6);
     for (const m of live) assert.equal((await sendOne(m.id, new Date("2026-11-06T12:00:00Z"))).status, "sent");
+    const warmupAfterOneDay = (await import("../lib/mail/warmup.ts")).warmupStats;
+    assert.deepEqual([(await warmupAfterOneDay(db, mailboxId))!.sendingDays, (await warmupAfterOneDay(db, mailboxId))!.sent, (await warmupAfterOneDay(db, mailboxId))!.stage], [1, 4, 1]);
     const liveSent = sent.slice(-4);
     assert.deepEqual(liveSent.map((x) => x.to), live.map((m) => m.toEmail), "каждое — одному получателю, на его адрес");
     assert.ok(liveSent.every((x) => !x.inReplyTo));
@@ -2602,13 +2615,22 @@ describe("Рассылка (этап 1)", () => {
     assert.equal(sB2.status, "replied_neg");
     assert.ok((await db.select().from(schema.doNotContact).where(eq(schema.doNotContact.inn, B.sellerInn))).length > 0);
 
-    // SMTP-отказ «спам» — ящик на паузу на 48 часов.
+    // Hard bounce исключает адрес и останавливает первые касания при 20%, но не блокирует весь ящик.
+    const [afterBounce] = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, mailboxId));
+    assert.equal(afterBounce.warmupFirstsPaused, true);
+    assert.equal(afterBounce.status, "warming");
+    assert.match(afterBounce.warmupHoldReason ?? "", /live-дней/);
+
+    // SMTP-отказ «спам» — ящик на паузу на 48 часов и ступень ниже; повторы до отказа не считаются блокировкой.
+    await db.update(schema.mailboxes).set({ warmupStage: 2 }).where(eq(schema.mailboxes.id, mailboxId));
     smtpError = Object.assign(new Error("554 5.7.1 Message rejected under suspicion of SPAM"), { responseCode: 554 });
-    const next = (await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.status, "planned"), eq(schema.mailMessages.planDay, "2026-11-10"))))[0];
+    const [next] = await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.status, "planned"), eq(schema.mailMessages.planDay, "2026-11-10"), eq(schema.mailMessages.touch, "followup")));
     assert.equal((await sendOne(next.id, new Date("2026-11-10T10:00:00Z"))).status, "failed");
     const [paused] = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, mailboxId));
     assert.equal(paused.status, "paused");
+    assert.equal(paused.warmupStage, 1);
     assert.equal(paused.pausedUntil?.toISOString(), "2026-11-12T10:00:00.000Z");
+    assert.deepEqual(await pollMailbox(mailboxId, new Date("2026-11-10T10:05:00Z")), { fetched: 4, processed: 0 }, "IMAP работает на SMTP-паузе");
     smtpError = null;
 
     // «Пауза всей рассылки».
@@ -2622,3 +2644,204 @@ describe("Рассылка (этап 1)", () => {
   });
 });
 
+
+describe("Рассылка: ступени, предохранители и локальный агент", () => {
+  async function newMailbox(email: string, stage = 1) {
+    const [domain] = await db.select().from(schema.mailDomains).where(eq(schema.mailDomains.domain, "tlkbars-import.ru"));
+    const [source] = await db.select().from(schema.mailboxes).orderBy(schema.mailboxes.id).limit(1);
+    const verified = new Date("2026-11-01T06:00:00Z");
+    const [box] = await db.insert(schema.mailboxes).values({
+      email,
+      fromName: "Тест",
+      domainId: domain.id,
+      smtpHost: "smtp.yandex.ru",
+      smtpUser: email,
+      imapHost: "imap.yandex.ru",
+      imapUser: email,
+      passwordEnc: source.passwordEnc,
+      signature: "Тест",
+      dailyLimit: 25,
+      warmupStage: stage,
+      warmupStageStartedAt: new Date("2026-11-01T06:00:00Z"),
+      smtpVerifiedAt: verified,
+      imapVerifiedAt: verified,
+    }).returning();
+    return box;
+  }
+
+  function historyRow(mailboxId: number, sellerInn: string, key: string, at: Date, mode: "live" | "test" | "dry_run" = "live") {
+    return {
+      sellerInn,
+      mailboxId,
+      toEmail: `${key}@example.org`,
+      touch: "first",
+      subject: "Тест",
+      body: "Тестовое письмо",
+      messageId: `<${key}@tlkbars-import.ru>`,
+      status: mode === "dry_run" ? "dry_run" : "sent",
+      mode,
+      planDay: mailShared.dayInZone(at, "Europe/Moscow"),
+      scheduledAt: at,
+      sentAt: at,
+    };
+  }
+
+  test("5 дней и 25 live-писем открывают следующую ступень; четыре ящика независимы", async () => {
+    const [seller] = await db.select().from(schema.leadSellers).limit(1);
+    const boxes = [] as typeof schema.mailboxes.$inferSelect[];
+    for (let i = 0; i < 4; i++) boxes.push(await newMailbox(`warm${i}@tlkbars-import.ru`));
+    const box = boxes[0];
+    const { evaluateWarmup, warmupStats } = await import("../lib/mail/warmup.ts");
+    const { mailboxLimit } = await import("../lib/mail/planner.ts");
+
+    for (let stage = 1; stage <= 4; stage++) {
+      const values = [];
+      for (let i = 0; i < 25; i++) {
+        const at = new Date(Date.UTC(2026, 10 + Math.floor((stage * 7 + Math.floor(i / 5)) / 30), 1 + ((stage * 7 + Math.floor(i / 5)) % 30), 8 + (i % 5)));
+        values.push(historyRow(box.id, seller.inn, `stage-${stage}-${i}`, at));
+      }
+      values.push(historyRow(box.id, seller.inn, `ignored-test-${stage}`, new Date("2027-01-02T08:00:00Z"), "test"));
+      values.push(historyRow(box.id, seller.inn, `ignored-dry-${stage}`, new Date("2027-01-03T08:00:00Z"), "dry_run"));
+      await db.insert(schema.mailMessages).values(values);
+      const before = await warmupStats(db, box.id);
+      assert.equal(before?.sendingDays, 5, "дни без live, dry-run и test не засчитываются");
+      assert.equal(before?.sent, 25);
+      const after = await evaluateWarmup(db, box.id, new Date(values[23].sentAt.getTime() + 3600_000));
+      assert.equal(after?.stage, stage + 1);
+      assert.equal(after?.stageLimit, mailShared.warmupStageLimit(stage + 1));
+      assert.equal(after?.sent, 0, "письмо, завершившее прошлую ступень, не засчитывается новой");
+      assert.equal(after?.sendingDays, 0);
+      const [current] = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, box.id));
+      assert.equal(mailboxLimit(current), mailShared.warmupStageLimit(stage + 1));
+    }
+    const [finished] = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, box.id));
+    assert.equal(finished.status, "active");
+    for (const other of boxes.slice(1)) {
+      assert.equal((await warmupStats(db, other.id))?.stage, 1);
+      assert.equal((await warmupStats(db, other.id))?.sendingDays, 0);
+    }
+
+    const limited = { ...finished, warmupStage: 5, warmupLimitOverride: null, dailyLimit: 7 };
+    assert.equal(mailboxLimit(limited), 7, "ручной dailyLimit только уменьшает лимит");
+    assert.equal(mailboxLimit({ ...limited, dailyLimit: 500 }), 25);
+    assert.equal(mailboxLimit({ ...limited, warmupLimitOverride: 40 }), 40, "особое повышение — отдельное действие");
+
+    const insufficient = boxes[1];
+    await db.insert(schema.mailMessages).values(Array.from({ length: 20 }, (_, i) => historyRow(insufficient.id, seller.inn, `short-${i}`, new Date(Date.UTC(2026, 10, 2 + Math.floor(i / 4), 8)))));
+    assert.equal((await evaluateWarmup(db, insufficient.id, new Date("2026-11-07T12:00:00Z")))?.stage, 1, "25 писем обязательны даже после пяти дней");
+
+    const errors = boxes[2];
+    await db.insert(schema.mailMessages).values(Array.from({ length: 25 }, (_, i) => historyRow(errors.id, seller.inn, `errors-${i}`, new Date(Date.UTC(2026, 10, 2 + Math.floor(i / 5), 8)))));
+    await db.insert(schema.mailMessages).values({ ...historyRow(errors.id, seller.inn, "recent-error", new Date("2026-11-06T12:00:00Z")), status: "failed", error: "temporary SMTP error" });
+    assert.equal((await evaluateWarmup(db, errors.id, new Date("2026-11-06T13:00:00Z")))?.stage, 1, "ошибка последнего отправочного дня удерживает ступень");
+  });
+
+  test("агент получает проверки и цепочку по Bearer-ключу; повтор результата и advisory lock безопасны", async () => {
+    const s = await adminSession();
+    await call(s, "PUT", "/mail/settings", { mode: "dry_run", testAddress: "qa@example.org" });
+    const created = await call(s, "POST", "/mail/mailboxes", { email: "agent@tlkbars-import.ru", fromName: "Агент", domainId: (await db.select().from(schema.mailDomains).where(eq(schema.mailDomains.domain, "tlkbars-import.ru")))[0].id, password: "agent-test-password", dailyLimit: 25 });
+    assert.equal(created.statusCode, 200, created.body);
+    const mailboxId = created.json().mailbox.id as number;
+    const issued = await call(s, "POST", "/mail/agent/token");
+    const token = issued.json().token as string;
+    assert.ok(token.startsWith("irbis_mail_"));
+    const agent = (method: "next" | "result", payload: unknown, key = token) => app.inject({ method: "POST", url: `${API}/mail/agent/${method}`, headers: { authorization: `Bearer ${key}` }, payload: payload as object });
+    assert.equal((await agent("next", { host: "test-pc" }, "wrong")).statusCode, 401);
+    assert.equal((await call(s, "POST", `/mail/mailboxes/${mailboxId}/check`, { testTo: "" })).json().queued, true);
+    const check = (await agent("next", { host: "test-pc" })).json().task;
+    assert.equal(check.type, "check");
+    assert.equal(check.mailbox.password, "agent-test-password");
+    assert.equal((await agent("result", { type: "check", mailboxId, smtp: { ok: true }, imap: { ok: true }, host: "test-pc" })).statusCode, 200);
+    const [verified] = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, mailboxId));
+    assert.ok(verified.smtpVerifiedAt && verified.imapVerifiedAt);
+
+    const [queued] = await db.select({ inn: schema.leadQueue.sellerInn }).from(schema.leadQueue).where(eq(schema.leadQueue.status, "planned")).limit(1);
+    const chain = await call(s, "POST", "/mail/test-chain", { inn: queued.inn, mailboxId });
+    assert.equal(chain.json().queued, true);
+    const first = (await agent("next", { host: "test-pc" })).json().task;
+    assert.equal(first.type, "send");
+    assert.equal(first.mail.to, "qa@example.org");
+    await agent("result", { type: "send", messageId: first.messageId, ok: true, host: "test-pc" });
+    await agent("result", { type: "send", messageId: first.messageId, ok: true, host: "test-pc" });
+    const { nextMailAgentTask } = await import("../lib/mail/agent.ts");
+    const second = await nextMailAgentTask("test-pc", new Date(Date.now() + 2000));
+    assert.equal(second.type, "send");
+    assert.notEqual(second.type === "send" ? second.messageId : 0, first.messageId);
+    assert.equal(second.type === "send" ? second.mail.inReplyTo : null, first.mail.messageId);
+    await agent("result", { type: "send", messageId: second.type === "send" ? second.messageId : 0, ok: true, host: "test-pc" });
+    const testMessages = await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.mailboxId, mailboxId), eq(schema.mailMessages.mode, "test"))).orderBy(schema.mailMessages.id);
+    assert.deepEqual(testMessages.map((m) => m.status), ["sent", "sent"]);
+    const { warmupStats } = await import("../lib/mail/warmup.ts");
+    assert.equal((await warmupStats(db, mailboxId))?.sent, 0, "test не продвигает прогрев");
+
+    const single = await db.insert(schema.mailMessages).values({ sellerInn: queued.inn, mailboxId, toEmail: "qa@example.org", sentTo: "qa@example.org", touch: "first", subject: "Один", body: "Один", messageId: "<single-agent@tlkbars-import.ru>", planDay: mailShared.dayInZone(new Date(), "Europe/Moscow"), scheduledAt: new Date(), mode: "test" }).returning();
+    const claims = await Promise.all([nextMailAgentTask("test-pc", new Date(Date.now() + 3000)), nextMailAgentTask("test-pc", new Date(Date.now() + 3000))]);
+    assert.equal(claims.filter((task) => task.type === "send" && task.messageId === single[0].id).length, 1, "два опроса не получают одно письмо");
+    const claim = claims.find((task) => task.type === "send" && task.messageId === single[0].id);
+    if (claim?.type === "send") await agent("result", { type: "send", messageId: claim.messageId, ok: true, host: "test-pc" });
+
+    const { tryMailWorkerLock, MAIL_WORKER_LOCK_ID } = await import("../lib/mail/worker.ts");
+    const a = await pool.connect();
+    const b = await pool.connect();
+    try {
+      assert.equal(await tryMailWorkerLock(a), true);
+      assert.equal(await tryMailWorkerLock(b), false);
+    } finally {
+      await a.query("select pg_advisory_unlock($1)", [MAIL_WORKER_LOCK_ID]);
+      a.release();
+      b.release();
+    }
+  });
+
+  test("auth-ошибка ставит паузу без повторных SMTP-попыток; лимит общий и перенос не копит долг", async () => {
+    const s = await adminSession();
+    await call(s, "PUT", "/mail/settings", { mode: "live" });
+    const box = await newMailbox("auth@tlkbars-import.ru");
+    const [seller] = await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.status, "new")).limit(1);
+    const insert = await db.insert(schema.mailMessages).values(historyRow(box.id, seller.inn, "auth-failure", new Date("2026-11-10T08:00:00Z"))).returning();
+    await db.update(schema.mailMessages).set({ status: "planned", mode: null, sentAt: null }).where(eq(schema.mailMessages.id, insert[0].id));
+    let attempts = 0;
+    setTransportFactory(() => ({ async send() { attempts++; throw new Error("535 5.7.8 EAUTH authentication failed"); }, async verify() {} }));
+    assert.equal((await sendOne(insert[0].id, new Date("2026-11-10T08:00:00Z"))).status, "failed");
+    assert.equal((await sendOne(insert[0].id, new Date("2026-11-10T08:01:00Z"))).status, "skipped");
+    assert.equal(attempts, 1);
+    const [paused] = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, box.id));
+    assert.equal(paused.status, "paused");
+    assert.equal(paused.pausedUntil, null);
+    assert.equal(paused.smtpVerifiedAt, null);
+
+    const bounceBox = await newMailbox("smtp-bounce@tlkbars-import.ru");
+    const bounceInsert = await db.insert(schema.mailMessages).values(historyRow(bounceBox.id, seller.inn, "direct-bounce", new Date("2026-11-10T08:00:00Z"))).returning();
+    await db.update(schema.mailMessages).set({ status: "planned", mode: null, sentAt: null }).where(eq(schema.mailMessages.id, bounceInsert[0].id));
+    setTransportFactory(() => ({ async send() { throw new Error("550 5.1.1 user unknown"); }, async verify() {} }));
+    assert.equal((await sendOne(bounceInsert[0].id, new Date("2026-11-10T08:00:00Z"))).status, "failed");
+    const { warmupStats: bounceStats } = await import("../lib/mail/warmup.ts");
+    assert.equal((await bounceStats(db, bounceBox.id))?.bounces, 1, "SMTP hard bounce входит в статистику даже без DSN");
+    assert.equal((await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, bounceBox.id)))[0].status, "warming", "один bounce не блокирует ящик");
+    setTransportFactory(null);
+    await call(s, "PUT", "/mail/settings", { mode: "dry_run" });
+
+    const plannedBox = await newMailbox("capacity@tlkbars-import.ru");
+    const queueSellers = await db.select().from(schema.leadQueue).where(and(eq(schema.leadQueue.status, "planned"), eq(schema.leadQueue.touch, "first"))).orderBy(schema.leadQueue.id).limit(5);
+    for (const [i, q] of queueSellers.entries()) {
+      await db.update(schema.leadQueue).set({ status: "cancelled" }).where(eq(schema.leadQueue.sellerInn, q.sellerInn));
+      await db.update(schema.mailMessages).set({ status: "cancelled" }).where(and(eq(schema.mailMessages.queueId, q.id), eq(schema.mailMessages.status, "planned")));
+      if (i < 4) {
+        await db.insert(schema.mailMessages).values(historyRow(plannedBox.id, q.sellerInn, `old-first-${i}`, new Date("2026-11-06T08:00:00Z")));
+        await db.insert(schema.leadQueue).values({ sellerInn: q.sellerInn, plannedDate: "2026-11-09", touch: "followup", status: "planned" });
+      } else {
+        await db.insert(schema.leadQueue).values({ sellerInn: q.sellerInn, plannedDate: "2026-11-09", touch: "first", status: "planned" });
+      }
+    }
+    const plan = await planDay(db, new Date("2026-11-09T07:00:00Z"), { mailboxIds: [plannedBox.id], rnd: () => 0.5 });
+    assert.equal(plan.planned, 5);
+    assert.equal(plan.followups, 4);
+    assert.equal(plan.firsts, 1, "первые и повторы делят один лимит 5");
+    const old = await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.mailboxId, plannedBox.id), eq(schema.mailMessages.planDay, "2026-11-09"), eq(schema.mailMessages.status, "planned")));
+    assert.equal(old.length, 5);
+    const next = await planDay(db, new Date("2026-11-10T07:00:00Z"), { mailboxIds: [plannedBox.id], rnd: () => 0.5 });
+    assert.equal(next.planned, 5, "на следующий день только новый дневной лимит, без долга");
+    const oldAfter = await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.mailboxId, plannedBox.id), eq(schema.mailMessages.planDay, "2026-11-09"), eq(schema.mailMessages.status, "planned")));
+    assert.equal(oldAfter.length, 0, "старые слоты закрыты при переносе");
+  });
+});

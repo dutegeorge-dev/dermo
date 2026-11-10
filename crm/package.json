@@ -21,6 +21,7 @@
     "tnved:update": "node --import tsx server/cli/tnved.ts",
     "leadgen:worker": "node --import tsx server/cli/leadgen-worker.ts",
     "mail:worker": "node --import tsx server/cli/mail-worker.ts",
+    "mail:agent": "node --import tsx server/cli/mail-agent.ts",
     "leadgen:check": "node --import tsx server/cli/leadgen-check.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json",
     "test": "node --import tsx --test server/test/*.test.ts"

@@ -23,6 +23,9 @@ import { decryptSecret } from "./crypto.ts";
 import { FINAL_STATUSES } from "./planner.ts";
 import { cancelPlanned } from "./sender.ts";
 import { loadMailbox, type MailboxFull } from "./render.ts";
+import { evaluateWarmup, pauseForConfiguration } from "./warmup.ts";
+
+export const IMAP_CONFIG_RE = /AUTHENTICATIONFAILED|authentication failed|invalid credentials|EAUTH|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|connection timeout|Command failed/i;
 
 export type FetchedMessage = { uid: number; source: Buffer };
 export type FetchResult = { uidValidity: number; lastUid: number; messages: FetchedMessage[] };
@@ -218,6 +221,7 @@ export async function processMessage(m: MailboxFull, uidValidity: number, uid: n
       });
     }
   }
+  if (c.kind === "bounce") await evaluateWarmup(db, m.id, now);
   return row;
 }
 
@@ -230,11 +234,12 @@ export async function pollMailbox(id: number, now = new Date()): Promise<{ fetch
     for (const msg of res.messages.sort((a, b) => a.uid - b.uid)) {
       if (await processMessage(m, res.uidValidity, msg.uid, msg.source, now)) processed++;
     }
-    await db.update(mailboxes).set({ imapUidValidity: res.uidValidity, imapLastUid: res.lastUid, imapCheckedAt: now, imapError: null }).where(eq(mailboxes.id, id));
+    await db.update(mailboxes).set({ imapUidValidity: res.uidValidity, imapLastUid: res.lastUid, imapCheckedAt: now, imapError: null, imapVerifiedAt: m.imapVerifiedAt ?? now }).where(eq(mailboxes.id, id));
     return { fetched: res.messages.length, processed };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await db.update(mailboxes).set({ imapCheckedAt: now, imapError: message.slice(0, 500) }).where(eq(mailboxes.id, id));
+    if (IMAP_CONFIG_RE.test(message)) await pauseForConfiguration(db, id, message, now, "IMAP");
     throw error;
   }
 }

@@ -3,8 +3,6 @@
  * разнесение писем по окну отправки, подсказка «похоже на отказ». Импортируется и сервером, и фронтом.
  */
 
-import { addDaysIso, isWorkday } from "./leadgen.ts";
-
 /** Право на раздел «Рассылка» (users.permissions). Ящики и настройки — только админ. */
 export const MAIL_PERMISSION = "mail";
 
@@ -210,30 +208,41 @@ export function spreadTimes(n: number, start: number, end: number, opts: { minGa
 // ── Запуск дня и автоматический прогрев ──────────────────────────────────────
 
 export const MAX_MAILBOXES_PER_RUN = 30;
-export const WARMUP_INITIAL_LIMIT = 10;
-export const WARMUP_DAILY_STEP = 5;
+export const WARMUP_STAGE_LIMITS = [5, 10, 15, 20, 25] as const;
+export const WARMUP_SENDING_DAYS = 5;
+export const WARMUP_MIN_STAGE_SENT = 25;
+export const WARMUP_MAX_BOUNCE_RATE = 0.03;
 
 export function normalizeRunMailboxIds(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
 }
 
-/** Номер рабочего дня прогрева, начиная с 1. Выходные и праздники лимит не увеличивают. */
-export function warmupWorkday(start: string | null, day: string, settings: Pick<MailSettings, "workdays" | "holidays">): number {
-  if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start) || start > day) return 0;
-  let n = 0;
-  for (let cursor = start; cursor <= day; cursor = addDaysIso(cursor, 1)) {
-    if (isWorkday(cursor, settings)) n++;
-  }
-  return n;
+/** Лимит зависит только от ступени и фактического прогресса, а не от календарной даты. */
+export function warmupStageLimit(stage: number): number {
+  return WARMUP_STAGE_LIMITS[Math.min(WARMUP_STAGE_LIMITS.length, Math.max(1, Math.trunc(stage))) - 1];
 }
 
-/** 10 писем в первый рабочий день, затем +5 каждый рабочий день до целевого лимита. */
-export function warmupDailyLimit(target: number, start: string | null, day: string, settings: Pick<MailSettings, "workdays" | "holidays">): number {
-  const limit = Math.max(0, target);
-  if (!start) return limit;
-  const n = warmupWorkday(start, day, settings);
-  return n ? Math.min(limit, WARMUP_INITIAL_LIMIT + (n - 1) * WARMUP_DAILY_STEP) : 0;
+export type WarmupRulesInput = {
+  stage: number;
+  sendingDays: number;
+  sent: number;
+  recentErrors: number;
+  bounceRate: number;
+  ready: boolean;
+  active: boolean;
+};
+
+/** null — можно перейти дальше (на пятой ступени — просто продолжать с лимитом 25). */
+export function warmupHoldReason(v: WarmupRulesInput): string | null {
+  if (!v.active) return "ящик или домен на паузе";
+  if (!v.ready) return "нужна успешная проверка SMTP и IMAP локальным агентом";
+  if (v.stage >= WARMUP_STAGE_LIMITS.length) return null;
+  if (v.sendingDays < WARMUP_SENDING_DAYS) return `нужно ${WARMUP_SENDING_DAYS} фактических live-дней, сейчас ${v.sendingDays}`;
+  if (v.sent < WARMUP_MIN_STAGE_SENT) return `нужно ${WARMUP_MIN_STAGE_SENT} live-писем за ступень, сейчас ${v.sent}`;
+  if (v.recentErrors > 0) return "SMTP-ошибки или блокировки за последние три отправочных дня";
+  if (v.bounceRate > WARMUP_MAX_BOUNCE_RATE) return `hard bounce ${(v.bounceRate * 100).toFixed(1)}% — выше допустимых 3%`;
+  return null;
 }
 
 // ── Время в часовом поясе ────────────────────────────────────────────────────

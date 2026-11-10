@@ -1168,12 +1168,27 @@ export const mailboxes = pgTable("mailboxes", {
   /** Пароль приложения — AES-256-GCM (ключ MAILBOX_SECRET_KEY), в интерфейс не отдаётся. */
   passwordEnc: text("password_enc").notNull(),
   signature: text("signature").notNull().default(""),
-  dailyLimit: integer("daily_limit").notNull().default(30),
+  /** Обычный ручной предел: может только уменьшить лимит текущей ступени. */
+  dailyLimit: integer("daily_limit").notNull().default(25),
   warmupStart: date("warmup_start"),
+  warmupStage: integer("warmup_stage").notNull().default(1),
+  warmupStageStartedAt: timestamp("warmup_stage_started_at", { withTimezone: true }).notNull().defaultNow(),
+  warmupHoldReason: text("warmup_hold_reason"),
+  /** После массовых возвратов новые первые касания ждут проверки базы администратором. */
+  warmupFirstsPaused: boolean("warmup_firsts_paused").notNull().default(false),
+  /** Отдельное явное исключение из алгоритма; устанавливается отдельным действием с аудитом. */
+  warmupLimitOverride: integer("warmup_limit_override"),
   /** warming / active / paused / burned. */
   status: text("status").notNull().default("warming"),
   pauseReason: text("pause_reason"),
   pausedUntil: timestamp("paused_until", { withTimezone: true }),
+  smtpVerifiedAt: timestamp("smtp_verified_at", { withTimezone: true }),
+  smtpError: text("smtp_error"),
+  imapVerifiedAt: timestamp("imap_verified_at", { withTimezone: true }),
+  /** Задания локальному агенту на проверку подключения и внеочередной опрос IMAP. */
+  checkRequestedAt: timestamp("check_requested_at", { withTimezone: true }),
+  checkTestTo: text("check_test_to"),
+  imapPollRequestedAt: timestamp("imap_poll_requested_at", { withTimezone: true }),
   /** Курсор IMAP: UIDVALIDITY папки INBOX и последний прочитанный UID. */
   imapUidValidity: bigint("imap_uid_validity", { mode: "number" }),
   imapLastUid: bigint("imap_last_uid", { mode: "number" }),

@@ -9,11 +9,12 @@
 import { and, asc, desc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
 
 import { addDaysIso, isWorkday, nextWorkday } from "../../../shared/leadgen.ts";
-import { dayInZone, type MailSettings, spreadTimes, warmupDailyLimit, warmupWorkday, zonedTime } from "../../../shared/mail.ts";
+import { dayInZone, type MailSettings, spreadTimes, warmupStageLimit, zonedTime } from "../../../shared/mail.ts";
 import type { DbOrTx } from "../../db/client.ts";
 import { leadContacts, leadQueue, leadSellers, mailDomains, mailboxes, mailMessages } from "../../db/schema.ts";
 import { getMailSettings, loadMailbox, type MailboxFull, newMessageId, patchMailState, renderForSeller } from "./render.ts";
 import { isStopped } from "./stoplist.ts";
+import { evaluateWarmup, mailboxLiveReady } from "./warmup.ts";
 
 /** Статусы продавца, при которых больше не пишем. */
 export const FINAL_STATUSES = ["replied", "replied_pos", "replied_neg", "bounced", "do_not_contact"];
@@ -35,7 +36,7 @@ export type PlanSummary = {
   note?: string;
 };
 
-type MailboxState = Pick<typeof mailboxes.$inferSelect, "status" | "pausedUntil" | "dailyLimit" | "warmupStart">;
+type MailboxState = Pick<typeof mailboxes.$inferSelect, "status" | "pausedUntil" | "dailyLimit" | "warmupStage" | "warmupLimitOverride">;
 
 /** Ящик может отправлять сейчас: не на паузе / не сожжён, пауза по времени истекла. */
 export function mailboxUsable(m: Pick<typeof mailboxes.$inferSelect, "status" | "pausedUntil">, now: Date): boolean {
@@ -44,17 +45,20 @@ export function mailboxUsable(m: Pick<typeof mailboxes.$inferSelect, "status" | 
   return m.status === "active" || m.status === "warming";
 }
 
-export function mailboxLimit(m: MailboxState, day: string, settings: Pick<MailSettings, "workdays" | "holidays">): number {
-  if (m.status === "burned" || m.status === "active") return Math.max(0, m.dailyLimit);
-  return warmupDailyLimit(m.dailyLimit, m.warmupStart, day, settings);
+export function mailboxLimit(m: MailboxState, _day?: string, _settings?: Pick<MailSettings, "workdays" | "holidays">): number {
+  if (m.status === "burned") return 0;
+  return Math.max(0, m.warmupLimitOverride ?? Math.min(warmupStageLimit(m.warmupStage), m.dailyLimit));
 }
 
-/** Завершённый прогрев и истёкшая пауза автоматически возвращают ящик в правильный статус. */
-export function mailboxStatusForDay(m: MailboxState, day: string, now: Date, settings: Pick<MailSettings, "workdays" | "holidays">): string {
+/** Для live обязательны обе проверки с того компьютера, который будет отправлять. */
+export function mailboxReadyForMode(m: Pick<MailboxFull, "smtpVerifiedAt" | "imapVerifiedAt">, mode: MailSettings["mode"]): boolean {
+  return mode !== "live" || mailboxLiveReady(m);
+}
+
+/** Истёкшая временная пауза автоматически возвращает ящик на текущую ступень. */
+export function mailboxStatusForDay(m: MailboxState, _day: string, now: Date, _settings: Pick<MailSettings, "workdays" | "holidays">): string {
   if (m.status === "burned" || (m.status === "paused" && (!m.pausedUntil || m.pausedUntil > now))) return m.status;
-  if (m.status === "active") return "active";
-  if (!m.warmupStart) return "active";
-  return warmupDailyLimit(m.dailyLimit, m.warmupStart, day, settings) >= m.dailyLimit && warmupWorkday(m.warmupStart, day, settings) > 0 ? "active" : "warming";
+  return m.warmupStage >= 5 ? "active" : "warming";
 }
 
 const workdaysOf = (s: MailSettings) => ({ workdays: s.workdays, holidays: s.holidays });
@@ -95,18 +99,30 @@ export async function planDay(tx: DbOrTx, now = new Date(), opts: { rnd?: () => 
   const boxes: MailboxFull[] = [];
   for (const m of await tx.select().from(mailboxes).innerJoin(mailDomains, eq(mailDomains.id, mailboxes.domainId))) {
     if (selected && !selected.has(m.mailboxes.id)) continue;
+    const warmup = await evaluateWarmup(tx, m.mailboxes.id, now);
     const status = mailboxStatusForDay(m.mailboxes, day, now, s);
     if (status !== m.mailboxes.status) await tx.update(mailboxes).set({ status, pauseReason: null, pausedUntil: null, updatedAt: now }).where(eq(mailboxes.id, m.mailboxes.id));
-    const box = { ...m.mailboxes, status };
-    if (mailboxUsable(box, now) && m.mail_domains.status === "active") boxes.push({ ...box, domain: m.mail_domains });
+    const box = { ...m.mailboxes, status, warmupFirstsPaused: warmup?.firstsPaused ?? m.mailboxes.warmupFirstsPaused };
+    if (mailboxUsable(box, now) && m.mail_domains.status === "active" && mailboxReadyForMode(box, s.mode)) boxes.push({ ...box, domain: m.mail_domains });
   }
   const used = await tx
     .select({ mailboxId: mailMessages.mailboxId, n: sql<number>`count(*)::int` })
     .from(mailMessages)
-    .where(and(eq(mailMessages.planDay, day), inArray(mailMessages.status, ["planned", "sending", "sent", "dry_run"])))
+    .where(and(eq(mailMessages.planDay, day), inArray(mailMessages.status, ["planned", "sending", "sent", "dry_run", "failed"])))
     .groupBy(mailMessages.mailboxId);
   const left = new Map(boxes.map((b) => [b.id, Math.max(0, mailboxLimit(b, day, s) - (used.find((u) => u.mailboxId === b.id)?.n ?? 0))]));
   const limit = new Map(boxes.map((b) => [b.id, Math.max(1, mailboxLimit(b, day, s))]));
+
+  // Вчерашние несостоявшиеся отправки не копят долг: старый слот закрывается, касание получает один новый слот сегодня.
+  if (selected?.size !== 0) {
+    const old = await tx
+      .update(mailMessages)
+      .set({ status: "cancelled", error: `перенесено на ${day}` })
+      .where(and(sql`${mailMessages.planDay} < ${day}`, eq(mailMessages.status, "planned"), selected ? inArray(mailMessages.mailboxId, [...selected]) : undefined))
+      .returning({ queueId: mailMessages.queueId });
+    const queueIds = old.map((r) => r.queueId).filter((id): id is number => id !== null);
+    if (queueIds.length) await tx.update(leadQueue).set({ plannedDate: day, status: "planned" }).where(and(inArray(leadQueue.id, queueIds), eq(leadQueue.status, "planned")));
+  }
 
   // Всё, что должно уйти сегодня и раньше: сначала повторы, потом первые письма (по плану лидогенерации).
   const items = await tx
@@ -163,7 +179,7 @@ export async function planDay(tx: DbOrTx, now = new Date(), opts: { rnd?: () => 
       continue;
     }
     // Ящик с наибольшей долей оставшегося лимита — распределение пропорционально остатку.
-    const box = boxes.filter((b) => (left.get(b.id) ?? 0) > 0).sort((a, b) => (left.get(b.id)! / limit.get(b.id)!) - (left.get(a.id)! / limit.get(a.id)!))[0];
+    const box = boxes.filter((b) => (left.get(b.id) ?? 0) > 0 && (it.touch !== "first" || !b.warmupFirstsPaused)).sort((a, b) => (left.get(b.id)! / limit.get(b.id)!) - (left.get(a.id)! / limit.get(a.id)!))[0];
     if (!box) {
       defer.push(it.id);
       continue;

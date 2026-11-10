@@ -5,7 +5,7 @@ import { dayInZone, MAX_MAILBOXES_PER_RUN, normalizeRunMailboxIds } from "../../
 import { db, type DbOrTx } from "../../db/client.ts";
 import { mailDomains, mailboxes, mailRunMailboxes, mailRuns } from "../../db/schema.ts";
 import { HttpError } from "../http.ts";
-import { mailboxLimit, mailboxUsable, planDay, type PlanSummary, windowOf } from "./planner.ts";
+import { mailboxLimit, mailboxReadyForMode, mailboxUsable, planDay, type PlanSummary, windowOf } from "./planner.ts";
 import { getMailSettings } from "./render.ts";
 
 export type DailyRun = typeof mailRuns.$inferSelect & { mailboxIds: number[] };
@@ -32,6 +32,7 @@ export async function startDailyRun(now: Date, userId: number | null, input: unk
   if (rows.length !== ids.length) throw new HttpError(400, "Один из выбранных ящиков не найден");
   for (const row of rows) {
     if (row.mail_domains.status !== "active" || !mailboxUsable(row.mailboxes, now)) throw new HttpError(409, `Ящик ${row.mailboxes.email} сейчас недоступен`);
+    if (!mailboxReadyForMode(row.mailboxes, s.mode)) throw new HttpError(409, `Ящик ${row.mailboxes.email}: сначала локальный агент должен успешно проверить SMTP и IMAP`);
     if (mailboxLimit(row.mailboxes, day, s) <= 0) throw new HttpError(409, `У ящика ${row.mailboxes.email} на сегодня нулевой лимит`);
   }
 

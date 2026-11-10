@@ -118,7 +118,7 @@ npm run crm:dev
 Лидогенерация WB (в `crm/`): `npm run leadgen:worker` — воркер сбора (в проде служба `bars-crm-leadgen`),
 `npm run leadgen:check [-- --query "гантели" --registry]` — отвечают ли эндпоинты WB / DaData / Checko с этого сервера,
 `scripts/wb-probe.cjs` — найти новые эндпоинты WB через Playwright. Подробно — `server/lib/leadgen/README.md`.
-Рассылка (в `crm/`): `npm run mail:worker` — воркер (в проде служба `bars-crm-mail`). Подробно — `server/lib/mail/README.md`.
+Рассылка (в `crm/`): `npm run mail:worker` — серверный планировщик (в проде служба `bars-crm-mail`); на рабочем Windows-ПК — `scripts/start-mail-agent.bat` (ключ спрашивается один раз), автозагрузка — `scripts/install-mail-agent-startup.ps1`. Подробно — `server/lib/mail/README.md`.
 
 В `crm/`: `npm run typecheck`, `npm run db:generate` (новая миграция после правки `server/db/schema.ts`), `npm start` (прод-запуск).
 
@@ -342,7 +342,7 @@ sudo systemctl start bars-crm
 | `lead_queue` | Касания: `seller_inn`, `planned_date`, `position` (порядок в дне), `touch` (first/followup), `status` (planned/done/cancelled), `sent_at`, `note` |
 | `lead_events` | История статусов продавца: `seller_inn`, `type`, `comment`, `user_id`, `created_at` |
 | `mail_domains` | Рассылка: холодные домены — `domain`, `landing_base_url` (https://<домен>/wb/), `status` active/paused/burned, `dkim_selector`, `dns_check`, `note` (tlkbars.ru не принимается) |
-| `mailboxes` | Ящики: email, `from_name`, `domain_id`, SMTP host/port/secure/user, IMAP host/port/user, `password_enc` (AES-256-GCM, MAILBOX_SECRET_KEY), `signature`, `daily_limit` (целевой), `warmup_start` (автопрогрев 10 → +5 за рабочий день), `status` warming/active/paused/burned, `pause_reason`, `paused_until`, курсор IMAP (`imap_uid_validity`, `imap_last_uid`) |
+| `mailboxes` | Ящики: email, `from_name`, `domain_id`, SMTP host/port/secure/user, IMAP host/port/user, `password_enc` (AES-256-GCM, MAILBOX_SECRET_KEY), `signature`, `daily_limit` (ручной верхний предел), `warmup_stage` (1–5: лимиты 5/10/15/20/25), `warmup_stage_started_at`, `warmup_hold_reason`, `warmup_firsts_paused`, `warmup_limit_override`, `status` warming/active/paused/burned, `pause_reason`, `paused_until`, проверки SMTP / IMAP и задания агенту, курсор IMAP (`imap_uid_validity`, `imap_last_uid`) |
 | `mail_runs`, `mail_run_mailboxes` | Явный запуск рассылки на день и выбранные вручную ящики (до 30); без запуска воркер не планирует и не отправляет |
 | `mail_templates` | Шаблоны: `category_id` (null — все) + `for_marking`, `touch` first/followup, `subject`, `body` (текст, `{a|b}` и подстановки), `active`, `version`; ИИ-редактор через общий Claude |
 | `mail_messages` | План / журнал / отправленные целиком: продавец, `queue_id`, ящик, `to_email` / `sent_to`, `touch`, шаблон и версия, тема, текст, `variants`, `message_id`, `in_reply_to`, `status` planned/sending/sent/dry_run/failed/cancelled, `mode`, `plan_day`, `scheduled_at`, `sent_at`, `error` |

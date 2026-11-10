@@ -33,16 +33,29 @@ type Mailbox = {
   dailyLimit: number;
   todayLimit: number;
   usedToday: number;
+  liveSentToday: number;
   remainingToday: number;
-  warmupDay: number;
+  warmupStage: number;
+  warmupDays: number;
+  warmupStageSent: number;
+  warmupBounces: number;
+  warmupBounceRate: number;
+  warmupHoldReason: string | null;
+  warmupFirstsPaused: boolean;
+  warmupLimitOverride: number | null;
   usable: boolean;
   availableForRun: boolean;
   warmupStart: string | null;
   status: string;
   pauseReason: string | null;
   pausedUntil: string | null;
+  smtpVerifiedAt: string | null;
+  smtpError: string | null;
+  imapVerifiedAt: string | null;
   imapCheckedAt: string | null;
   imapError: string | null;
+  checkRequestedAt: string | null;
+  imapPollRequestedAt: string | null;
 };
 type PlanSummary = { day: string; at: string; planned: number; followups: number; firsts: number; deferred: number; deferredTo: string | null; noEmail: number; skipped: number; perMailbox: Record<string, number>; note?: string };
 type MailStatus = {
@@ -54,6 +67,7 @@ type MailStatus = {
   state: { lastPlan?: PlanSummary };
   run: { id: number; planDay: string; createdAt: string; mailboxIds: number[] } | null;
   worker: { at: string | null; alive: boolean };
+  agent: { hasKey: boolean; lastSeenAt: string | null; host: string | null; alive: boolean };
   ai: boolean;
   secretKey: boolean;
   mailboxes: Mailbox[];
@@ -186,9 +200,8 @@ function RunPanel({ st }: { st: MailStatus }) {
               <span className="min-w-0">
                 <span className="block break-all font-medium">{m.email}</span>
                 <span className="muted">
-                  {BOX_STATUS[m.status] ?? m.status} · сегодня {m.todayLimit}/{m.dailyLimit}
-                  {m.status === "warming" && m.warmupDay > 0 ? ` · день ${m.warmupDay}` : ""}
-                  {` · осталось ${m.remainingToday}`}
+                  {BOX_STATUS[m.status] ?? m.status} · ступень {m.warmupStage}, лимит {m.todayLimit}
+                  {` · live отправлено ${m.liveSentToday}, осталось ${m.remainingToday}`}
                 </span>
                 {!m.usable && <span className="block text-red-600 dark:text-red-400">{m.pauseReason || (m.domainStatus !== "active" ? "домен не активен" : "ящик недоступен")}</span>}
               </span>
@@ -202,8 +215,8 @@ function RunPanel({ st }: { st: MailStatus }) {
         <button
           type="button"
           className="btn btn-primary"
-          disabled={!selected.length || start.isPending || !st.worker.alive}
-          title={!st.worker.alive ? "Сначала запустите службу bars-crm-mail" : ""}
+          disabled={!selected.length || start.isPending || !st.agent.alive}
+          title={!st.agent.alive ? "Сначала запустите локального агента на рабочем компьютере" : ""}
           onClick={() => (st.settings.mode !== "live" || window.confirm(`Боевой режим: начать отправку продавцам через ${selected.length} ящиков?`)) && start.mutate()}
         >
           {start.isPending ? "Строим план…" : `Начать рассылку${st.settings.mode === "live" ? "" : st.settings.mode === "test" ? " (тест)" : " (dry-run)"}`}
@@ -225,7 +238,7 @@ function PlanTab({ st, admin }: { st: MailStatus; admin: boolean }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 text-xs">
-        <Badge ok={st.worker.alive}>{st.worker.alive ? "воркер работает" : "воркер не запущен — служба bars-crm-mail"}</Badge>
+        <Badge ok={st.agent.alive}>{st.agent.alive ? `локальный агент работает${st.agent.host ? `: ${st.agent.host}` : ""}` : "локальный агент не запущен на рабочем ПК"}</Badge>
         <Badge ok={st.secretKey}>{st.secretKey ? "ключ шифрования есть" : "нет MAILBOX_SECRET_KEY"}</Badge>
         <Badge ok={st.mailboxes.some((m) => m.status === "active" || m.status === "warming")}>ящиков в работе: {st.mailboxes.filter((m) => m.status === "active" || m.status === "warming").length}</Badge>
         <Badge ok>
@@ -638,7 +651,7 @@ function Preview({ st, templates }: { st: MailStatus; templates: Template[] }) {
     mutationFn: () => api<{ subject: string; body: string; from: string; templateId: number }>("/mail/preview", { method: "POST", body: { inn: inn.trim(), mailboxId: Number(mailboxId), touch, templateId: templateId ? Number(templateId) : null } }),
   });
   const chain = useMutation({
-    mutationFn: () => api<{ first: { status: string; error?: string }; followup?: { status: string; error?: string } }>("/mail/test-chain", { method: "POST", body: { inn: inn.trim(), mailboxId: Number(mailboxId) } }),
+    mutationFn: () => api<{ queued: boolean; first: { status: string; error?: string }; followup?: { status: string; error?: string } }>("/mail/test-chain", { method: "POST", body: { inn: inn.trim(), mailboxId: Number(mailboxId) } }),
   });
   return (
     <div className="panel space-y-3 p-4 text-sm">
@@ -688,9 +701,9 @@ function Preview({ st, templates }: { st: MailStatus; templates: Template[] }) {
       <ErrorBox error={preview.error ?? chain.error} />
       {chain.data && (
         <div className="text-xs">
-          Первое: {chain.data.first.status}
-          {chain.data.first.error ? ` (${chain.data.first.error})` : ""}
-          {chain.data.followup && ` · повтор: ${chain.data.followup.status}${chain.data.followup.error ? ` (${chain.data.followup.error})` : ""}`}
+          {chain.data.queued
+            ? "Первое письмо и повтор поставлены в очередь локального агента. Они будут отправлены на тестовый адрес с сохранением цепочки; статусы продавца и прогрев не меняются."
+            : `Первое: ${chain.data.first.status}${chain.data.first.error ? ` (${chain.data.first.error})` : ""}${chain.data.followup ? ` · повтор: ${chain.data.followup.status}${chain.data.followup.error ? ` (${chain.data.followup.error})` : ""}` : ""}`}
         </div>
       )}
       {preview.data && (
@@ -811,10 +824,18 @@ function BoxesTab({ st }: { st: MailStatus }) {
   const domains = useQuery({ queryKey: ["mail", "domains"], queryFn: () => api<{ domains: Domain[] }>("/mail/domains") });
   const [newDomain, setNewDomain] = useState("");
   const [editing, setEditing] = useState<Mailbox | "new" | null>(null);
+  const [agentToken, setAgentToken] = useState("");
   const addDomain = useMutation({
     mutationFn: () => api("/mail/domains", { method: "POST", body: { domain: newDomain } }),
     onSuccess: () => {
       setNewDomain("");
+      void qc.invalidateQueries({ queryKey: ["mail"] });
+    },
+  });
+  const issueToken = useMutation({
+    mutationFn: () => api<{ token: string }>("/mail/agent/token", { method: "POST" }),
+    onSuccess: (result) => {
+      setAgentToken(result.token);
       void qc.invalidateQueries({ queryKey: ["mail"] });
     },
   });
@@ -838,6 +859,23 @@ function BoxesTab({ st }: { st: MailStatus }) {
         </div>
         <ErrorBox error={addDomain.error ?? domains.error} />
       </div>
+      <div className="panel space-y-2 p-4 text-sm">
+        <div className="font-semibold">Локальный агент на рабочем ПК</div>
+        <div className="text-xs muted">SMTP и IMAP выполняет только агент. Сервер планирует письма и хранит журнал. Запуск из каталога crm: <code>npm run mail:agent</code>.</div>
+        <Badge ok={st.agent.alive}>{st.agent.alive ? `подключён${st.agent.host ? `: ${st.agent.host}` : ""}` : "не подключён"}</Badge>
+        <div>
+          <button type="button" className="btn btn-sm" disabled={issueToken.isPending} onClick={() => window.confirm("Новый ключ отключит прежний. Выпустить?") && issueToken.mutate()}>
+            {st.agent.hasKey ? "Выпустить новый ключ" : "Выпустить ключ агента"}
+          </button>
+        </div>
+        {agentToken && (
+          <label className="block">
+            <span className="label">Ключ показан один раз — сохраните в CRM_MAIL_AGENT_TOKEN на рабочем ПК</span>
+            <textarea className="input font-mono text-xs" readOnly value={agentToken} onFocus={(e) => e.target.select()} />
+          </label>
+        )}
+        <ErrorBox error={issueToken.error} />
+      </div>
       <div className="flex justify-end">
         <button type="button" className="btn" disabled={!domains.data?.domains.length} onClick={() => setEditing("new")}>
           <IconPlus size={14} /> Ящик
@@ -855,25 +893,39 @@ function BoxesTab({ st }: { st: MailStatus }) {
 }
 
 function MailboxRow({ m, testAddress, onEdit }: { m: Mailbox; testAddress: string; onEdit: () => void }) {
+  const qc = useQueryClient();
   const [testTo, setTestTo] = useState(testAddress);
-  const check = useMutation({ mutationFn: () => api<{ smtp: string; imap: string; test: string | null }>(`/mail/mailboxes/${m.id}/check`, { method: "POST", body: { testTo } }) });
-  const poll = useMutation({ mutationFn: () => api<{ fetched: number; processed: number }>(`/mail/mailboxes/${m.id}/poll`, { method: "POST" }) });
+  const [specialOpen, setSpecialOpen] = useState(false);
+  const [special, setSpecial] = useState({ limit: String(m.warmupLimitOverride ?? m.todayLimit), reason: "" });
+  const updated = { onSuccess: () => void qc.invalidateQueries({ queryKey: ["mail"] }) };
+  const check = useMutation({ mutationFn: () => api<{ queued: boolean }>(`/mail/mailboxes/${m.id}/check`, { method: "POST", body: { testTo } }), ...updated });
+  const poll = useMutation({ mutationFn: () => api<{ queued: boolean }>(`/mail/mailboxes/${m.id}/poll`, { method: "POST" }), ...updated });
+  const review = useMutation({ mutationFn: () => api(`/mail/mailboxes/${m.id}/review-bounces`, { method: "POST" }), ...updated });
+  const override = useMutation({
+    mutationFn: (limit: number | null) => api(`/mail/mailboxes/${m.id}/limit-override`, { method: "POST", body: { limit, reason: special.reason } }),
+    ...updated,
+  });
   return (
     <div className="space-y-2 px-4 py-3">
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="font-medium">
             {m.fromName ? `${m.fromName} <${m.email}>` : m.email}{" "}
-            <span className="text-xs muted">
-              · {BOX_STATUS[m.status] ?? m.status} · сегодня {m.todayLimit}, цель {m.dailyLimit}/день
-              {m.status === "warming" && m.warmupStart ? ` · прогрев с ${m.warmupStart}, рабочий день ${m.warmupDay}` : ""}
-            </span>
+            <span className="text-xs muted">· {BOX_STATUS[m.status] ?? m.status} · ступень {m.warmupStage}/5 · лимит {m.todayLimit}/день</span>
           </div>
           <div className="text-xs muted">
-            SMTP {m.smtpHost}:{m.smtpPort}{m.smtpSecure ? " SSL" : " STARTTLS"} · IMAP {m.imapHost}:{m.imapPort}
-            {m.imapCheckedAt && ` · входящие проверены ${formatDateTime(m.imapCheckedAt)}`}
+            Сегодня live: {m.liveSentToday} · занято в плане: {m.usedToday} · осталось: {m.remainingToday} · отправочных дней ступени: {m.warmupDays}/5 · live за ступень: {m.warmupStageSent}/25
           </div>
-          {m.pauseReason && <div className="text-xs text-red-600 dark:text-red-400">пауза: {m.pauseReason}{m.pausedUntil ? ` до ${formatDateTime(m.pausedUntil)}` : ""}</div>}
+          <div className="text-xs muted">
+            Ручной предел: {m.dailyLimit}{m.warmupLimitOverride !== null ? ` · особый лимит: ${m.warmupLimitOverride}` : ""} · возвраты ступени: {m.warmupBounces} ({(m.warmupBounceRate * 100).toFixed(1)}%)
+          </div>
+          <div className="text-xs muted">
+            SMTP {m.smtpHost}:{m.smtpPort}{m.smtpSecure ? " SSL" : " STARTTLS"} — {m.smtpVerifiedAt ? `проверен ${formatDateTime(m.smtpVerifiedAt)}` : "не проверен"} · IMAP {m.imapHost}:{m.imapPort} — {m.imapVerifiedAt ? `проверен ${formatDateTime(m.imapVerifiedAt)}` : "не проверен"}
+          </div>
+          {m.warmupHoldReason && <div className="text-xs text-amber-700 dark:text-amber-300">удержание ступени: {m.warmupHoldReason}</div>}
+          {m.warmupFirstsPaused && <div className="text-xs text-red-600 dark:text-red-400">Новые первые касания остановлены до проверки базы. Повторы и IMAP продолжаются.</div>}
+          {m.pauseReason && <div className="text-xs text-red-600 dark:text-red-400">пауза: {m.pauseReason}{m.pausedUntil ? ` до ${formatDateTime(m.pausedUntil)}` : " до исправления конфигурации"}</div>}
+          {m.smtpError && <div className="text-xs text-red-600 dark:text-red-400">SMTP: {m.smtpError}</div>}
           {m.imapError && <div className="text-xs text-red-600 dark:text-red-400">IMAP: {m.imapError}</div>}
         </div>
         <button type="button" className="icon-btn" onClick={onEdit} aria-label="Изменить">
@@ -882,21 +934,25 @@ function MailboxRow({ m, testAddress, onEdit }: { m: Mailbox; testAddress: strin
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <input className="input w-56 text-xs" placeholder="тестовое письмо на…" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
-        <button type="button" className="btn btn-sm" disabled={check.isPending} onClick={() => check.mutate()}>
-          Проверить подключение
+        <button type="button" className="btn btn-sm" disabled={check.isPending || Boolean(m.checkRequestedAt)} onClick={() => check.mutate()}>
+          {m.checkRequestedAt ? "Проверка ждёт агента" : "Проверить через агента"}
         </button>
-        <button type="button" className="btn btn-sm" disabled={poll.isPending} onClick={() => poll.mutate()}>
-          Проверить входящие
+        <button type="button" className="btn btn-sm" disabled={poll.isPending || Boolean(m.imapPollRequestedAt)} onClick={() => poll.mutate()}>
+          {m.imapPollRequestedAt ? "Опрос ждёт агента" : "Проверить входящие"}
         </button>
-        {check.data && (
-          <span className="text-xs">
-            SMTP: {check.data.smtp === "ok" ? "✓" : check.data.smtp} · IMAP: {check.data.imap === "ok" ? "✓" : check.data.imap}
-            {check.data.test !== null && ` · тестовое письмо: ${check.data.test === "ok" ? "отправлено" : check.data.test}`}
-          </span>
-        )}
-        {poll.data && <span className="text-xs">новых: {poll.data.fetched}, разобрано {poll.data.processed}</span>}
+        <button type="button" className="btn btn-sm" onClick={() => setSpecialOpen(!specialOpen)}>Особый лимит</button>
+        {m.warmupFirstsPaused && <button type="button" className="btn btn-sm" disabled={review.isPending} onClick={() => window.confirm("База и невалидные адреса проверены? Разрешить первые касания заново?") && review.mutate()}>База проверена</button>}
+        {(check.data || poll.data) && <span className="text-xs">Задание передано локальному агенту; результат появится после выполнения.</span>}
       </div>
-      <ErrorBox error={check.error ?? poll.error} />
+      {specialOpen && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md bg-slate-50 p-3 text-xs dark:bg-neutral-800/50">
+          <label><span className="label">Лимит вместо алгоритма (0–500)</span><input className="input w-32" type="number" value={special.limit} onChange={(e) => setSpecial({ ...special, limit: e.target.value })} /></label>
+          <label className="min-w-64 flex-1"><span className="label">Причина (обязательно, пишется в журнал)</span><input className="input" value={special.reason} onChange={(e) => setSpecial({ ...special, reason: e.target.value })} /></label>
+          <button type="button" className="btn btn-sm" disabled={override.isPending || !special.reason.trim()} onClick={() => override.mutate(Number(special.limit))}>Применить</button>
+          {m.warmupLimitOverride !== null && <button type="button" className="btn btn-sm" disabled={override.isPending} onClick={() => override.mutate(null)}>Снять особый лимит</button>}
+        </div>
+      )}
+      <ErrorBox error={check.error ?? poll.error ?? review.error ?? override.error} />
     </div>
   );
 }
@@ -916,7 +972,7 @@ function MailboxDialog({ mailbox, domains, onClose }: { mailbox: Mailbox | null;
     imapUser: mailbox?.imapUser ?? "",
     password: "",
     signature: mailbox?.signature ?? "",
-    dailyLimit: String(mailbox?.dailyLimit ?? 30),
+    dailyLimit: String(mailbox?.dailyLimit ?? 25),
     status: mailbox?.status ?? "warming",
   });
   const save = useMutation({
@@ -980,7 +1036,7 @@ function MailboxDialog({ mailbox, domains, onClose }: { mailbox: Mailbox | null;
           <textarea className="input min-h-[90px]" value={v.signature} onChange={(e) => setV({ ...v, signature: e.target.value })} />
         </label>
         <div className="grid gap-3 sm:grid-cols-3">
-          {field("dailyLimit", "Целевой лимит писем в день", { inputMode: "numeric" })}
+          {field("dailyLimit", "Ручной верхний предел писем в день", { inputMode: "numeric", min: 0, max: 500 })}
           <label className="block">
             <span className="label">Статус</span>
             <select className="input" value={v.status} onChange={(e) => setV({ ...v, status: e.target.value })}>

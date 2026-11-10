@@ -1,28 +1,30 @@
 /**
  * Воркер рассылки (служба bars-crm-mail, `npm run mail:worker`; в разработке — CRM_MAIL_INLINE=true в bars-crm):
- * - раз в 20 с: в рабочий день после начала окна — план явно запущенного дня (один раз в день), отправка подошедших писем только с выбранных ящиков;
- * - раз в 5 минут: входящие всех ящиков (IMAP).
- * Одновременно работает один воркер (advisory lock в PostgreSQL). Пароли и тела писем в лог не пишутся.
+ * - раз в 20 с: в рабочий день после начала окна — план явно запущенного дня (один раз в день).
+ * SMTP и IMAP выполняет только локальный HTTPS-агент на рабочем компьютере; серверный воркер к ним не подключается.
+ * Одновременно работает один планировщик (advisory lock в PostgreSQL). Пароли и тела писем в лог не пишутся.
  */
 
 import os from "node:os";
 
 import { eq } from "drizzle-orm";
+import type { PoolClient } from "pg";
 
 import { isWorkday } from "../../../shared/leadgen.ts";
 import { dayInZone } from "../../../shared/mail.ts";
 import { db, pool } from "../../db/client.ts";
 import { settings as settingsTable } from "../../db/schema.ts";
-import { pollAll } from "./inbound.ts";
 import { planDay, windowOf } from "./planner.ts";
 import { getMailSettings, getMailState } from "./render.ts";
 import { getDailyRun } from "./runs.ts";
-import { sendDue } from "./sender.ts";
 
 export const MAIL_WORKER_KEY = "mail_worker";
-const LOCK_ID = 7_342_002;
+export const MAIL_WORKER_LOCK_ID = 7_342_002;
 const TICK_MS = 20_000;
-const IMAP_MS = 5 * 60_000;
+
+export async function tryMailWorkerLock(client: PoolClient): Promise<boolean> {
+  return (await client.query<{ ok: boolean }>("select pg_try_advisory_lock($1) as ok", [MAIL_WORKER_LOCK_ID])).rows[0]?.ok ?? false;
+}
 
 /** План дня строится только после явного запуска с выбранными ящиками. */
 export async function maybePlan(now = new Date()): Promise<boolean> {
@@ -61,35 +63,26 @@ export function startMailWorker(logger: Logger): () => Promise<void> {
   const loop = (async () => {
     const client = await pool.connect();
     let locked = false;
-    let lastImap = 0;
     try {
       while (!stopping) {
         if (!locked) {
-          locked = (await client.query<{ ok: boolean }>("select pg_try_advisory_lock($1) as ok", [LOCK_ID])).rows[0]?.ok ?? false;
+          locked = await tryMailWorkerLock(client);
           if (!locked) {
             await nap(30_000);
             continue;
           }
-          logger.info("Рассылка: воркер запущен");
+          logger.info("Рассылка: планировщик запущен; SMTP/IMAP — на локальном агенте");
         }
         try {
-          await heartbeat("работает");
+          await heartbeat("планировщик");
           if (await maybePlan()) logger.info("Рассылка: план дня построен");
-          const s = await getMailSettings(db);
-          const run = await getDailyRun(db, dayInZone(new Date(), s.timezone));
-          const results = run ? await sendDue(new Date(), run.mailboxIds) : [];
-          for (const r of results) logger.info(`Рассылка: письмо ${r.messageId} — ${r.status}${r.error ? ` (${r.error.slice(0, 200)})` : ""}`);
-          if (Date.now() - lastImap >= IMAP_MS) {
-            lastImap = Date.now();
-            await pollAll(new Date(), logger.info);
-          }
         } catch (error) {
           logger.error(`Рассылка: ошибка воркера — ${error instanceof Error ? error.message : String(error)}`);
         }
         await nap(TICK_MS);
       }
     } finally {
-      if (locked) await client.query("select pg_advisory_unlock($1)", [LOCK_ID]).catch(() => {});
+      if (locked) await client.query("select pg_advisory_unlock($1)", [MAIL_WORKER_LOCK_ID]).catch(() => {});
       client.release();
     }
   })();

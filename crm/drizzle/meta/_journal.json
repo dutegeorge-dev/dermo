@@ -169,6 +169,13 @@
       "when": 1794218942206,
       "tag": "0023_milky_leper_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794300922700,
+      "tag": "0024_stormy_ben_parker",
+      "breakpoints": true
     }
   ]
 }

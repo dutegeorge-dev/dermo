@@ -7,7 +7,7 @@ import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { addDaysIso } from "../../shared/leadgen.ts";
-import { dayInZone, MAIL_PERMISSION, MAIN_DOMAIN_ERROR, mentionsMainDomain, unknownPlaceholders, warmupWorkday } from "../../shared/mail.ts";
+import { dayInZone, MAIL_PERMISSION, MAIN_DOMAIN_ERROR, mentionsMainDomain, unknownPlaceholders } from "../../shared/mail.ts";
 import { db } from "../db/client.ts";
 import { doNotContact, leadCategories, leadQueue, leadSellers, mailDomains, mailboxes, mailInbound, mailMessages, mailTemplates } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
@@ -15,13 +15,13 @@ import { aiEnabled } from "../lib/ai.ts";
 import { body, HttpError, intParam, requireAdmin, requirePermission } from "../lib/http.ts";
 import { getLeadgenSettings, setSellerStatus } from "../lib/leadgen/work.ts";
 import { assistMailTemplate, type MailTemplateAiInput } from "../lib/mail/ai-letters.ts";
-import { decryptSecret, encryptSecret } from "../lib/mail/crypto.ts";
-import { checkImap, pollMailbox } from "../lib/mail/inbound.ts";
+import { issueMailAgentToken, mailAgentState } from "../lib/mail/agent.ts";
+import { encryptSecret } from "../lib/mail/crypto.ts";
 import { mailboxLimit, mailboxStatusForDay, mailboxUsable, planDay } from "../lib/mail/planner.ts";
 import { getMailSettings, getMailState, loadMailbox, newMessageId, renderForSeller, setMailSettings } from "../lib/mail/render.ts";
 import { getDailyRun, startDailyRun } from "../lib/mail/runs.ts";
-import { buildMail, makeTransport, sendOne } from "../lib/mail/sender.ts";
 import { addToStopList } from "../lib/mail/stoplist.ts";
+import { evaluateWarmup, resumeFirstsAfterReview, warmupStats } from "../lib/mail/warmup.ts";
 import { workerAlive } from "../lib/mail/worker.ts";
 
 const guard = (request: FastifyRequest) => requirePermission(request, MAIL_PERMISSION);
@@ -46,11 +46,20 @@ const mailboxColumns = {
   signature: mailboxes.signature,
   dailyLimit: mailboxes.dailyLimit,
   warmupStart: sql<string | null>`${mailboxes.warmupStart}::text`,
+  warmupStage: mailboxes.warmupStage,
+  warmupHoldReason: mailboxes.warmupHoldReason,
+  warmupFirstsPaused: mailboxes.warmupFirstsPaused,
+  warmupLimitOverride: mailboxes.warmupLimitOverride,
   status: mailboxes.status,
   pauseReason: mailboxes.pauseReason,
   pausedUntil: mailboxes.pausedUntil,
+  smtpVerifiedAt: mailboxes.smtpVerifiedAt,
+  smtpError: mailboxes.smtpError,
+  imapVerifiedAt: mailboxes.imapVerifiedAt,
   imapCheckedAt: mailboxes.imapCheckedAt,
   imapError: mailboxes.imapError,
+  checkRequestedAt: mailboxes.checkRequestedAt,
+  imapPollRequestedAt: mailboxes.imapPollRequestedAt,
 };
 
 type MailboxInput = {
@@ -120,6 +129,15 @@ async function mailboxValues(input: Partial<MailboxInput>, partial: boolean): Pr
       out.pausedUntil = null;
     }
   }
+  const passwordChanged = Boolean(out.passwordEnc);
+  if (passwordChanged || input.smtpHost !== undefined || input.smtpPort !== undefined || input.smtpSecure !== undefined || input.smtpUser !== undefined) {
+    out.smtpVerifiedAt = null;
+    out.smtpError = null;
+  }
+  if (passwordChanged || input.imapHost !== undefined || input.imapPort !== undefined || input.imapUser !== undefined) {
+    out.imapVerifiedAt = null;
+    out.imapError = null;
+  }
   return out;
 }
 
@@ -176,17 +194,38 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
     const used = await db
       .select({ mailboxId: mailMessages.mailboxId, n: sql<number>`count(*)::int` })
       .from(mailMessages)
-      .where(and(eq(mailMessages.planDay, day), inArray(mailMessages.status, ["planned", "sending", "sent", "dry_run"])))
+      .where(and(eq(mailMessages.planDay, day), inArray(mailMessages.status, ["planned", "sending", "sent", "dry_run", "failed"])))
       .groupBy(mailMessages.mailboxId);
-    const mailboxViews = boxes.map((m) => {
+    const liveSent = await db
+      .select({ mailboxId: mailMessages.mailboxId, n: sql<number>`count(*)::int` })
+      .from(mailMessages)
+      .where(and(eq(mailMessages.planDay, day), eq(mailMessages.status, "sent"), eq(mailMessages.mode, "live")))
+      .groupBy(mailMessages.mailboxId);
+    const mailboxViews = await Promise.all(boxes.map(async (m) => {
+      const evaluated = await evaluateWarmup(db, m.id, now);
+      const stats = evaluated ?? await warmupStats(db, m.id);
       const status = mailboxStatusForDay(m, day, now, s);
-      const current = { ...m, status };
+      const current = { ...m, status, warmupHoldReason: stats?.holdReason ?? m.warmupHoldReason, warmupFirstsPaused: stats?.firstsPaused ?? m.warmupFirstsPaused };
       const todayLimit = mailboxLimit(current, day, s);
       const usedToday = used.find((u) => u.mailboxId === m.id)?.n ?? 0;
       const remainingToday = Math.max(0, todayLimit - usedToday);
-      const usable = mailboxUsable(current, now) && m.domainStatus === "active";
-      return { ...current, todayLimit, usedToday, remainingToday, warmupDay: warmupWorkday(m.warmupStart, day, s), usable, availableForRun: usable && remainingToday > 0 };
-    });
+      const ready = s.mode !== "live" || Boolean(m.smtpVerifiedAt && m.imapVerifiedAt);
+      const usable = mailboxUsable(current, now) && m.domainStatus === "active" && ready;
+      return {
+        ...current,
+        todayLimit,
+        usedToday,
+        liveSentToday: liveSent.find((u) => u.mailboxId === m.id)?.n ?? 0,
+        remainingToday,
+        warmupDays: stats?.sendingDays ?? 0,
+        warmupStageSent: stats?.sent ?? 0,
+        warmupBounces: stats?.bounces ?? 0,
+        warmupBounceRate: stats?.bounceRate ?? 0,
+        usable,
+        availableForRun: usable && remainingToday > 0,
+      };
+    }));
+    const agent = await mailAgentState();
     return {
       settings: s,
       day,
@@ -196,6 +235,7 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
       state: await getMailState(db),
       run: await getDailyRun(db, day),
       worker: await workerAlive(),
+      agent: { hasKey: Boolean(agent.hash), lastSeenAt: agent.lastSeenAt, host: agent.host, alive: Boolean(agent.lastSeenAt && now.getTime() - Date.parse(agent.lastSeenAt) < 120_000) },
       ai: aiEnabled(),
       secretKey: Boolean(process.env.MAILBOX_SECRET_KEY?.trim()),
       mailboxes: mailboxViews,
@@ -369,6 +409,37 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
     return { mailbox: row };
   });
 
+  app.post("/mail/agent/token", async (request) => {
+    const user = requireAdmin(request);
+    const token = await issueMailAgentToken(user.id);
+    await audit(db, { userId: user.id, action: "update", entityType: "mail_agent", entityId: null, summary: "Рассылка: выпущен новый ключ локального агента", ip: request.ip });
+    return { token };
+  });
+
+  app.post("/mail/mailboxes/:id/limit-override", async (request) => {
+    const user = requireAdmin(request);
+    const id = intParam((request.params as { id: string }).id);
+    const input = body<{ limit: number | null; reason: string }>(request);
+    const limit = input.limit === null ? null : Number(input.limit);
+    if (limit !== null && (!Number.isInteger(limit) || limit < 0 || limit > 500)) throw new HttpError(400, "Особый лимит — 0–500 или null");
+    const reason = String(input.reason ?? "").trim().slice(0, 500);
+    if (limit !== null && !reason) throw new HttpError(400, "Укажите причину особого лимита");
+    const [before] = await db.select({ warmupLimitOverride: mailboxes.warmupLimitOverride }).from(mailboxes).where(eq(mailboxes.id, id));
+    if (!before) throw new HttpError(404, "Ящик не найден");
+    const [m] = await db.update(mailboxes).set({ warmupLimitOverride: limit, updatedAt: new Date() }).where(eq(mailboxes.id, id)).returning({ email: mailboxes.email });
+    await audit(db, { userId: user.id, action: "update", entityType: "mailbox", entityId: id, summary: `Рассылка: особый лимит ${m.email} — ${limit ?? "снят"}${reason ? `, причина: ${reason}` : ""}`, data: { previous: before.warmupLimitOverride, limit, reason }, ip: request.ip });
+    return { ok: true };
+  });
+
+  app.post("/mail/mailboxes/:id/review-bounces", async (request) => {
+    const user = requireAdmin(request);
+    const id = intParam((request.params as { id: string }).id);
+    const [m] = await db.select({ id: mailboxes.id }).from(mailboxes).where(eq(mailboxes.id, id));
+    if (!m) throw new HttpError(404, "Ящик не найден");
+    await resumeFirstsAfterReview(db, id, user.id);
+    return { ok: true };
+  });
+
   app.delete("/mail/mailboxes/:id", async (request) => {
     const user = requireAdmin(request);
     const id = intParam((request.params as { id: string }).id);
@@ -381,43 +452,24 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  /** «Проверить подключение»: SMTP-логин, IMAP-логин, при testTo — тестовое письмо. */
+  /** Проверку и тестовое письмо выполняет локальный агент, а не VDS. */
   app.post("/mail/mailboxes/:id/check", async (request) => {
-    requireAdmin(request);
+    const user = requireAdmin(request);
     const id = intParam((request.params as { id: string }).id);
     const testTo = String(body<{ testTo: string }>(request).testTo ?? "").trim().toLowerCase();
-    const m = await loadMailbox(db, id);
-    const result: { smtp: string; imap: string; test: string | null } = { smtp: "", imap: "", test: null };
-    const transport = makeTransport(m);
-    try {
-      await transport.verify();
-      result.smtp = "ok";
-    } catch (error) {
-      result.smtp = error instanceof Error ? error.message : String(error);
-    }
-    try {
-      await checkImap(m, decryptSecret(m.passwordEnc));
-      result.imap = "ok";
-    } catch (error) {
-      result.imap = error instanceof Error ? error.message : String(error);
-    }
-    if (testTo && result.smtp === "ok") {
-      if (!EMAIL_RE.test(testTo)) throw new HttpError(400, "Тестовый адрес — email");
-      try {
-        await transport.send(buildMail(m, { subject: "Проверка ящика", body: `Тестовое письмо с ${m.email}: SMTP работает.\n\n${m.signature}`, messageId: newMessageId(m.domain.domain), inReplyTo: null }, testTo));
-        result.test = "ok";
-      } catch (error) {
-        result.test = error instanceof Error ? error.message : String(error);
-      }
-    }
-    transport.close?.();
-    return result;
+    if (testTo && !EMAIL_RE.test(testTo)) throw new HttpError(400, "Тестовый адрес — email");
+    const [m] = await db.update(mailboxes).set({ checkRequestedAt: new Date(), checkTestTo: testTo || null, updatedAt: new Date() }).where(eq(mailboxes.id, id)).returning({ email: mailboxes.email });
+    if (!m) throw new HttpError(404, "Ящик не найден");
+    await audit(db, { userId: user.id, action: "update", entityType: "mailbox", entityId: id, summary: `Рассылка: запрошена проверка ${m.email} локальным агентом${testTo ? `, тест → ${testTo}` : ""}`, ip: request.ip });
+    return { queued: true };
   });
 
-  /** Опросить входящие ящика сейчас (не ждать 5 минут). */
   app.post("/mail/mailboxes/:id/poll", async (request) => {
     guard(request);
-    return pollMailbox(intParam((request.params as { id: string }).id));
+    const id = intParam((request.params as { id: string }).id);
+    const [m] = await db.update(mailboxes).set({ imapPollRequestedAt: new Date(), updatedAt: new Date() }).where(eq(mailboxes.id, id)).returning({ id: mailboxes.id });
+    if (!m) throw new HttpError(404, "Ящик не найден");
+    return { queued: true };
   });
 
   // ── Шаблоны ──
@@ -497,7 +549,7 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
     return { subject: r.subject, body: r.body, variants: r.variants, templateId: r.template.id, from: `${m.fromName || m.email} <${m.email}>` };
   });
 
-  /** Тест цепочки: первое письмо и повтор (Re:, In-Reply-To) продавцу — на тестовый адрес, сразу. Воронка не меняется. */
+  /** Тест цепочки ставит два явных test-задания локальному агенту. Воронка и прогрев не меняются. */
   app.post("/mail/test-chain", async (request) => {
     const user = guard(request);
     const input = body<{ inn: string; mailboxId: number }>(request);
@@ -505,23 +557,21 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
     if (!s.testAddress) throw new HttpError(400, "Задайте тестовый адрес в настройках рассылки");
     const m = await loadMailbox(db, Number(input.mailboxId));
     const inn = String(input.inn ?? "");
-    const day = dayInZone(new Date(), s.timezone);
+    const now = new Date();
+    const day = dayInZone(now, s.timezone);
     const first = await renderForSeller(db, inn, m, "first");
-    const insert = async (touch: "first" | "followup", r: Awaited<ReturnType<typeof renderForSeller>>, inReplyTo: string | null) =>
+    const follow = await renderForSeller(db, inn, m, "followup", { firstSubject: first.subject });
+    const insert = async (touch: "first" | "followup", r: Awaited<ReturnType<typeof renderForSeller>>, inReplyTo: string | null, offset: number) =>
       (
         await db
           .insert(mailMessages)
-          .values({ sellerInn: inn, mailboxId: m.id, toEmail: s.testAddress, touch, templateId: r.template.id, templateVersion: r.template.version, subject: r.subject, body: r.body, variants: r.variants, messageId: newMessageId(m.domain.domain), inReplyTo, planDay: day, scheduledAt: new Date() })
-          .returning()
+          .values({ sellerInn: inn, mailboxId: m.id, toEmail: s.testAddress, sentTo: s.testAddress, touch, templateId: r.template.id, templateVersion: r.template.version, subject: r.subject, body: r.body, variants: r.variants, messageId: newMessageId(m.domain.domain), inReplyTo, planDay: day, scheduledAt: new Date(now.getTime() + offset), mode: "test" })
+          .returning({ id: mailMessages.id, messageId: mailMessages.messageId })
       )[0];
-    const a = await insert("first", first, null);
-    const ra = await sendOne(a.id, new Date(), { force: true });
-    if (ra.status !== "sent") return { first: ra };
-    const follow = await renderForSeller(db, inn, m, "followup", { firstSubject: first.subject });
-    const b = await insert("followup", follow, a.messageId);
-    const rb = await sendOne(b.id, new Date(), { force: true });
-    await audit(db, { userId: user.id, action: "create", entityType: "mail", entityId: null, summary: `Рассылка: тест цепочки ${m.email} → ${s.testAddress}`, ip: request.ip });
-    return { first: ra, followup: rb };
+    const a = await insert("first", first, null, 0);
+    const b = await insert("followup", follow, a.messageId, 1000);
+    await audit(db, { userId: user.id, action: "create", entityType: "mail", entityId: null, summary: `Рассылка: тест цепочки ${m.email} → ${s.testAddress} поставлен локальному агенту`, ip: request.ip });
+    return { queued: true, first: { messageId: a.id, status: "planned" }, followup: { messageId: b.id, status: "planned" } };
   });
 
   // ── Входящие ──
