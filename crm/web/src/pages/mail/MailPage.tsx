@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 
-import { MAIL_MODES, type MailMode, type MailSettings, PLACEHOLDERS } from "../../../../shared/mail.ts";
+import { MAIL_MODES, type MailMode, type MailSettings, MAX_MAILBOXES_PER_RUN, PLACEHOLDERS } from "../../../../shared/mail.ts";
 import { IconPencil, IconPlus } from "../../components/Icons.tsx";
 import { Content } from "../../components/Layout.tsx";
 import { EmptyState, ErrorBox, Modal, PageHeader, Spinner } from "../../components/ui.tsx";
@@ -21,6 +21,7 @@ type Mailbox = {
   fromName: string;
   domainId: number;
   domain: string;
+  domainStatus: string;
   smtpHost: string;
   smtpPort: number;
   smtpSecure: boolean;
@@ -30,6 +31,12 @@ type Mailbox = {
   imapUser: string;
   signature: string;
   dailyLimit: number;
+  todayLimit: number;
+  usedToday: number;
+  remainingToday: number;
+  warmupDay: number;
+  usable: boolean;
+  availableForRun: boolean;
   warmupStart: string | null;
   status: string;
   pauseReason: string | null;
@@ -45,7 +52,9 @@ type MailStatus = {
   queueDue: number;
   unresolved: number;
   state: { lastPlan?: PlanSummary };
+  run: { id: number; planDay: string; createdAt: string; mailboxIds: number[] } | null;
   worker: { at: string | null; alive: boolean };
+  ai: boolean;
   secretKey: boolean;
   mailboxes: Mailbox[];
 };
@@ -139,6 +148,71 @@ function Badge({ ok, children }: { ok: boolean; children: React.ReactNode }) {
 
 // ── План и журнал ────────────────────────────────────────────────────────────
 
+function RunPanel({ st }: { st: MailStatus }) {
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<number[]>(st.run?.mailboxIds ?? []);
+  const start = useMutation({
+    mutationFn: () => api<{ plan: PlanSummary }>("/mail/run", { method: "POST", body: { mailboxIds: selected } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["mail"] }),
+  });
+  const started = Boolean(st.run);
+  const chosen = st.run ? st.mailboxes.filter((m) => st.run!.mailboxIds.includes(m.id)) : st.mailboxes.filter((m) => selected.includes(m.id));
+  const capacity = chosen.reduce((sum, m) => sum + m.remainingToday, 0);
+  const toggle = (id: number) => {
+    if (started) return;
+    setSelected((old) => old.includes(id) ? old.filter((x) => x !== id) : old.length < MAX_MAILBOXES_PER_RUN ? [...old, id] : old);
+  };
+  const selectAll = () => setSelected(st.mailboxes.filter((m) => m.availableForRun).slice(0, MAX_MAILBOXES_PER_RUN).map((m) => m.id));
+  return (
+    <div className="panel space-y-3 p-4 text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <div>
+          <div className="font-semibold">{started ? `Рассылка на ${st.day} запущена` : "Запуск рассылки на сегодня"}</div>
+          <div className="text-xs muted">
+            {started ? `Выбрано ящиков: ${st.run!.mailboxIds.length}. Новые касания можно добавить кнопкой «Допланировать».` : `Выберите до ${MAX_MAILBOXES_PER_RUN} ящиков. Планироваться и отправляться будут только письма с них.`}
+          </div>
+        </div>
+        <div className="ml-auto text-right">
+          <div><b>{chosen.length}</b> ящиков · доступно <b>{capacity}</b> писем сегодня</div>
+          {!started && <button type="button" className="link text-xs" onClick={selectAll}>Выбрать все доступные (до {MAX_MAILBOXES_PER_RUN})</button>}
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {st.mailboxes.map((m) => {
+          const checked = started ? st.run!.mailboxIds.includes(m.id) : selected.includes(m.id);
+          return (
+            <label key={m.id} className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${checked ? "border-accent bg-accent/5" : "border-slate-200 dark:border-neutral-700"} ${!started && m.availableForRun ? "cursor-pointer" : "opacity-60"}`}>
+              <input type="checkbox" className="mt-0.5" checked={checked} disabled={started || !m.availableForRun || (!checked && selected.length >= MAX_MAILBOXES_PER_RUN)} onChange={() => toggle(m.id)} />
+              <span className="min-w-0">
+                <span className="block break-all font-medium">{m.email}</span>
+                <span className="muted">
+                  {BOX_STATUS[m.status] ?? m.status} · сегодня {m.todayLimit}/{m.dailyLimit}
+                  {m.status === "warming" && m.warmupDay > 0 ? ` · день ${m.warmupDay}` : ""}
+                  {` · осталось ${m.remainingToday}`}
+                </span>
+                {!m.usable && <span className="block text-red-600 dark:text-red-400">{m.pauseReason || (m.domainStatus !== "active" ? "домен не активен" : "ящик недоступен")}</span>}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {!st.mailboxes.length && <EmptyState title="Сначала добавьте ящики во вкладке «Ящики»" />}
+      <ErrorBox error={start.error} />
+      {!started && (
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={!selected.length || start.isPending || !st.worker.alive}
+          title={!st.worker.alive ? "Сначала запустите службу bars-crm-mail" : ""}
+          onClick={() => (st.settings.mode !== "live" || window.confirm(`Боевой режим: начать отправку продавцам через ${selected.length} ящиков?`)) && start.mutate()}
+        >
+          {start.isPending ? "Строим план…" : `Начать рассылку${st.settings.mode === "live" ? "" : st.settings.mode === "test" ? " (тест)" : " (dry-run)"}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PlanTab({ st, admin }: { st: MailStatus; admin: boolean }) {
   const qc = useQueryClient();
   const [day, setDay] = useState(st.day);
@@ -158,6 +232,7 @@ function PlanTab({ st, admin }: { st: MailStatus; admin: boolean }) {
           окно {st.settings.windowStart}–{st.settings.windowEnd}, {st.settings.timezone}
         </Badge>
       </div>
+      <RunPanel st={st} />
       <div className="panel flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-sm">
         <div>
           Сегодня ({st.day}): в плане <b>{t.planned ?? 0}</b>, отправлено <b>{t.sent ?? 0}</b>, журнал dry-run <b>{t.dry_run ?? 0}</b>, ошибок <b>{t.failed ?? 0}</b>, снято {t.cancelled ?? 0}
@@ -171,9 +246,11 @@ function PlanTab({ st, admin }: { st: MailStatus; admin: boolean }) {
             {p.skipped > 0 && ` · снято ${p.skipped} (стоп-лист / уже ответили)`}
           </div>
         )}
-        <button type="button" className="btn btn-sm ml-auto" disabled={plan.isPending} onClick={() => plan.mutate()} title="Обычно план строит воркер в начале окна">
-          Построить план сейчас
-        </button>
+        {st.run && (
+          <button type="button" className="btn btn-sm ml-auto" disabled={plan.isPending} onClick={() => plan.mutate()} title="Добавить новые касания из очереди для уже выбранных ящиков">
+            {plan.isPending ? "Планируем…" : "Допланировать новые касания"}
+          </button>
+        )}
       </div>
       <ErrorBox error={plan.error ?? cancel.error} />
       {admin && <MailSettingsForm settings={st.settings} />}
@@ -431,15 +508,34 @@ function TemplatesTab({ st }: { st: MailStatus }) {
       </div>
       <Preview st={st} templates={templates.data?.templates ?? []} />
       {cats.data && <CategoryMailFields categories={cats.data.categories} />}
-      {editing && <TemplateDialog template={editing === "new" ? null : editing} categories={cats.data?.categories ?? []} onClose={() => setEditing(null)} />}
+      {editing && <TemplateDialog template={editing === "new" ? null : editing} categories={cats.data?.categories ?? []} aiEnabled={st.ai} onClose={() => setEditing(null)} />}
     </div>
   );
 }
 
-function TemplateDialog({ template, categories, onClose }: { template: Template | null; categories: Category[]; onClose: () => void }) {
+function TemplateDialog({ template, categories, aiEnabled, onClose }: { template: Template | null; categories: Category[]; aiEnabled: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const scopeOf = (t: Template | null) => (t?.categoryId ? String(t.categoryId) : t?.forMarking === true ? "marking" : t?.forMarking === false ? "plain" : "all");
   const [v, setV] = useState({ name: template?.name ?? "", touch: template?.touch ?? "first", scope: scopeOf(template), subject: template?.subject ?? "", body: template?.body ?? "", active: template?.active ?? true });
+  const [ai, setAi] = useState({ operation: template ? "improve" : "create", instruction: "" });
+  const assist = useMutation({
+    mutationFn: () => {
+      const category = categories.find((c) => String(c.id) === v.scope);
+      return api<{ subject: string; body: string }>("/mail/templates/ai", {
+        method: "POST",
+        body: {
+          operation: ai.operation,
+          touch: v.touch,
+          category: category?.name ?? (v.scope === "marking" ? "все категории с маркировкой" : v.scope === "plain" ? "все категории без маркировки" : "все категории"),
+          marking: v.scope === "marking" || Boolean(category?.marking),
+          subject: v.subject,
+          body: v.body,
+          instruction: ai.instruction,
+        },
+      });
+    },
+    onSuccess: (result) => setV((old) => ({ ...old, subject: result.subject, body: result.body })),
+  });
   const save = useMutation({
     mutationFn: () => {
       const scope = v.scope === "all" || v.scope === "marking" || v.scope === "plain" ? { categoryId: null, forMarking: v.scope === "marking" ? true : v.scope === "plain" ? false : null } : { categoryId: Number(v.scope), forMarking: null };
@@ -489,6 +585,24 @@ function TemplateDialog({ template, categories, onClose }: { template: Template 
             </select>
           </label>
         </div>
+        {aiEnabled && (
+          <div className="rounded-md border border-slate-200 p-3 dark:border-neutral-700">
+            <div className="mb-2 font-medium">Claude · создание и унификация шаблона</div>
+            <div className="grid gap-2 sm:grid-cols-[220px_1fr_auto]">
+              <select className="input" value={ai.operation} onChange={(e) => setAi({ ...ai, operation: e.target.value })}>
+                <option value="create">Создать заново</option>
+                <option value="improve">Улучшить текущий</option>
+                <option value="unify">Привести к единому стилю</option>
+              </select>
+              <input className="input" value={ai.instruction} onChange={(e) => setAi({ ...ai, instruction: e.target.value })} placeholder="Например: короче, мягче, без давления" />
+              <button type="button" className="btn" disabled={assist.isPending} onClick={() => assist.mutate()}>
+                {assist.isPending ? "Claude пишет…" : "Применить ИИ"}
+              </button>
+            </div>
+            <div className="mt-1 text-xs muted">Результат заполнит черновик ниже. Проверьте его и сохраните — в рассылку он попадёт только после сохранения.</div>
+            <ErrorBox error={assist.error} />
+          </div>
+        )}
         <label className="block">
           <span className="label">Тема</span>
           <input className="input" value={v.subject} onChange={(e) => setV({ ...v, subject: e.target.value })} />
@@ -749,7 +863,11 @@ function MailboxRow({ m, testAddress, onEdit }: { m: Mailbox; testAddress: strin
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="font-medium">
-            {m.fromName ? `${m.fromName} <${m.email}>` : m.email} <span className="text-xs muted">· {BOX_STATUS[m.status] ?? m.status} · лимит {m.dailyLimit}/день</span>
+            {m.fromName ? `${m.fromName} <${m.email}>` : m.email}{" "}
+            <span className="text-xs muted">
+              · {BOX_STATUS[m.status] ?? m.status} · сегодня {m.todayLimit}, цель {m.dailyLimit}/день
+              {m.status === "warming" && m.warmupStart ? ` · прогрев с ${m.warmupStart}, рабочий день ${m.warmupDay}` : ""}
+            </span>
           </div>
           <div className="text-xs muted">
             SMTP {m.smtpHost}:{m.smtpPort}{m.smtpSecure ? " SSL" : " STARTTLS"} · IMAP {m.imapHost}:{m.imapPort}

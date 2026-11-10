@@ -1,5 +1,5 @@
 /**
- * Отправка запланированных писем. Раз в ~20 с: по каждому ящику — одно письмо, срок которого подошёл, если с прошлого
+ * Отправка запланированных писем с ящиков текущего запуска. Раз в ~20 с: по каждому ящику — одно письмо, срок которого подошёл, если с прошлого
  * прошло не меньше minGap и сейчас окно отправки. Перед отправкой — стоп-лист, статус продавца, запрет tlkbars.ru.
  * Режимы: dry_run — только журнал; test — на тестовый адрес (воронка не меняется); live — продавцу (первое письмо →
  * «Написал» и повтор в очереди лидогенерации, повтор → «Повтор отправлен»). Повтор — в той же цепочке
@@ -15,7 +15,7 @@ import { db, type DbOrTx } from "../../db/client.ts";
 import { leadSellers, mailboxes, mailMessages } from "../../db/schema.ts";
 import { getLeadgenSettings, setSellerStatus } from "../leadgen/work.ts";
 import { decryptSecret } from "./crypto.ts";
-import { FINAL_STATUSES, mailboxUsable, windowOf } from "./planner.ts";
+import { FINAL_STATUSES, mailboxStatusForDay, mailboxUsable, windowOf } from "./planner.ts";
 import { getMailSettings, loadMailbox, type MailboxFull } from "./render.ts";
 import { isStopped } from "./stoplist.ts";
 
@@ -156,15 +156,19 @@ export async function sendOne(id: number, now = new Date(), opts: { force?: bool
   return { messageId: id, status: "sent" };
 }
 
-/** Тик отправки: по одному письму с каждого готового ящика (ящики работают независимо, параллельно). */
-export async function sendDue(now = new Date()): Promise<SendResult[]> {
+/** Тик отправки: только ящики запуска дня; одно подошедшее письмо с каждого, параллельно. */
+export async function sendDue(now = new Date(), mailboxIds?: number[]): Promise<SendResult[]> {
   const s = await getMailSettings(db);
-  if (s.paused || !inWindow(now, s)) return [];
-  const boxes = (await db.select().from(mailboxes)).filter((m) => mailboxUsable(m, now));
+  if (s.paused || !inWindow(now, s) || mailboxIds?.length === 0) return [];
+  const selected = mailboxIds === undefined ? null : new Set(mailboxIds);
+  const day = dayInZone(now, s.timezone);
+  const boxes = (await db.select().from(mailboxes))
+    .filter((m) => (!selected || selected.has(m.id)) && mailboxUsable(m, now))
+    .map((m) => ({ ...m, status: mailboxStatusForDay(m, day, now, s) }));
   const minGapMs = s.minGapMinutes * 60_000;
   const work = boxes.map(async (m) => {
-    // Пауза истекла — ящик снова в работе.
-    if (m.status === "paused") await db.update(mailboxes).set({ status: "active", pauseReason: null, pausedUntil: null, updatedAt: now }).where(eq(mailboxes.id, m.id));
+    const [stored] = await db.select({ status: mailboxes.status }).from(mailboxes).where(eq(mailboxes.id, m.id));
+    if (stored && stored.status !== m.status) await db.update(mailboxes).set({ status: m.status, pauseReason: null, pausedUntil: null, updatedAt: now }).where(eq(mailboxes.id, m.id));
     const [last] = await db
       .select({ at: mailMessages.sentAt })
       .from(mailMessages)

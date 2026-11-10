@@ -2361,6 +2361,7 @@ describe("Лидогенерация WB", () => {
 
 const mailShared = await import("../../shared/mail.ts");
 const { planDay } = await import("../lib/mail/planner.ts");
+const { getDailyRun, startDailyRun } = await import("../lib/mail/runs.ts");
 const { sendDue, sendOne, setTransportFactory } = await import("../lib/mail/sender.ts");
 const { pollMailbox, setImapFetcher } = await import("../lib/mail/inbound.ts");
 const { decryptSecret } = await import("../lib/mail/crypto.ts");
@@ -2392,6 +2393,14 @@ describe("Рассылка (этап 1)", () => {
     assert.equal(mailShared.looksLikeRefusal("Нет, спасибо.\n> Видел ваши"), true);
     assert.equal(mailShared.looksLikeRefusal("Не актуально"), true);
     assert.equal(mailShared.looksLikeRefusal("Да, интересно, пришлите расчёт"), false);
+    const work = { workdays: [1, 2, 3, 4, 5], holidays: [] };
+    assert.equal(mailShared.warmupWorkday("2026-11-06", "2026-11-06", work), 1);
+    assert.equal(mailShared.warmupWorkday("2026-11-06", "2026-11-09", work), 2, "выходные не увеличивают прогрев");
+    assert.deepEqual(["2026-11-06", "2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12"].map((day) => mailShared.warmupDailyLimit(30, "2026-11-06", day, work)), [10, 15, 20, 25, 30]);
+    assert.equal(mailShared.warmupDailyLimit(12, "2026-11-06", "2026-11-09", work), 12, "целевой лимит не превышается");
+    assert.equal(mailShared.warmupDailyLimit(30, "2026-11-10", "2026-11-09", work), 0, "до начала прогрева не отправляем");
+    assert.deepEqual(mailShared.normalizeRunMailboxIds([3, "2", 3, -1, 0, "bad"]), [3, 2]);
+    assert.equal(mailShared.MAX_MAILBOXES_PER_RUN, 30);
   });
 
   test("ящики, шаблоны, план дня, dry-run / test / live, цепочка, входящие, стоп-лист", async () => {
@@ -2403,7 +2412,7 @@ describe("Рассылка (этап 1)", () => {
     assert.equal(dom.statusCode, 200, dom.body);
     const domainId = dom.json().domain.id as number;
     assert.equal(dom.json().domain.landingBaseUrl, "https://tlkbars-import.ru/wb/");
-    const mb = await call(s, "POST", "/mail/mailboxes", { email: "ivan@tlkbars-import.ru", fromName: "Иван Демо", domainId, password: "app-pass-123", signature: "Иван Демо\nИмпорт из Китая", dailyLimit: 30 });
+    const mb = await call(s, "POST", "/mail/mailboxes", { email: "ivan@tlkbars-import.ru", fromName: "Иван Демо", domainId, password: "app-pass-123", signature: "Иван Демо\nИмпорт из Китая", dailyLimit: 30, warmupStart: "2026-11-01" });
     assert.equal(mb.statusCode, 200, mb.body);
     const mailboxId = mb.json().mailbox.id as number;
     const [row] = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, mailboxId));
@@ -2413,10 +2422,12 @@ describe("Рассылка (этап 1)", () => {
     assert.deepEqual([row.smtpHost, row.smtpPort, row.imapHost, row.imapPort, row.status], ["smtp.yandex.ru", 465, "imap.yandex.ru", 993, "warming"]);
     const st0 = (await call(s, "GET", "/mail/status")).json();
     assert.equal(st0.settings.mode, "dry_run", "по умолчанию — dry-run");
+    assert.equal(st0.run, null, "без явного запуска рассылки нет");
     assert.ok(st0.mailboxes.length === 1 && !("passwordEnc" in st0.mailboxes[0]) && !JSON.stringify(st0).includes("app-pass"), "пароль наружу не отдаётся");
     assert.equal((await call(s, "PATCH", `/mail/mailboxes/${mailboxId}`, { signature: "сайт: tlkbars.ru" })).statusCode, 400, "подпись с tlkbars.ru — нельзя");
     assert.equal((await call(s, "POST", "/mail/templates", { touch: "first", subject: "Привет", body: "Наш сайт https://tlkbars.ru" })).statusCode, 400);
     assert.equal((await call(s, "POST", "/mail/templates", { touch: "first", subject: "Привет", body: "Здравствуйте, {name}" })).statusCode, 400, "неизвестная подстановка");
+    assert.equal((await call(s, "POST", "/mail/templates/ai", { operation: "create", touch: "first" })).statusCode, 503, "без ключа ИИ-редактор выключен, шаблоны работают без него");
     assert.equal((await call(s, "GET", "/mail/templates")).json().templates.length, 3, "3 шаблона засеяны");
 
     // Проверка подключения (SMTP — подменён).
@@ -2443,20 +2454,25 @@ describe("Рассылка (этап 1)", () => {
     assert.match(pv.body, /Иван Демо\nИмпорт из Китая$/);
     assert.equal(pv.from, "Иван Демо <ivan@tlkbars-import.ru>");
 
-    // План дня (пятница 06.11.2026, 10:00 МСК), dry-run: 30 писем в окне, остальное — на понедельник.
+    // Явный запуск дня с выбранным ящиком (пятница 06.11.2026, 10:00 МСК), dry-run: 30 писем.
     const now = new Date("2026-11-06T07:00:00Z");
-    const plan = await planDay(db, now, { rnd: lcgMail(3) });
+    const { run, plan } = await startDailyRun(now, null, [mailboxId], { rnd: lcgMail(3) });
+    assert.deepEqual(run.mailboxIds, [mailboxId]);
+    assert.deepEqual((await getDailyRun(db, "2026-11-06"))?.mailboxIds, [mailboxId]);
+    await assert.rejects(startDailyRun(now, null, [mailboxId]), /уже запущена/);
+    await assert.rejects(startDailyRun(now, null, Array.from({ length: 31 }, (_, i) => i + 1)), /не больше 30/);
     assert.equal(plan.planned, 30);
     assert.ok(plan.deferred > 0 && plan.deferredTo === "2026-11-09", JSON.stringify(plan));
-    assert.equal((await planDay(db, now, { rnd: lcgMail(4) })).planned, 0, "повторный план не дублирует");
+    assert.equal((await planDay(db, now, { rnd: lcgMail(4), mailboxIds: run.mailboxIds })).planned, 0, "повторный план не дублирует");
     const msgs = await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.planDay, "2026-11-06")).orderBy(schema.mailMessages.scheduledAt);
     assert.equal(msgs.length, 30);
     assert.ok(msgs.every((m, i) => m.scheduledAt >= now && m.scheduledAt < new Date("2026-11-06T14:30:00Z") && (i === 0 || m.scheduledAt.getTime() - msgs[i - 1].scheduledAt.getTime() >= 4 * 60_000)), "в окне, не чаще раза в 4 минуты");
     assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 1));
     assert.ok(msgs.every((m) => m.variants.subject.length === 1 && m.variants.body.length >= 1), "выбранные варианты сохранены");
 
-    // dry-run: журнал, без отправки.
-    const r1 = await sendDue(msgs[0].scheduledAt);
+    // dry-run: журнал, без отправки. Пустой выбор ящиков запрещает отправку.
+    assert.deepEqual(await sendDue(msgs[0].scheduledAt, []), []);
+    const r1 = await sendDue(msgs[0].scheduledAt, run.mailboxIds);
     assert.deepEqual(r1.map((r) => r.status), ["dry_run"]);
     assert.equal(sent.length, 0);
     assert.deepEqual(await sendDue(new Date(msgs[0].scheduledAt.getTime() + 60_000)), [], "не чаще раза в 4 минуты");

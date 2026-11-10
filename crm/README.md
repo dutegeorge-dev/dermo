@@ -342,8 +342,9 @@ sudo systemctl start bars-crm
 | `lead_queue` | Касания: `seller_inn`, `planned_date`, `position` (порядок в дне), `touch` (first/followup), `status` (planned/done/cancelled), `sent_at`, `note` |
 | `lead_events` | История статусов продавца: `seller_inn`, `type`, `comment`, `user_id`, `created_at` |
 | `mail_domains` | Рассылка: холодные домены — `domain`, `landing_base_url` (https://<домен>/wb/), `status` active/paused/burned, `dkim_selector`, `dns_check`, `note` (tlkbars.ru не принимается) |
-| `mailboxes` | Ящики: email, `from_name`, `domain_id`, SMTP host/port/secure/user, IMAP host/port/user, `password_enc` (AES-256-GCM, MAILBOX_SECRET_KEY), `signature`, `daily_limit`, `warmup_start`, `status` warming/active/paused/burned, `pause_reason`, `paused_until`, курсор IMAP (`imap_uid_validity`, `imap_last_uid`) |
-| `mail_templates` | Шаблоны: `category_id` (null — все) + `for_marking`, `touch` first/followup, `subject`, `body` (текст, `{a|b}` и подстановки), `active`, `version` |
+| `mailboxes` | Ящики: email, `from_name`, `domain_id`, SMTP host/port/secure/user, IMAP host/port/user, `password_enc` (AES-256-GCM, MAILBOX_SECRET_KEY), `signature`, `daily_limit` (целевой), `warmup_start` (автопрогрев 10 → +5 за рабочий день), `status` warming/active/paused/burned, `pause_reason`, `paused_until`, курсор IMAP (`imap_uid_validity`, `imap_last_uid`) |
+| `mail_runs`, `mail_run_mailboxes` | Явный запуск рассылки на день и выбранные вручную ящики (до 30); без запуска воркер не планирует и не отправляет |
+| `mail_templates` | Шаблоны: `category_id` (null — все) + `for_marking`, `touch` first/followup, `subject`, `body` (текст, `{a|b}` и подстановки), `active`, `version`; ИИ-редактор через общий Claude |
 | `mail_messages` | План / журнал / отправленные целиком: продавец, `queue_id`, ящик, `to_email` / `sent_to`, `touch`, шаблон и версия, тема, текст, `variants`, `message_id`, `in_reply_to`, `status` planned/sending/sent/dry_run/failed/cancelled, `mode`, `plan_day`, `scheduled_at`, `sent_at`, `error` |
 | `mail_inbound` | Входящие ящиков: UID, отправитель, тема, `kind` human/auto/bounce, `reply_to_message_id`, `seller_inn`, `bounced_email`, текст без цитаты, `refusal_hint`, `resolution` |
 | `do_not_contact` | Стоп-лист рассылки: `inn` и / или `email`, причина, кто, когда |
@@ -434,10 +435,10 @@ sudo systemctl start bars-crm
 | `GET /leadgen/today?day=` | На день: первые письма (≤ `perDay`, по плану) и подошедшие повторы |
 | `GET /leadgen/stats?month=` | Итоги по категориям: отправлено, возвраты, ответы, положительные, % от отправленных |
 | `GET /leadgen/export.xlsx\|csv?<фильтры базы>` | Выгрузка: все поля продавца и все контакты (XLSX — листы «Продавцы» и «Контакты») |
-| `GET /mail/status`, `PUT /mail/settings` (админ), `POST /mail/pause` `{paused}`, `POST /mail/plan` | Рассылка (право mail): состояние, режим dry_run/test/live и окно, пауза всей рассылки, план дня сейчас |
+| `GET /mail/status`, `PUT /mail/settings` (админ), `POST /mail/pause` `{paused}`, `POST /mail/run` `{mailboxIds}`, `POST /mail/plan` | Рассылка (право mail): состояние, режим dry_run/test/live и окно, пауза; явный запуск с 1–30 ящиками, допланирование только для них |
 | `GET /mail/messages?day&status&mailbox&inn`, `GET /mail/messages/:id`, `POST /mail/messages/:id/cancel` | План и журнал писем |
 | `GET/POST /mail/domains`, `PATCH/DELETE /mail/domains/:id`, `POST /mail/mailboxes`, `PATCH/DELETE /mail/mailboxes/:id`, `POST /mail/mailboxes/:id/check` `{testTo}`, `POST /mail/mailboxes/:id/poll` | Домены и ящики (админ; пароль не отдаётся), «Проверить подключение», опрос входящих |
-| `GET/POST /mail/templates`, `PATCH/DELETE /mail/templates/:id`, `POST /mail/preview` `{inn, mailboxId, touch, templateId?}`, `POST /mail/test-chain` `{inn, mailboxId}` | Шаблоны (правка текста — новая версия), предпросмотр, тест цепочки на тестовый адрес |
+| `GET/POST /mail/templates`, `PATCH/DELETE /mail/templates/:id`, `POST /mail/templates/ai`, `POST /mail/preview` `{inn, mailboxId, touch, templateId?}`, `POST /mail/test-chain` `{inn, mailboxId}` | Шаблоны (правка текста — новая версия), ИИ-черновик через Claude, предпросмотр, тест цепочки на тестовый адрес |
 | `GET /mail/inbound?kind&unresolved&days`, `POST /mail/inbound/:id/resolve` `{resolution: replied_pos\|replied_neg\|stop}` | Входящие и разбор ответа |
 | `GET/POST /mail/stoplist`, `DELETE /mail/stoplist/:id` (админ), `GET /mail/categories`, `PATCH /mail/categories/:id` `{slug, mailName, mailNote}` | Стоп-лист; категории в письмах |
 | `GET /calendar` | События календаря: даты сделок в работе и свои события (`kind: "custom"`) |

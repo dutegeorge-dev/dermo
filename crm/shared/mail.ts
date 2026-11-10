@@ -3,6 +3,8 @@
  * разнесение писем по окну отправки, подсказка «похоже на отказ». Импортируется и сервером, и фронтом.
  */
 
+import { addDaysIso, isWorkday } from "./leadgen.ts";
+
 /** Право на раздел «Рассылка» (users.permissions). Ящики и настройки — только админ. */
 export const MAIL_PERMISSION = "mail";
 
@@ -203,6 +205,35 @@ export function spreadTimes(n: number, start: number, end: number, opts: { minGa
     out.push(Math.round(t));
   }
   return out;
+}
+
+// ── Запуск дня и автоматический прогрев ──────────────────────────────────────
+
+export const MAX_MAILBOXES_PER_RUN = 30;
+export const WARMUP_INITIAL_LIMIT = 10;
+export const WARMUP_DAILY_STEP = 5;
+
+export function normalizeRunMailboxIds(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+}
+
+/** Номер рабочего дня прогрева, начиная с 1. Выходные и праздники лимит не увеличивают. */
+export function warmupWorkday(start: string | null, day: string, settings: Pick<MailSettings, "workdays" | "holidays">): number {
+  if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start) || start > day) return 0;
+  let n = 0;
+  for (let cursor = start; cursor <= day; cursor = addDaysIso(cursor, 1)) {
+    if (isWorkday(cursor, settings)) n++;
+  }
+  return n;
+}
+
+/** 10 писем в первый рабочий день, затем +5 каждый рабочий день до целевого лимита. */
+export function warmupDailyLimit(target: number, start: string | null, day: string, settings: Pick<MailSettings, "workdays" | "holidays">): number {
+  const limit = Math.max(0, target);
+  if (!start) return limit;
+  const n = warmupWorkday(start, day, settings);
+  return n ? Math.min(limit, WARMUP_INITIAL_LIMIT + (n - 1) * WARMUP_DAILY_STEP) : 0;
 }
 
 // ── Время в часовом поясе ────────────────────────────────────────────────────

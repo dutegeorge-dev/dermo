@@ -1,6 +1,6 @@
 /**
  * Воркер рассылки (служба bars-crm-mail, `npm run mail:worker`; в разработке — CRM_MAIL_INLINE=true в bars-crm):
- * - раз в 20 с: в рабочий день после начала окна — план дня (один раз в день), отправка подошедших писем;
+ * - раз в 20 с: в рабочий день после начала окна — план явно запущенного дня (один раз в день), отправка подошедших писем только с выбранных ящиков;
  * - раз в 5 минут: входящие всех ящиков (IMAP).
  * Одновременно работает один воркер (advisory lock в PostgreSQL). Пароли и тела писем в лог не пишутся.
  */
@@ -16,6 +16,7 @@ import { settings as settingsTable } from "../../db/schema.ts";
 import { pollAll } from "./inbound.ts";
 import { planDay, windowOf } from "./planner.ts";
 import { getMailSettings, getMailState } from "./render.ts";
+import { getDailyRun } from "./runs.ts";
 import { sendDue } from "./sender.ts";
 
 export const MAIL_WORKER_KEY = "mail_worker";
@@ -23,7 +24,7 @@ const LOCK_ID = 7_342_002;
 const TICK_MS = 20_000;
 const IMAP_MS = 5 * 60_000;
 
-/** План дня, если окно началось, день рабочий и плана на сегодня ещё не было. */
+/** План дня строится только после явного запуска с выбранными ящиками. */
 export async function maybePlan(now = new Date()): Promise<boolean> {
   const s = await getMailSettings(db);
   if (s.paused) return false;
@@ -31,9 +32,11 @@ export async function maybePlan(now = new Date()): Promise<boolean> {
   if (!isWorkday(day, { workdays: s.workdays, holidays: s.holidays })) return false;
   const w = windowOf(day, s);
   if (now < w.start || now >= w.end) return false;
+  const run = await getDailyRun(db, day);
+  if (!run) return false;
   const state = await getMailState<{ lastPlanDay?: string }>(db);
   if (state.lastPlanDay === day) return false;
-  await planDay(db, now);
+  await planDay(db, now, { mailboxIds: run.mailboxIds });
   return true;
 }
 
@@ -72,7 +75,10 @@ export function startMailWorker(logger: Logger): () => Promise<void> {
         try {
           await heartbeat("работает");
           if (await maybePlan()) logger.info("Рассылка: план дня построен");
-          for (const r of await sendDue()) logger.info(`Рассылка: письмо ${r.messageId} — ${r.status}${r.error ? ` (${r.error.slice(0, 200)})` : ""}`);
+          const s = await getMailSettings(db);
+          const run = await getDailyRun(db, dayInZone(new Date(), s.timezone));
+          const results = run ? await sendDue(new Date(), run.mailboxIds) : [];
+          for (const r of results) logger.info(`Рассылка: письмо ${r.messageId} — ${r.status}${r.error ? ` (${r.error.slice(0, 200)})` : ""}`);
           if (Date.now() - lastImap >= IMAP_MS) {
             lastImap = Date.now();
             await pollAll(new Date(), logger.info);

@@ -162,6 +162,13 @@
       "when": 1793949472210,
       "tag": "0022_mail",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794218942206,
+      "tag": "0023_milky_leper_queen",
+      "breakpoints": true
     }
   ]
 }

@@ -1183,6 +1183,28 @@ export const mailboxes = pgTable("mailboxes", {
   updatedAt: updatedAt(),
 });
 
+/** Запуск рассылки на день: без него воркер не планирует и не отправляет письма. */
+export const mailRuns = pgTable("mail_runs", {
+  id: serial("id").primaryKey(),
+  planDay: date("plan_day").notNull().unique(),
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+});
+
+/** Ящики, которые сотрудник явно выбрал для этого запуска (не больше 30). */
+export const mailRunMailboxes = pgTable(
+  "mail_run_mailboxes",
+  {
+    runId: integer("run_id")
+      .notNull()
+      .references(() => mailRuns.id, { onDelete: "cascade" }),
+    mailboxId: integer("mailbox_id")
+      .notNull()
+      .references(() => mailboxes.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.runId, t.mailboxId] }), index("mail_run_mailboxes_box_idx").on(t.mailboxId)],
+);
+
 export const mailTemplates = pgTable("mail_templates", {
   id: serial("id").primaryKey(),
   /** null — для всех категорий. */

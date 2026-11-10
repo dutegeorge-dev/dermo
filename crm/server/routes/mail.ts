@@ -7,16 +7,19 @@ import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { addDaysIso } from "../../shared/leadgen.ts";
-import { dayInZone, MAIL_PERMISSION, MAIN_DOMAIN_ERROR, mentionsMainDomain, unknownPlaceholders } from "../../shared/mail.ts";
+import { dayInZone, MAIL_PERMISSION, MAIN_DOMAIN_ERROR, mentionsMainDomain, unknownPlaceholders, warmupWorkday } from "../../shared/mail.ts";
 import { db } from "../db/client.ts";
 import { doNotContact, leadCategories, leadQueue, leadSellers, mailDomains, mailboxes, mailInbound, mailMessages, mailTemplates } from "../db/schema.ts";
 import { audit } from "../lib/audit.ts";
+import { aiEnabled } from "../lib/ai.ts";
 import { body, HttpError, intParam, requireAdmin, requirePermission } from "../lib/http.ts";
 import { getLeadgenSettings, setSellerStatus } from "../lib/leadgen/work.ts";
+import { assistMailTemplate, type MailTemplateAiInput } from "../lib/mail/ai-letters.ts";
 import { decryptSecret, encryptSecret } from "../lib/mail/crypto.ts";
 import { checkImap, pollMailbox } from "../lib/mail/inbound.ts";
-import { planDay } from "../lib/mail/planner.ts";
+import { mailboxLimit, mailboxStatusForDay, mailboxUsable, planDay } from "../lib/mail/planner.ts";
 import { getMailSettings, getMailState, loadMailbox, newMessageId, renderForSeller, setMailSettings } from "../lib/mail/render.ts";
+import { getDailyRun, startDailyRun } from "../lib/mail/runs.ts";
 import { buildMail, makeTransport, sendOne } from "../lib/mail/sender.ts";
 import { addToStopList } from "../lib/mail/stoplist.ts";
 import { workerAlive } from "../lib/mail/worker.ts";
@@ -32,6 +35,7 @@ const mailboxColumns = {
   fromName: mailboxes.fromName,
   domainId: mailboxes.domainId,
   domain: mailDomains.domain,
+  domainStatus: mailDomains.status,
   smtpHost: mailboxes.smtpHost,
   smtpPort: mailboxes.smtpPort,
   smtpSecure: mailboxes.smtpSecure,
@@ -154,8 +158,9 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
   // ── Состояние, настройки, пауза ──
   app.get("/mail/status", async (request) => {
     guard(request);
+    const now = new Date();
     const s = await getMailSettings(db);
-    const day = dayInZone(new Date(), s.timezone);
+    const day = dayInZone(now, s.timezone);
     const counts = await db
       .select({ status: mailMessages.status, n: sql<number>`count(*)::int` })
       .from(mailMessages)
@@ -167,6 +172,21 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
       .innerJoin(leadSellers, eq(leadSellers.inn, leadQueue.sellerInn))
       .where(and(eq(leadQueue.status, "planned"), sql`${leadQueue.plannedDate} <= ${day}`, sql`${leadSellers.pickedAt} is not null`));
     const [unresolved] = await db.select({ n: sql<number>`count(*)::int` }).from(mailInbound).where(and(eq(mailInbound.kind, "human"), sql`${mailInbound.resolution} is null`));
+    const boxes = await db.select(mailboxColumns).from(mailboxes).innerJoin(mailDomains, eq(mailDomains.id, mailboxes.domainId)).orderBy(asc(mailboxes.id));
+    const used = await db
+      .select({ mailboxId: mailMessages.mailboxId, n: sql<number>`count(*)::int` })
+      .from(mailMessages)
+      .where(and(eq(mailMessages.planDay, day), inArray(mailMessages.status, ["planned", "sending", "sent", "dry_run"])))
+      .groupBy(mailMessages.mailboxId);
+    const mailboxViews = boxes.map((m) => {
+      const status = mailboxStatusForDay(m, day, now, s);
+      const current = { ...m, status };
+      const todayLimit = mailboxLimit(current, day, s);
+      const usedToday = used.find((u) => u.mailboxId === m.id)?.n ?? 0;
+      const remainingToday = Math.max(0, todayLimit - usedToday);
+      const usable = mailboxUsable(current, now) && m.domainStatus === "active";
+      return { ...current, todayLimit, usedToday, remainingToday, warmupDay: warmupWorkday(m.warmupStart, day, s), usable, availableForRun: usable && remainingToday > 0 };
+    });
     return {
       settings: s,
       day,
@@ -174,9 +194,11 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
       queueDue: due.n,
       unresolved: unresolved.n,
       state: await getMailState(db),
+      run: await getDailyRun(db, day),
       worker: await workerAlive(),
+      ai: aiEnabled(),
       secretKey: Boolean(process.env.MAILBOX_SECRET_KEY?.trim()),
-      mailboxes: await db.select(mailboxColumns).from(mailboxes).innerJoin(mailDomains, eq(mailDomains.id, mailboxes.domainId)).orderBy(asc(mailboxes.id)),
+      mailboxes: mailboxViews,
     };
   });
 
@@ -198,9 +220,21 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
     return { settings: next };
   });
 
+  app.post("/mail/run", async (request) => {
+    const user = guard(request);
+    const input = body<{ mailboxIds: number[] }>(request);
+    const result = await startDailyRun(new Date(), user.id, input.mailboxIds);
+    await audit(db, { userId: user.id, action: "create", entityType: "mail_run", entityId: result.run.id, summary: `Рассылка: запуск на ${result.run.planDay}, ящиков ${result.run.mailboxIds.length}, писем в плане ${result.plan.planned}`, ip: request.ip });
+    return result;
+  });
+
   app.post("/mail/plan", async (request) => {
     guard(request);
-    return { plan: await planDay(db) };
+    const s = await getMailSettings(db);
+    const day = dayInZone(new Date(), s.timezone);
+    const run = await getDailyRun(db, day);
+    if (!run) throw new HttpError(409, "Сначала выберите ящики и нажмите «Начать рассылку»");
+    return { plan: await planDay(db, new Date(), { mailboxIds: run.mailboxIds }) };
   });
 
   // ── План и журнал ──
@@ -387,6 +421,27 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Шаблоны ──
+  app.post("/mail/templates/ai", async (request) => {
+    const user = guard(request);
+    if (!aiEnabled()) throw new HttpError(503, "ИИ не подключён: задайте ANTHROPIC_BASE_URL и ANTHROPIC_AUTH_TOKEN в crm/.env");
+    const input = body<MailTemplateAiInput>(request);
+    const requested = String(input.operation ?? "");
+    const operation: MailTemplateAiInput["operation"] = requested === "create" || requested === "unify" ? requested : "improve";
+    const touch = input.touch === "followup" ? "followup" : "first";
+    const result = await assistMailTemplate({
+      operation,
+      touch,
+      category: String(input.category ?? "").trim().slice(0, 200),
+      marking: Boolean(input.marking),
+      subject: String(input.subject ?? "").slice(0, 300),
+      body: String(input.body ?? "").slice(0, 10000),
+      instruction: String(input.instruction ?? "").trim().slice(0, 2000),
+    });
+    const checked = templateValues({ touch, subject: result.subject, body: result.body }, false);
+    await audit(db, { userId: user.id, action: "create", entityType: "mail_template_ai", entityId: null, summary: `Рассылка: ИИ-${operation} шаблона (${touch})`, data: { usage: result.usage }, ip: request.ip });
+    return { subject: checked.subject, body: checked.body, usage: result.usage };
+  });
+
   app.get("/mail/templates", async (request) => {
     guard(request);
     return { templates: await db.select().from(mailTemplates).orderBy(asc(mailTemplates.touch), asc(mailTemplates.id)) };
