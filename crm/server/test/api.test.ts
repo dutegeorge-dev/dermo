@@ -2378,9 +2378,14 @@ describe("Рассылка (этап 1)", () => {
     assert.equal(mailShared.namePatronymic("АЛИЕВ РАШИД ГЕЙДАР ОГЛЫ"), "Рашид Гейдар оглы");
     assert.equal(mailShared.namePatronymic("ООО Ромашка"), "");
     assert.equal(mailShared.namePatronymic("Smith John"), "");
-    const vars = { name_patronymic: "", brand: "Demo", product: "гантели", category: "фитнес-инвентаря", marking_note: "", link: "https://x.ru/wb/f?l=abc", signature: "Иван", first_subject: "Тема" };
+    const vars = { name_patronymic: "", brand: "Demo", product: "гантели", product_accusative: "ваши гантели", category: "фитнес-инвентаря", marking_note: "", link: "https://x.ru/wb/f?l=abc", signature: "Иван", first_subject: "Тема" };
     assert.equal(mailShared.fillVars("Здравствуйте, {name_patronymic}!\n\nВидел ваши {product}. {marking_note} Ок.\n\n{signature}", vars), "Добрый день!\n\nВидел ваши гантели. Ок.\n\nИван");
     assert.equal(mailShared.fillVars("{name_patronymic}, напомню о себе.", vars), "Напомню о себе.");
+    assert.equal(mailShared.productAccusative("душевая система черная"), "вашу душевую систему черную");
+    assert.equal(mailShared.productAccusative("смеситель"), "ваш смеситель");
+    assert.equal(mailShared.productAccusative("сетевое зарядное устройство"), "ваше сетевое зарядное устройство");
+    assert.equal(mailShared.productAccusative("гантели"), "ваши гантели");
+    assert.equal(mailShared.productAccusative("садовая мебель"), "вашу садовую мебель");
     for (const bad of ["см. tlkbars.ru", "https://www.tlkbars.ru/x", "пишите info@tlkbars.ru", "TLKBARS.RU"]) assert.equal(mailShared.mentionsMainDomain(bad), true, bad);
     for (const ok of ["https://tlkbars-import.ru/wb/", "ivan@tlkbars-import.ru", "mytlkbars.ru"]) assert.equal(mailShared.mentionsMainDomain(ok), false, ok);
     const start = Date.UTC(2026, 10, 6, 6, 30);
@@ -2456,6 +2461,7 @@ describe("Рассылка (этап 1)", () => {
     assert.ok(!/[{}]/.test(pv.subject + pv.body), "все подстановки и варианты раскрыты");
     assert.match(pv.body, /^(Добрый день|Здравствуйте), Иван Петрович!/);
     assert.match(pv.body, /Менять поставщика не предлагаю/);
+    assert.match(pv.body, /под брендом «[^»]+» на WB/);
     assert.match(pv.body, /артикул товара на WB/);
     assert.ok(!pv.body.includes("https://"), "в новом первом письме нет ссылки");
     assert.match(pv.body, /Иван Демо\nИмпорт из Китая$/);
@@ -2475,7 +2481,7 @@ describe("Рассылка (этап 1)", () => {
     const msgs = await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.planDay, "2026-11-06")).orderBy(schema.mailMessages.scheduledAt);
     assert.equal(msgs.length, 30);
     assert.ok(msgs.every((m, i) => m.scheduledAt >= now && m.scheduledAt < new Date("2026-11-06T14:30:00Z") && (i === 0 || m.scheduledAt.getTime() - msgs[i - 1].scheduledAt.getTime() >= 4 * 60_000)), "в окне, не чаще раза в 4 минуты");
-    assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 2));
+    assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 3));
     assert.ok(msgs.every((m) => m.variants.subject.length === 1 && m.variants.body.length >= 1), "выбранные варианты сохранены");
 
     // dry-run: журнал, без отправки. Пустой выбор ящиков запрещает отправку.

@@ -8,7 +8,7 @@ import crypto from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 
 import { shortProduct } from "../../../shared/leadgen.ts";
-import { DEFAULT_MAIL_SETTINGS, fillVars, hash32, MAIN_DOMAIN_ERROR, type MailSettings, mentionsMainDomain, namePatronymic, normalizeMailSettings, spin } from "../../../shared/mail.ts";
+import { DEFAULT_MAIL_SETTINGS, fillVars, hash32, MAIN_DOMAIN_ERROR, type MailSettings, mentionsMainDomain, namePatronymic, normalizeMailSettings, productAccusative, spin } from "../../../shared/mail.ts";
 import type { DbOrTx } from "../../db/client.ts";
 import { leadCategories, leadSellers, mailDomains, mailboxes, mailTemplates, settings as settingsTable } from "../../db/schema.ts";
 import { HttpError } from "../http.ts";
@@ -92,13 +92,15 @@ export function assertNoMainDomain(...parts: (string | null | undefined)[]): voi
 export function renderWith(template: Template, ctx: { seller: Seller; category: Category | null; mailbox: MailboxFull; token: string; firstSubject?: string }): Rendered {
   const { seller, category, mailbox } = ctx;
   const brand = seller.brands[0] ?? "";
+  const product = shortProduct(seller.products[0]?.name ?? "", brand) || "товары";
   const seed = `${seller.inn}:${template.touch}`;
   const subj = spin(template.subject, `${seed}:s`);
   const body = spin(template.body, `${seed}:b`);
   const vars = {
     name_patronymic: namePatronymic(seller.managerName),
-    brand: brand || "вашим брендом",
-    product: shortProduct(seller.products[0]?.name ?? "", brand) || "товары",
+    brand: brand || "ваш бренд",
+    product,
+    product_accusative: productAccusative(product),
     category: category?.mailName || category?.name.toLowerCase() || "товаров",
     marking_note: category?.mailNote ?? "",
     link: landingLink(mailbox.domain.landingBaseUrl, category?.slug ?? "", ctx.token),

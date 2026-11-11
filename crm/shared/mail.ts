@@ -122,10 +122,33 @@ export function namePatronymic(fullName: string | null | undefined): string {
   return rest.map((w) => (/^(оглы|кызы|улы|уулу)$/i.test(w) ? w.toLowerCase() : cap(w))).join(" ");
 }
 
+const RU_ADJECTIVE_RE = /(ый|ий|ой|ая|яя|ое|ее|ые|ие)$/i;
+const RU_FEMININE_SOFT_NOUNS = new Set(["мебель", "площадь", "степень", "дверь", "мышь", "тетрадь"]);
+
+/** Неодушевлённый товар с «ваш / ваша / ваше / ваши» в винительном падеже. */
+export function productAccusative(text: string): string {
+  const words = String(text ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return "ваши товары";
+  const nounIndex = words.findIndex((word) => !RU_ADJECTIVE_RE.test(word));
+  if (nounIndex < 0) return `ваши ${words.join(" ")}`;
+  const noun = words[nounIndex];
+  const plural = words.some((word) => /(ые|ие)$/i.test(word)) || (words.length === 1 && /(ы|и)$/i.test(noun));
+  if (plural) return `ваши ${words.join(" ")}`;
+  const feminine = /[ая]$/i.test(noun) || RU_FEMININE_SOFT_NOUNS.has(noun) || words.slice(0, nounIndex).some((word) => /(ая|яя)$/i.test(word));
+  const neuter = !feminine && (/[ое]$/i.test(noun) || /мя$/i.test(noun) || words.slice(0, nounIndex).some((word) => /(ое|ее)$/i.test(word)));
+  const inflected = words.map((word, index) => {
+    if (feminine && RU_ADJECTIVE_RE.test(word)) return word.replace(/ая$/i, "ую").replace(/яя$/i, "юю");
+    if (feminine && index === nounIndex) return word.replace(/а$/i, "у").replace(/я$/i, "ю");
+    return word;
+  });
+  return `${feminine ? "вашу" : neuter ? "ваше" : "ваш"} ${inflected.join(" ")}`;
+}
+
 export type MailVars = {
   name_patronymic: string;
   brand: string;
   product: string;
+  product_accusative: string;
   category: string;
   marking_note: string;
   link: string;
@@ -142,7 +165,7 @@ export function fillVars(text: string, v: MailVars): string {
       .replace(/(^|\n)\{name_patronymic\},\s*(\S)/g, (_, pre: string, ch: string) => `${pre}${ch.toUpperCase()}`)
       .replace(/,?\s*\{name_patronymic\}/g, "");
   }
-  out = out.replace(/\{(name_patronymic|brand|product|category|marking_note|link|signature|first_subject)\}/g, (_, k: keyof MailVars) => v[k] ?? "");
+  out = out.replace(/\{(name_patronymic|brand|product|product_accusative|category|marking_note|link|signature|first_subject)\}/g, (_, k: keyof MailVars) => v[k] ?? "");
   // Пустой {marking_note} не оставляет двойных пробелов; лишние пустые строки — убрать.
   return out
     .replace(/[ \t]{2,}/g, " ")
@@ -153,7 +176,7 @@ export function fillVars(text: string, v: MailVars): string {
 
 /** Неизвестные подстановки, оставшиеся в тексте: {name}, {inn}… — показать в шаблоне как ошибку. */
 export function unknownPlaceholders(text: string): string[] {
-  const known = new Set(["name_patronymic", "brand", "product", "category", "marking_note", "link", "signature", "first_subject"]);
+  const known = new Set(["name_patronymic", "brand", "product", "product_accusative", "category", "marking_note", "link", "signature", "first_subject"]);
   return [...new Set([...text.matchAll(/\{([a-z_]+)\}/g)].map((m) => m[1]).filter((k) => !known.has(k)))];
 }
 
@@ -161,6 +184,7 @@ export const PLACEHOLDERS: Record<keyof MailVars, string> = {
   name_patronymic: "имя и отчество руководителя (нет — «Добрый день!» без имени)",
   brand: "бренд продавца",
   product: "товар продавца, коротко",
+  product_accusative: "товар с «ваш / ваша / ваше / ваши» в винительном падеже",
   category: "категория — как в письме («фитнес-инвентаря»)",
   marking_note: "фраза о маркировке из категории",
   link: "персональная ссылка https://<домен ящика>/wb/<категория>?l=<токен>",

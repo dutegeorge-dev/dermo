@@ -24,7 +24,7 @@ type Task =
   | { type: "imap"; mailboxId: number; mailbox: Mailbox; cursor: { uidValidity: number | null; lastUid: number | null } };
 type Fetched = { uid: number; source: Buffer };
 
-const rawBase = (process.env.CRM_URL ?? "https://tlkbars.ru").trim().replace(/\/+$/, "");
+const rawBase = (process.env.CRM_URL ?? "https://datapoint-sync.ru").trim().replace(/\/+$/, "");
 const base = `${rawBase.replace(/\/crm$/, "")}/crm/api/mail/agent`;
 const token = (process.env.CRM_MAIL_AGENT_TOKEN ?? "").trim();
 const once = process.env.CRM_MAIL_AGENT_ONCE === "1" || process.argv.includes("--once");
@@ -67,7 +67,19 @@ function smtp(mailbox: Mailbox) {
   });
 }
 
-const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
+const errorText = (error: unknown) => {
+  if (!(error instanceof Error)) return String(error);
+  const e = error as Error & { code?: string; command?: string; rejectedFrom?: string; responseStatus?: string; responseText?: string; serverResponseCode?: string };
+  return [
+    e.message,
+    e.responseStatus && `статус ${e.responseStatus}`,
+    e.responseText && `ответ: ${e.responseText}`,
+    e.serverResponseCode && `код ${e.serverResponseCode}`,
+    e.code && `ошибка ${e.code}`,
+    e.command && `команда ${e.command}`,
+    e.rejectedFrom && `этап ${e.rejectedFrom}`,
+  ].filter(Boolean).join(" · ");
+};
 
 async function check(task: Extract<Task, { type: "check" }>) {
   const transport = smtp(task.mailbox);

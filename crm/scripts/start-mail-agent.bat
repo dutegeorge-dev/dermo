@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal
 cd /d "%~dp0\.."
 
-set "CRM_URL=https://tlkbars.ru"
+set "CRM_URL=https://datapoint-sync.ru"
 set "CONFIG_DIR=%LOCALAPPDATA%\Irbis"
 set "TOKEN_FILE=%CONFIG_DIR%\mail-agent-token.txt"
 if not exist "%CONFIG_DIR%" mkdir "%CONFIG_DIR%"
