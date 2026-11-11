@@ -2384,6 +2384,7 @@ describe("Рассылка (этап 1)", () => {
     assert.equal(mailShared.fillVars("Здравствуйте, {name_patronymic}!\n\nВидел ваши {product}. {marking_note} Ок.\n\n{signature}", vars), "Добрый день!\n\nВидел ваши гантели. Ок.\n\nИван");
     assert.equal(mailShared.fillVars("{name_patronymic}, напомню о себе.", vars), "Напомню о себе.");
     assert.equal(mailShared.productAccusative("душевая система черная"), "вашу душевую систему черную");
+    assert.equal(mailShared.productAccusative("скамья спортивная"), "вашу скамью спортивную");
     assert.equal(mailShared.productAccusative("смеситель"), "ваш смеситель");
     assert.equal(mailShared.productAccusative("сетевое зарядное устройство"), "ваше сетевое зарядное устройство");
     assert.equal(mailShared.productAccusative("гантели"), "ваши гантели");
@@ -2483,7 +2484,7 @@ describe("Рассылка (этап 1)", () => {
     const msgs = await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.planDay, "2026-11-06")).orderBy(schema.mailMessages.scheduledAt);
     assert.equal(msgs.length, 30);
     assert.ok(msgs.every((m, i) => m.scheduledAt >= now && m.scheduledAt < new Date("2026-11-06T14:30:00Z") && (i === 0 || m.scheduledAt.getTime() - msgs[i - 1].scheduledAt.getTime() >= 4 * 60_000)), "в окне, не чаще раза в 4 минуты");
-    assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 4));
+    assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 5));
     assert.ok(msgs.every((m) => m.variants.subject.length === 1 && m.variants.body.length >= 1), "выбранные варианты сохранены");
 
     // dry-run: журнал, без отправки. Пустой выбор ящиков запрещает отправку.

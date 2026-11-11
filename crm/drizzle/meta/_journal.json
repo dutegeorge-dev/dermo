@@ -197,6 +197,13 @@
       "when": 1794374277502,
       "tag": "0027_mail_first_template",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794375477639,
+      "tag": "0028_mail_product_case",
+      "breakpoints": true
     }
   ]
 }
