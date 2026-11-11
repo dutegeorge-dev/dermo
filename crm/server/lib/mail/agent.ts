@@ -13,7 +13,6 @@ import { mailboxLimit, mailboxUsable } from "./planner.ts";
 import { getMailSettings, loadMailbox, newMessageId, type MailboxFull } from "./render.ts";
 import { getDailyRun } from "./runs.ts";
 import { evaluateWarmup, pauseForConfiguration } from "./warmup.ts";
-import { MAIL_WORKER_KEY } from "./worker.ts";
 
 export const MAIL_AGENT_KEY = "mail_agent";
 const CLAIM_LOCK_ID = 7_342_102;
@@ -51,8 +50,6 @@ async function touchAgent(host: unknown): Promise<void> {
     target: settingsTable.key,
     set: { value: sql`jsonb_set(jsonb_set(${settingsTable.value}, '{lastSeenAt}', to_jsonb(${at}::text), true), '{host}', to_jsonb(${name}::text), true)`, updatedAt: new Date() },
   });
-  const value = { at, host: name, state: "локальный агент" };
-  await db.insert(settingsTable).values({ key: MAIL_WORKER_KEY, value }).onConflictDoUpdate({ target: settingsTable.key, set: { value, updatedAt: new Date() } });
 }
 
 type AgentMailbox = {
