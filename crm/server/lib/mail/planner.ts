@@ -1,17 +1,19 @@
 /**
  * План дня рассылки для ящиков явного запуска. В начале окна (и по кнопке «Построить план») из lead_queue берётся всё,
- * что должно уйти сегодня и раньше: сначала повторы (только с ящика первого письма), потом первые письма — по ящикам пропорционально остатку
+ * что должно уйти сегодня и раньше. По умолчанию только первые письма; повторы — лишь при MAIL_FOLLOWUPS_ENABLED=true,
+ * сначала они (с ящика первого письма), потом первые — по ящикам пропорционально остатку
  * дневного лимита. Каждый ящик — равномерно по окну со случайным сдвигом ±jitter, не чаще minGap. Не влезшее в лимиты и
  * окно переносится на следующий рабочий день. Письма рендерятся сразу и лежат в mail_messages (status planned).
  * Повторный запуск в тот же день добавляет только новое (уже запланированное не дублируется).
  */
 
-import { and, asc, desc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, lte, ne, sql } from "drizzle-orm";
 
 import { addDaysIso, isWorkday, nextWorkday } from "../../../shared/leadgen.ts";
 import { dayInZone, type MailSettings, spreadTimes, warmupStageLimit, zonedTime } from "../../../shared/mail.ts";
 import type { DbOrTx } from "../../db/client.ts";
 import { leadContacts, leadQueue, leadSellers, mailDomains, mailboxes, mailMessages } from "../../db/schema.ts";
+import { followupsEnabled } from "../followups.ts";
 import { getMailSettings, loadMailbox, type MailboxFull, newMessageId, patchMailState, renderForSeller } from "./render.ts";
 import { isStopped } from "./stoplist.ts";
 import { evaluateWarmup, mailboxLiveReady } from "./warmup.ts";
@@ -96,6 +98,10 @@ export async function planDay(tx: DbOrTx, now = new Date(), opts: { rnd?: () => 
 
   // В боевом запуске сюда передаются только явно выбранные ящики.
   const selected = opts.mailboxIds === undefined ? null : new Set(opts.mailboxIds);
+  if (!followupsEnabled()) {
+    await tx.update(mailMessages).set({ status: "cancelled", error: "повторные касания отключены" }).where(and(eq(mailMessages.touch, "followup"), eq(mailMessages.status, "planned")));
+    await tx.update(leadQueue).set({ status: "cancelled", note: "повторные касания отключены" }).where(and(eq(leadQueue.touch, "followup"), eq(leadQueue.status, "planned")));
+  }
   const boxes: MailboxFull[] = [];
   for (const m of await tx.select().from(mailboxes).innerJoin(mailDomains, eq(mailDomains.id, mailboxes.domainId))) {
     if (selected && !selected.has(m.mailboxes.id)) continue;
@@ -132,6 +138,7 @@ export async function planDay(tx: DbOrTx, now = new Date(), opts: { rnd?: () => 
     .where(
       and(
         eq(leadQueue.status, "planned"),
+        followupsEnabled() ? undefined : ne(leadQueue.touch, "followup"),
         lte(leadQueue.plannedDate, day),
         isNotNull(leadSellers.pickedAt),
         sql`not exists (select 1 from mail_messages m where m.queue_id = ${leadQueue.id} and m.status in ('planned', 'sending'))`,

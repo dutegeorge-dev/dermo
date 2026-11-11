@@ -12,6 +12,7 @@ import { dayInZone, MAIN_DOMAIN_ERROR, type MailMode, type MailSettings, mention
 import { db, type DbOrTx } from "../../db/client.ts";
 import { leadContacts, leadSellers, mailboxes, mailMessages } from "../../db/schema.ts";
 import { getLeadgenSettings, setSellerStatus } from "../leadgen/work.ts";
+import { followupsEnabled } from "../followups.ts";
 import { decryptSecret } from "./crypto.ts";
 import { FINAL_STATUSES, mailboxReadyForMode, mailboxStatusForDay, mailboxUsable, windowOf } from "./planner.ts";
 import { getMailSettings, loadMailbox, type MailboxFull } from "./render.ts";
@@ -124,6 +125,7 @@ export async function claimOutgoing(tx: DbOrTx, id: number, now = new Date(), op
   const fail = (status: "failed" | "cancelled", error: string) => failClaim(tx, id, mode, status, error, now);
   const box = await loadMailbox(tx, msg.mailboxId);
   const [seller] = await tx.select().from(leadSellers).where(eq(leadSellers.inn, msg.sellerInn));
+  if (msg.touch === "followup" && !followupsEnabled()) return { result: await fail("cancelled", "повторные касания отключены") };
   if (!opts.force) {
     if (!seller || FINAL_STATUSES.includes(seller.status)) return { result: await fail("cancelled", `продавец: ${seller?.status ?? "удалён"}`) };
     if (await isStopped(tx, msg.sellerInn, msg.toEmail)) return { result: await fail("cancelled", "стоп-лист") };

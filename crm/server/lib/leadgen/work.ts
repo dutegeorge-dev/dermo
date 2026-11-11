@@ -1,5 +1,5 @@
 /**
- * Работа с базой продавцов: «Сегодня» (первые письма по плану + повторы), смена статусов с историей и повторами,
+ * Работа с базой продавцов: «Сегодня», смена статусов с историей, необязательные повторы,
  * «Итоги» по категориям, список «База» с фильтрами, экспорт XLSX / CSV, настройки модуля.
  */
 
@@ -23,6 +23,7 @@ import {
 import type { DbOrTx } from "../../db/client.ts";
 import { leadCategories, leadContacts, leadEvents, leadQueue, leadSellers, settings as settingsTable } from "../../db/schema.ts";
 import { HttpError } from "../http.ts";
+import { followupsEnabled } from "../followups.ts";
 import { addToStopList } from "../mail/stoplist.ts";
 
 export const SETTINGS_KEY = "leadgen";
@@ -252,8 +253,8 @@ export async function getSeller(tx: DbOrTx, inn: string) {
 export type TodayItem = LeadSellerDto & { queueId: number; touch: "first" | "followup"; plannedDate: string };
 
 /**
- * На день: первые письма по плану (сегодня и не сделанные раньше — по порядку раскладки, не больше perDay) и
- * повторы, срок которых подошёл (followupDays после первого письма, если нет ответа).
+ * На день: первые письма по плану (сегодня и не сделанные раньше — по порядку раскладки, не больше perDay).
+ * Подошедшие повторы добавляются только при MAIL_FOLLOWUPS_ENABLED=true.
  */
 export async function todayList(tx: DbOrTx, day: string, s: LeadgenSettings): Promise<{ day: string; first: TodayItem[]; followups: TodayItem[]; firstLeft: number }> {
   const pick = (touch: "first" | "followup", limit: number) =>
@@ -266,7 +267,7 @@ export async function todayList(tx: DbOrTx, day: string, s: LeadgenSettings): Pr
       .orderBy(asc(leadQueue.plannedDate), asc(leadQueue.position), asc(leadQueue.id))
       .limit(limit);
   const first = await pick("first", s.perDay);
-  const followups = await pick("followup", 500);
+  const followups = followupsEnabled() ? await pick("followup", 500) : [];
   const [{ n }] = await tx
     .select({ n: sql<number>`count(*)::int` })
     .from(leadQueue)
@@ -279,7 +280,7 @@ export async function todayList(tx: DbOrTx, day: string, s: LeadgenSettings): Pr
   };
 }
 
-/** Смена статуса: история, отметка касаний в очереди, повтор через followupDays после первого письма. */
+/** Смена статуса: история, отметка касаний; повтор через followupDays только при включённой настройке. */
 export async function setSellerStatus(tx: DbOrTx, inn: string, status: SellerStatus, userId: number | null, comment: string | null, s: LeadgenSettings, now = new Date()): Promise<void> {
   if (!(status in SELLER_STATUSES)) throw new HttpError(400, "Неизвестный статус");
   const [seller] = await tx.select().from(leadSellers).where(eq(leadSellers.inn, inn));
@@ -295,9 +296,11 @@ export async function setSellerStatus(tx: DbOrTx, inn: string, status: SellerSta
   if (status === "sent") {
     await closeTouch("first");
     if (!seller.firstSentAt) patch.firstSentAt = now;
-    const [pending] = await tx.select({ id: leadQueue.id }).from(leadQueue).where(and(eq(leadQueue.sellerInn, inn), eq(leadQueue.touch, "followup")));
-    if (!pending) {
-      await tx.insert(leadQueue).values({ sellerInn: inn, plannedDate: nextWorkday(addDaysIso(today, s.followupDays), s), touch: "followup" });
+    if (followupsEnabled()) {
+      const [pending] = await tx.select({ id: leadQueue.id }).from(leadQueue).where(and(eq(leadQueue.sellerInn, inn), eq(leadQueue.touch, "followup")));
+      if (!pending) {
+        await tx.insert(leadQueue).values({ sellerInn: inn, plannedDate: nextWorkday(addDaysIso(today, s.followupDays), s), touch: "followup" });
+      }
     }
   } else if (status === "followup_sent") {
     await closeTouch("first");

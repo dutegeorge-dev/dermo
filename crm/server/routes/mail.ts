@@ -13,6 +13,7 @@ import { doNotContact, leadCategories, leadQueue, leadSellers, mailDomains, mail
 import { audit } from "../lib/audit.ts";
 import { aiEnabled } from "../lib/ai.ts";
 import { body, HttpError, intParam, requireAdmin, requirePermission } from "../lib/http.ts";
+import { followupsEnabled } from "../lib/followups.ts";
 import { getLeadgenSettings, setSellerStatus } from "../lib/leadgen/work.ts";
 import { assistMailTemplate, type MailTemplateAiInput } from "../lib/mail/ai-letters.ts";
 import { issueMailAgentToken, mailAgentState } from "../lib/mail/agent.ts";
@@ -551,6 +552,7 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
 
   /** Тест цепочки ставит два явных test-задания локальному агенту. Воронка и прогрев не меняются. */
   app.post("/mail/test-chain", async (request) => {
+    if (!followupsEnabled()) throw new HttpError(409, "Повторные касания отключены (MAIL_FOLLOWUPS_ENABLED=false)");
     const user = guard(request);
     const input = body<{ inn: string; mailboxId: number }>(request);
     const s = await getMailSettings(db);

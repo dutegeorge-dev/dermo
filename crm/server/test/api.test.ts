@@ -2252,7 +2252,8 @@ describe("Лидогенерация WB", () => {
     assert.deepEqual([...perCat.values()], [5, 5, 5, 5, 5, 5]);
     assert.notEqual(today.first[0].categoryId, today.first[1].categoryId, "категории вперемешку");
 
-    // Статусы → история; повтор через 4 дня; ответ снимает повтор.
+    // Совместимость: повтор через 4 дня при явном включении; ответ снимает повтор.
+    process.env.MAIL_FOLLOWUPS_ENABLED = "true";
     const inn = today.first[0].inn as string;
     const { setSellerStatus, todayList, getLeadgenSettings } = await import("../lib/leadgen/work.ts");
     const settings = await getLeadgenSettings(db);
@@ -2266,6 +2267,7 @@ describe("Лидогенерация WB", () => {
     const answered = await call(s, "POST", `/leadgen/sellers/${inn}/status`, { status: "replied_pos", comment: "интересно" });
     assert.deepEqual(answered.json().events.map((e: { type: string }) => e.type).sort(), ["followup_sent", "replied_pos", "sent"]);
     assert.ok(answered.json().queue.every((q: { status: string }) => q.status !== "planned"), "после ответа касаний в плане нет");
+    process.env.MAIL_FOLLOWUPS_ENABLED = "false";
 
     // Итоги — по взятым в работу.
     const st = (await call(s, "GET", "/leadgen/stats?month=2027-03")).json().rows as { categoryId: number; sellers: number; sent: number; bounced: number; replies: number; positive: number; positivePct: number }[];
@@ -2460,9 +2462,9 @@ describe("Рассылка (этап 1)", () => {
     assert.equal(JSON.stringify(pv), JSON.stringify((await call(s, "POST", "/mail/preview", { inn: inn0, mailboxId })).json()), "повторный рендер — то же письмо");
     assert.ok(!/[{}]/.test(pv.subject + pv.body), "все подстановки и варианты раскрыты");
     assert.match(pv.body, /^(Добрый день|Здравствуйте), Иван Петрович!/);
-    assert.match(pv.body, /Менять поставщика не предлагаю/);
-    assert.match(pv.body, /под брендом «[^»]+» на WB/);
-    assert.match(pv.body, /артикул товара на WB/);
+    assert.match(pv.body, /Всю цепочку можно передать одной команде/);
+    assert.match(pv.body, /под брендом .+ на WB/);
+    assert.match(pv.body, /пришлите артикул WB и параметры типичной партии/);
     assert.ok(!pv.body.includes("https://"), "в новом первом письме нет ссылки");
     assert.match(pv.body, /Иван Демо\nИмпорт из Китая$/);
     assert.equal(pv.from, "Иван Демо <ivan@tlkbars-import.ru>");
@@ -2481,7 +2483,7 @@ describe("Рассылка (этап 1)", () => {
     const msgs = await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.planDay, "2026-11-06")).orderBy(schema.mailMessages.scheduledAt);
     assert.equal(msgs.length, 30);
     assert.ok(msgs.every((m, i) => m.scheduledAt >= now && m.scheduledAt < new Date("2026-11-06T14:30:00Z") && (i === 0 || m.scheduledAt.getTime() - msgs[i - 1].scheduledAt.getTime() >= 4 * 60_000)), "в окне, не чаще раза в 4 минуты");
-    assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 3));
+    assert.ok(msgs.every((m) => !/[{}]/.test(m.subject + m.body) && m.messageId.endsWith("@tlkbars-import.ru>") && m.templateId && m.templateVersion === 4));
     assert.ok(msgs.every((m) => m.variants.subject.length === 1 && m.variants.body.length >= 1), "выбранные варианты сохранены");
 
     // dry-run: журнал, без отправки. Пустой выбор ящиков запрещает отправку.
@@ -2499,6 +2501,9 @@ describe("Рассылка (этап 1)", () => {
     const [seller1] = await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, msgs[1].sellerInn));
     assert.equal(seller1.status, "new", "в тесте статусы не меняются");
 
+    // Совместимость старых повторов проверяем при явном включении; по умолчанию они выключены.
+    process.env.MAIL_FOLLOWUPS_ENABLED = "true";
+    await db.update(schema.mailTemplates).set({ active: true }).where(eq(schema.mailTemplates.touch, "followup"));
     // live: продавцам; до проверки агентом SMTP не вызывается, dry-run и test прогрев не продвигают.
     await call(s, "PUT", "/mail/settings", { mode: "live" });
     assert.match((await sendOne(msgs[8].id)).error ?? "", /проверки SMTP и IMAP/);
@@ -2647,6 +2652,7 @@ describe("Рассылка (этап 1)", () => {
     await call(s, "POST", "/mail/pause", { paused: false });
     setTransportFactory(null);
     setImapFetcher(null);
+    process.env.MAIL_FOLLOWUPS_ENABLED = "false";
   });
 });
 
@@ -2743,6 +2749,8 @@ describe("Рассылка: ступени, предохранители и ло
   });
 
   test("агент получает проверки и цепочку по Bearer-ключу; повтор результата и advisory lock безопасны", async () => {
+    process.env.MAIL_FOLLOWUPS_ENABLED = "true";
+    await db.update(schema.mailTemplates).set({ active: true }).where(eq(schema.mailTemplates.touch, "followup"));
     const s = await adminSession();
     await call(s, "PUT", "/mail/settings", { mode: "dry_run", testAddress: "qa@example.org" });
     const created = await call(s, "POST", "/mail/mailboxes", { email: "agent@tlkbars-import.ru", fromName: "Агент", domainId: (await db.select().from(schema.mailDomains).where(eq(schema.mailDomains.domain, "tlkbars-import.ru")))[0].id, password: "agent-test-password", dailyLimit: 25 });
@@ -2797,6 +2805,7 @@ describe("Рассылка: ступени, предохранители и ло
       a.release();
       b.release();
     }
+    process.env.MAIL_FOLLOWUPS_ENABLED = "false";
   });
 
   test("auth-ошибка ставит паузу без повторных SMTP-попыток; лимит общий и перенос не копит долг", async () => {
@@ -2827,6 +2836,7 @@ describe("Рассылка: ступени, предохранители и ло
     setTransportFactory(null);
     await call(s, "PUT", "/mail/settings", { mode: "dry_run" });
 
+    process.env.MAIL_FOLLOWUPS_ENABLED = "true";
     const plannedBox = await newMailbox("capacity@tlkbars-import.ru");
     const queueSellers = await db.select().from(schema.leadQueue).where(and(eq(schema.leadQueue.status, "planned"), eq(schema.leadQueue.touch, "first"))).orderBy(schema.leadQueue.id).limit(5);
     for (const [i, q] of queueSellers.entries()) {
@@ -2849,5 +2859,62 @@ describe("Рассылка: ступени, предохранители и ло
     assert.equal(next.planned, 5, "на следующий день только новый дневной лимит, без долга");
     const oldAfter = await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.mailboxId, plannedBox.id), eq(schema.mailMessages.planDay, "2026-11-09"), eq(schema.mailMessages.status, "planned")));
     assert.equal(oldAfter.length, 0, "старые слоты закрыты при переносе");
+  });
+});
+
+describe("Рассылка без повторных касаний", () => {
+  test("по умолчанию только первые письма: старые повторы отменены, новые не создаются", async () => {
+    process.env.MAIL_FOLLOWUPS_ENABLED = "false";
+    const s = await adminSession();
+    await call(s, "PUT", "/mail/settings", { mode: "dry_run" });
+    await db.update(schema.mailTemplates).set({ active: false }).where(eq(schema.mailTemplates.touch, "followup"));
+    const domainId = (await db.select().from(schema.mailDomains).where(eq(schema.mailDomains.domain, "tlkbars-import.ru")))[0].id;
+    const created = await call(s, "POST", "/mail/mailboxes", { email: "first-only@tlkbars-import.ru", fromName: "Тест", domainId, password: "test-password", dailyLimit: 25 });
+    assert.equal(created.statusCode, 200, created.body);
+    const mailboxId = created.json().mailbox.id as number;
+    await db.update(schema.mailboxes).set({ smtpVerifiedAt: new Date("2026-11-01T06:00:00Z"), imapVerifiedAt: new Date("2026-11-01T06:00:00Z"), warmupStageStartedAt: new Date("2026-11-01T06:00:00Z") }).where(eq(schema.mailboxes.id, mailboxId));
+
+    const queueSellers = await db.select().from(schema.leadQueue).where(and(eq(schema.leadQueue.status, "planned"), eq(schema.leadQueue.touch, "first"))).orderBy(schema.leadQueue.id).limit(6);
+    assert.equal(queueSellers.length, 6);
+    let oldFirstId = 0;
+    let oldFollowupId = 0;
+    let oldFollowupQueueId = 0;
+    for (const [i, q] of queueSellers.entries()) {
+      await db.update(schema.leadQueue).set({ status: "cancelled" }).where(eq(schema.leadQueue.sellerInn, q.sellerInn));
+      await db.update(schema.mailMessages).set({ status: "cancelled" }).where(and(eq(schema.mailMessages.queueId, q.id), eq(schema.mailMessages.status, "planned")));
+      if (i === 0) {
+        const [first] = await db.insert(schema.mailMessages).values({ sellerInn: q.sellerInn, mailboxId, toEmail: "old-recipient@example.org", touch: "first", subject: "Первое", body: "История", messageId: "<first-only-history@tlkbars-import.ru>", status: "sent", mode: "live", planDay: "2026-11-06", scheduledAt: new Date("2026-11-06T08:00:00Z"), sentAt: new Date("2026-11-06T08:00:00Z") }).returning();
+        oldFirstId = first.id;
+        const [queue] = await db.insert(schema.leadQueue).values({ sellerInn: q.sellerInn, plannedDate: "2026-11-09", touch: "followup", status: "planned" }).returning();
+        oldFollowupQueueId = queue.id;
+        const [followup] = await db.insert(schema.mailMessages).values({ sellerInn: q.sellerInn, queueId: queue.id, mailboxId, toEmail: first.toEmail, touch: "followup", subject: `Re: ${first.subject}`, body: "Старый повтор", messageId: "<first-only-old-followup@tlkbars-import.ru>", inReplyTo: first.messageId, status: "planned", planDay: "2026-11-09", scheduledAt: new Date("2026-11-09T08:00:00Z") }).returning();
+        oldFollowupId = followup.id;
+      } else {
+        await db.insert(schema.leadQueue).values({ sellerInn: q.sellerInn, plannedDate: "2026-11-09", touch: "first", status: "planned" });
+      }
+    }
+
+    const plan = await planDay(db, new Date("2026-11-09T07:00:00Z"), { mailboxIds: [mailboxId], rnd: () => 0.5 });
+    assert.deepEqual([plan.planned, plan.firsts, plan.followups], [5, 5, 0], "весь лимит 5 использован только на первые письма");
+    assert.equal((await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.id, oldFirstId)))[0].status, "sent", "история сохранена");
+    assert.equal((await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.id, oldFollowupId)))[0].status, "cancelled");
+    assert.equal((await db.select().from(schema.leadQueue).where(eq(schema.leadQueue.id, oldFollowupQueueId)))[0].status, "cancelled");
+    const afterFirstPlan = await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.mailboxId, mailboxId));
+    assert.equal((await planDay(db, new Date("2026-11-09T07:00:00Z"), { mailboxIds: [mailboxId], rnd: () => 0.5 })).planned, 0, "повторный worker ничего не дублирует");
+    assert.equal((await db.select().from(schema.mailMessages).where(eq(schema.mailMessages.mailboxId, mailboxId))).length, afterFirstPlan.length);
+
+    const [outgoing] = await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.mailboxId, mailboxId), eq(schema.mailMessages.status, "planned"), eq(schema.mailMessages.touch, "first"))).limit(1);
+    let smtpCalls = 0;
+    setTransportFactory(() => ({ async send() { smtpCalls++; return { response: "250 test" }; }, async verify() {} }));
+    await call(s, "PUT", "/mail/settings", { mode: "live" });
+    assert.equal((await sendOne(outgoing.id, new Date("2026-11-09T08:00:00Z"))).status, "sent");
+    assert.equal(smtpCalls, 1);
+    setTransportFactory(null);
+    assert.equal((await db.select().from(schema.leadSellers).where(eq(schema.leadSellers.inn, outgoing.sellerInn)))[0].status, "sent");
+    assert.equal((await db.select().from(schema.leadQueue).where(and(eq(schema.leadQueue.sellerInn, outgoing.sellerInn), eq(schema.leadQueue.touch, "followup")))).length, 0, "после первого письма followup не создаётся");
+    const { warmupStats } = await import("../lib/mail/warmup.ts");
+    assert.equal((await warmupStats(db, mailboxId))?.sent, 2, "прогрев учитывает историческое и новое live-письма, но не повторы");
+    assert.equal((await db.select().from(schema.mailTemplates).where(eq(schema.mailTemplates.touch, "followup"))).every((template) => !template.active), true);
+    await call(s, "PUT", "/mail/settings", { mode: "dry_run" });
   });
 });
