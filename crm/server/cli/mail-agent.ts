@@ -120,6 +120,19 @@ async function check(task: Extract<Task, { type: "check" }>) {
   info(`${task.mailbox.email}: SMTP ${result.smtp.ok ? "OK" : result.smtp.error}; IMAP ${result.imap.ok ? "OK" : result.imap.error}${result.test ? `; тест ${result.test.ok ? "отправлен" : result.test.error}` : ""}`);
 }
 
+async function reportAccepted(messageId: number): Promise<void> {
+  while (!stopping) {
+    try {
+      await api("result", { type: "send", messageId, ok: true, host: os.hostname() });
+      return;
+    } catch (error) {
+      errorLog(`SMTP принял письмо ${messageId}. CRM пока недоступна: ${errorText(error)}. Через 10 секунд повторю только отчёт, без повторной SMTP-отправки.`);
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
+    }
+  }
+  throw new Error(`Письмо ${messageId} принято SMTP, но агент остановлен до отчёта в CRM. Запись останется sending; SMTP повторно не вызывался.`);
+}
+
 async function send(task: Extract<Task, { type: "send" }>) {
   const transport = smtp(task.mailbox);
   let accepted = false;
@@ -127,15 +140,17 @@ async function send(task: Extract<Task, { type: "send" }>) {
     try {
       await transport.sendMail({ ...task.mail, textEncoding: "quoted-printable" });
       accepted = true;
-      await api("result", { type: "send", messageId: task.messageId, ok: true, host: os.hostname() });
-      info(`${task.mailbox.email}: письмо ${task.messageId} отправлено`);
     } catch (error) {
-      if (accepted) throw new Error(`SMTP принял письмо ${task.messageId}, но CRM не подтвердила результат. Не перезапускайте это письмо вручную: проверьте связь и журнал sending. ${errorText(error)}`);
       await api("result", { type: "send", messageId: task.messageId, ok: false, error: errorText(error).slice(0, 1000), responseCode: (error as { responseCode?: number }).responseCode, host: os.hostname() });
       errorLog(`${task.mailbox.email}: письмо ${task.messageId} — ${errorText(error)}`);
+      return;
     }
   } finally {
     transport.close();
+  }
+  if (accepted) {
+    await reportAccepted(task.messageId);
+    info(`${task.mailbox.email}: письмо ${task.messageId} отправлено и подтверждено CRM`);
   }
 }
 

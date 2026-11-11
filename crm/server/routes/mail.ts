@@ -16,8 +16,10 @@ import { body, HttpError, intParam, requireAdmin, requirePermission } from "../l
 import { followupsEnabled } from "../lib/followups.ts";
 import { getLeadgenSettings, setSellerStatus } from "../lib/leadgen/work.ts";
 import { assistMailTemplate, type MailTemplateAiInput } from "../lib/mail/ai-letters.ts";
-import { issueMailAgentToken, mailAgentState } from "../lib/mail/agent.ts";
-import { encryptSecret } from "../lib/mail/crypto.ts";
+import { applyCheckResult, issueMailAgentToken, mailAgentState } from "../lib/mail/agent.ts";
+import { checkImap, pollMailbox } from "../lib/mail/inbound.ts";
+import { buildMail, makeTransport } from "../lib/mail/sender.ts";
+import { decryptSecret, encryptSecret } from "../lib/mail/crypto.ts";
 import { mailboxLimit, mailboxStatusForDay, mailboxUsable, planDay } from "../lib/mail/planner.ts";
 import { getMailSettings, getMailState, loadMailbox, newMessageId, renderForSeller, setMailSettings } from "../lib/mail/render.ts";
 import { getDailyRun, startDailyRun } from "../lib/mail/runs.ts";
@@ -453,24 +455,47 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  /** Проверку и тестовое письмо выполняет локальный агент, а не VDS. */
+  /** Проверку и необязательное тестовое письмо выполняет сервер; локальный агент — только резерв. */
   app.post("/mail/mailboxes/:id/check", async (request) => {
     const user = requireAdmin(request);
     const id = intParam((request.params as { id: string }).id);
     const testTo = String(body<{ testTo: string }>(request).testTo ?? "").trim().toLowerCase();
     if (testTo && !EMAIL_RE.test(testTo)) throw new HttpError(400, "Тестовый адрес — email");
-    const [m] = await db.update(mailboxes).set({ checkRequestedAt: new Date(), checkTestTo: testTo || null, updatedAt: new Date() }).where(eq(mailboxes.id, id)).returning({ email: mailboxes.email });
-    if (!m) throw new HttpError(404, "Ящик не найден");
-    await audit(db, { userId: user.id, action: "update", entityType: "mailbox", entityId: id, summary: `Рассылка: запрошена проверка ${m.email} локальным агентом${testTo ? `, тест → ${testTo}` : ""}`, ip: request.ip });
-    return { queued: true };
+    const m = await loadMailbox(db, id);
+    const now = new Date();
+    const result = { type: "check" as const, mailboxId: id, smtp: { ok: false, error: "" }, imap: { ok: false, error: "" }, test: null as { ok: boolean; error?: string } | null };
+    const transport = makeTransport(m);
+    try {
+      await transport.verify();
+      result.smtp = { ok: true, error: "" };
+      if (testTo) {
+        try {
+          await transport.send(buildMail(m, { subject: "Проверка ящика", body: `Тестовое письмо с ${m.email}: SMTP работает.\n\n${m.signature}`, messageId: newMessageId(m.domain.domain), inReplyTo: null }, testTo));
+          result.test = { ok: true };
+        } catch (error) {
+          result.test = { ok: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 1000) };
+        }
+      }
+    } catch (error) {
+      result.smtp = { ok: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 1000) };
+    } finally {
+      transport.close?.();
+    }
+    try {
+      await checkImap(m, decryptSecret(m.passwordEnc));
+      result.imap = { ok: true, error: "" };
+    } catch (error) {
+      result.imap = { ok: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 1000) };
+    }
+    await applyCheckResult(result, now);
+    await audit(db, { userId: user.id, action: "update", entityType: "mailbox", entityId: id, summary: `Рассылка: проверка ${m.email} на сервере${testTo ? `, тест → ${testTo}` : ""}`, ip: request.ip });
+    return result;
   });
 
   app.post("/mail/mailboxes/:id/poll", async (request) => {
     guard(request);
     const id = intParam((request.params as { id: string }).id);
-    const [m] = await db.update(mailboxes).set({ imapPollRequestedAt: new Date(), updatedAt: new Date() }).where(eq(mailboxes.id, id)).returning({ id: mailboxes.id });
-    if (!m) throw new HttpError(404, "Ящик не найден");
-    return { queued: true };
+    return { server: true, ...(await pollMailbox(id)) };
   });
 
   // ── Шаблоны ──

@@ -215,8 +215,8 @@ function RunPanel({ st }: { st: MailStatus }) {
         <button
           type="button"
           className="btn btn-primary"
-          disabled={!selected.length || start.isPending || !st.agent.alive}
-          title={!st.agent.alive ? "Сначала запустите локального агента на рабочем компьютере" : ""}
+          disabled={!selected.length || start.isPending}
+          title="Отправка и IMAP выполняются серверным воркером"
           onClick={() => (st.settings.mode !== "live" || window.confirm(`Боевой режим: начать отправку продавцам через ${selected.length} ящиков?`)) && start.mutate()}
         >
           {start.isPending ? "Строим план…" : `Начать рассылку${st.settings.mode === "live" ? "" : st.settings.mode === "test" ? " (тест)" : " (dry-run)"}`}
@@ -238,7 +238,7 @@ function PlanTab({ st, admin }: { st: MailStatus; admin: boolean }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 text-xs">
-        <Badge ok={st.agent.alive}>{st.agent.alive ? `локальный агент работает${st.agent.host ? `: ${st.agent.host}` : ""}` : "локальный агент не запущен на рабочем ПК"}</Badge>
+        <Badge ok={st.worker.alive}>{st.worker.alive ? `серверный воркер работает: SMTP и IMAP${st.worker.at ? `, ${formatDateTime(st.worker.at)}` : ""}` : "серверный воркер не запущен"}</Badge>
         <Badge ok={st.secretKey}>{st.secretKey ? "ключ шифрования есть" : "нет MAILBOX_SECRET_KEY"}</Badge>
         <Badge ok={st.mailboxes.some((m) => m.status === "active" || m.status === "warming")}>ящиков в работе: {st.mailboxes.filter((m) => m.status === "active" || m.status === "warming").length}</Badge>
         <Badge ok>
@@ -702,7 +702,7 @@ function Preview({ st, templates }: { st: MailStatus; templates: Template[] }) {
       {chain.data && (
         <div className="text-xs">
           {chain.data.queued
-            ? "Первое письмо и повтор поставлены в очередь локального агента. Они будут отправлены на тестовый адрес с сохранением цепочки; статусы продавца и прогрев не меняются."
+            ? "Первое письмо и повтор поставлены в очередь серверного воркера. Они будут отправлены на тестовый адрес с сохранением цепочки; статусы продавца и прогрев не меняются."
             : `Первое: ${chain.data.first.status}${chain.data.first.error ? ` (${chain.data.first.error})` : ""}${chain.data.followup ? ` · повтор: ${chain.data.followup.status}${chain.data.followup.error ? ` (${chain.data.followup.error})` : ""}` : ""}`}
         </div>
       )}
@@ -860,8 +860,8 @@ function BoxesTab({ st }: { st: MailStatus }) {
         <ErrorBox error={addDomain.error ?? domains.error} />
       </div>
       <div className="panel space-y-2 p-4 text-sm">
-        <div className="font-semibold">Локальный агент на рабочем ПК</div>
-        <div className="text-xs muted">SMTP и IMAP выполняет только агент. Сервер планирует письма и хранит журнал. Запуск из каталога crm: <code>npm run mail:agent</code>.</div>
+        <div className="font-semibold">Резервный локальный агент (не требуется)</div>
+        <div className="text-xs muted">Основные SMTP и IMAP выполняет серверный воркер. Локальный агент оставлен только как резервный вариант; для обычной рассылки запускать его не нужно.</div>
         <Badge ok={st.agent.alive}>{st.agent.alive ? `подключён${st.agent.host ? `: ${st.agent.host}` : ""}` : "не подключён"}</Badge>
         <div>
           <button type="button" className="btn btn-sm" disabled={issueToken.isPending} onClick={() => window.confirm("Новый ключ отключит прежний. Выпустить?") && issueToken.mutate()}>
@@ -935,14 +935,14 @@ function MailboxRow({ m, testAddress, onEdit }: { m: Mailbox; testAddress: strin
       <div className="flex flex-wrap items-center gap-2">
         <input className="input w-56 text-xs" placeholder="тестовое письмо на…" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
         <button type="button" className="btn btn-sm" disabled={check.isPending || Boolean(m.checkRequestedAt)} onClick={() => check.mutate()}>
-          {m.checkRequestedAt ? "Проверка ждёт агента" : "Проверить через агента"}
+          {check.isPending ? "Проверяем на сервере…" : "Проверить подключение"}
         </button>
         <button type="button" className="btn btn-sm" disabled={poll.isPending || Boolean(m.imapPollRequestedAt)} onClick={() => poll.mutate()}>
-          {m.imapPollRequestedAt ? "Опрос ждёт агента" : "Проверить входящие"}
+          {poll.isPending ? "Проверяем входящие…" : "Проверить входящие"}
         </button>
         <button type="button" className="btn btn-sm" onClick={() => setSpecialOpen(!specialOpen)}>Особый лимит</button>
         {m.warmupFirstsPaused && <button type="button" className="btn btn-sm" disabled={review.isPending} onClick={() => window.confirm("База и невалидные адреса проверены? Разрешить первые касания заново?") && review.mutate()}>База проверена</button>}
-        {(check.data || poll.data) && <span className="text-xs">Задание передано локальному агенту; результат появится после выполнения.</span>}
+        {(check.data || poll.data) && <span className="text-xs">Проверка выполнена на сервере.</span>}
       </div>
       {specialOpen && (
         <div className="flex flex-wrap items-end gap-2 rounded-md bg-slate-50 p-3 text-xs dark:bg-neutral-800/50">

@@ -1,5 +1,5 @@
 /**
- * Воркер рассылки: только план дня; SMTP и IMAP выполняет локальный HTTPS-агент.
+ * Воркер рассылки на сервере: план дня, SMTP-отправка и входящие по IMAP.
  * Запуск: `npm run mail:worker` (в проде — systemd-служба bars-crm-mail, deploy/systemd/bars-crm-mail.service).
  */
 

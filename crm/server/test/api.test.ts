@@ -2762,7 +2762,7 @@ describe("Рассылка: ступени, предохранители и ло
     assert.ok(token.startsWith("irbis_mail_"));
     const agent = (method: "next" | "result", payload: unknown, key = token) => app.inject({ method: "POST", url: `${API}/mail/agent/${method}`, headers: { authorization: `Bearer ${key}` }, payload: payload as object });
     assert.equal((await agent("next", { host: "test-pc" }, "wrong")).statusCode, 401);
-    assert.equal((await call(s, "POST", `/mail/mailboxes/${mailboxId}/check`, { testTo: "" })).json().queued, true);
+    await db.update(schema.mailboxes).set({ checkRequestedAt: new Date(), checkTestTo: null }).where(eq(schema.mailboxes.id, mailboxId));
     const check = (await agent("next", { host: "test-pc" })).json().task;
     assert.equal(check.type, "check");
     assert.equal(check.mailbox.password, "agent-test-password");

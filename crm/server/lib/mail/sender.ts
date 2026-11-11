@@ -215,12 +215,12 @@ export async function sendDue(now = new Date(), mailboxIds?: number[]): Promise<
       .limit(1);
     if (last?.at && now.getTime() - last.at.getTime() < minGapMs) return null;
     const [due] = await db
-      .select({ id: mailMessages.id })
+      .select({ id: mailMessages.id, mode: mailMessages.mode, queueId: mailMessages.queueId })
       .from(mailMessages)
       .where(and(eq(mailMessages.mailboxId, m.id), eq(mailMessages.status, "planned"), lte(mailMessages.scheduledAt, now)))
       .orderBy(asc(mailMessages.scheduledAt))
       .limit(1);
-    return due ? sendOne(due.id, now) : null;
+    return due ? sendOne(due.id, now, { force: due.mode === "test" && due.queueId === null }) : null;
   });
   return (await Promise.all(work)).filter((r): r is SendResult => r !== null);
 }

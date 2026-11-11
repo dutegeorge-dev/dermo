@@ -178,7 +178,7 @@ export type AgentImapResult = {
 };
 export type MailAgentResult = AgentCheckResult | AgentSendResult | AgentImapResult;
 
-async function applyCheckResult(result: AgentCheckResult, now: Date): Promise<void> {
+export async function applyCheckResult(result: AgentCheckResult, now: Date): Promise<void> {
   const m = await loadMailbox(db, result.mailboxId);
   const smtpError = result.smtp.ok ? result.test && !result.test.ok ? result.test.error ?? "тестовое письмо не отправлено" : null : result.smtp.error ?? "SMTP: ошибка";
   const imapError = result.imap.ok ? null : result.imap.error ?? "IMAP: ошибка";

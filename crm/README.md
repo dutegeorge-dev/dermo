@@ -118,7 +118,7 @@ npm run crm:dev
 Лидогенерация WB (в `crm/`): `npm run leadgen:worker` — воркер сбора (в проде служба `bars-crm-leadgen`),
 `npm run leadgen:check [-- --query "гантели" --registry]` — отвечают ли эндпоинты WB / DaData / Checko с этого сервера,
 `scripts/wb-probe.cjs` — найти новые эндпоинты WB через Playwright. Подробно — `server/lib/leadgen/README.md`.
-Рассылка (в `crm/`): `npm run mail:worker` — серверный планировщик (в проде служба `bars-crm-mail`); на рабочем Windows-ПК — `scripts/start-mail-agent.bat` (ключ спрашивается один раз), автозагрузка — `scripts/install-mail-agent-startup.ps1`. Подробно — `server/lib/mail/README.md`.
+Рассылка (в `crm/`): `npm run mail:worker` — серверный планировщик, SMTP и IMAP (в проде служба `bars-crm-mail`). Локальный `scripts/start-mail-agent.bat` остаётся только резервным вариантом и для обычной рассылки не нужен. Подробно — `server/lib/mail/README.md`.
 
 В `crm/`: `npm run typecheck`, `npm run db:generate` (новая миграция после правки `server/db/schema.ts`), `npm start` (прод-запуск).
 
