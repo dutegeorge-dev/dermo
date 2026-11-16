@@ -2919,3 +2919,32 @@ describe("Рассылка без повторных касаний", () => {
     await call(s, "PUT", "/mail/settings", { mode: "dry_run" });
   });
 });
+
+describe("Запуск дня с добором будущих первых писем", () => {
+  test("выбранные ящики заполняют сегодняшний лимит без дублей и сверхнормативной очереди", async () => {
+    process.env.MAIL_FOLLOWUPS_ENABLED = "false";
+    const s = await adminSession();
+    await call(s, "PUT", "/mail/settings", { mode: "dry_run" });
+    await db.update(schema.leadQueue).set({ status: "cancelled" }).where(eq(schema.leadQueue.status, "planned"));
+    const sellers = await db.select().from(schema.leadSellers).where(and(eq(schema.leadSellers.status, "new"), sql`${schema.leadSellers.pickedAt} is not null`)).orderBy(schema.leadSellers.inn).limit(5);
+    assert.equal(sellers.length, 5);
+    for (const [i, seller] of sellers.entries()) {
+      await db.insert(schema.leadQueue).values({ sellerInn: seller.inn, plannedDate: i === 0 ? "2026-11-16" : "2026-11-17", touch: "first", status: "planned" });
+    }
+    const domainId = (await db.select().from(schema.mailDomains).where(eq(schema.mailDomains.domain, "tlkbars-import.ru")))[0].id;
+    const created = await call(s, "POST", "/mail/mailboxes", { email: "future-fill@tlkbars-import.ru", fromName: "Тест", domainId, password: "test-password", dailyLimit: 25 });
+    assert.equal(created.statusCode, 200, created.body);
+    const mailboxId = created.json().mailbox.id as number;
+    const result = await startDailyRun(new Date("2026-11-16T07:00:00Z"), null, [mailboxId], { rnd: () => 0.5 });
+    assert.deepEqual([result.plan.planned, result.plan.firsts, result.plan.followups, result.plan.deferred], [5, 5, 0, 0]);
+    for (const seller of sellers) {
+      const queue = await db.select().from(schema.leadQueue).where(and(eq(schema.leadQueue.sellerInn, seller.inn), eq(schema.leadQueue.status, "planned"), eq(schema.leadQueue.touch, "first")));
+      assert.equal(queue.length, 1);
+      assert.equal(queue[0].plannedDate, "2026-11-16", "будущая дата перенесена на выбранный день");
+    }
+    const messages = await db.select().from(schema.mailMessages).where(and(eq(schema.mailMessages.planDay, "2026-11-16"), eq(schema.mailMessages.mailboxId, mailboxId)));
+    assert.equal(messages.length, 5);
+    assert.equal(new Set(messages.map((m) => m.sellerInn)).size, 5, "один получатель не дублируется");
+    await assert.rejects(startDailyRun(new Date("2026-11-16T08:00:00Z"), null, [mailboxId]), /уже запущена/);
+  });
+});

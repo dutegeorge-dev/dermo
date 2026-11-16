@@ -185,6 +185,7 @@ function RunPanel({ st }: { st: MailStatus }) {
           <div className="text-xs muted">
             {started ? `Выбрано ящиков: ${st.run!.mailboxIds.length}. Новые касания можно добавить кнопкой «Допланировать».` : `Выберите до ${MAX_MAILBOXES_PER_RUN} ящиков. Планироваться и отправляться будут только письма с них.`}
           </div>
+          {!started && <div className="text-xs muted">Если на сегодня мало писем, недостающие первые касания будут добраны из будущих дат до лимита выбранных ящиков.</div>}
         </div>
         <div className="ml-auto text-right">
           <div><b>{chosen.length}</b> ящиков · доступно <b>{capacity}</b> писем сегодня</div>
