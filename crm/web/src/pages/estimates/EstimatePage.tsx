@@ -321,7 +321,7 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
             </div>
             <p className="text-xs muted">
               {teu
-                ? `ТЭУ: товар клиент оплачивает поставщику сам; комиссия за перевод ${p.fxPercent ?? 0}% — только на фрахт, затем +${p.teuPercent ?? 0}% от общей суммы вместе с комиссией компании.`
+                ? `ТЭУ: товар клиент оплачивает поставщику сам; комиссия за перевод ${p.fxPercent ?? 0}% — только на фрахт. НДС ${p.teuPercent ?? 0}% начисляется на все расходы и комиссию компании, кроме товара, пошлины и таможенного НДС.`
                 : `Комиссия: оплачиваем товар и перевозку — комиссия за перевод ${p.fxPercent ?? 0}% на товар + перевозку.`}
             </p>
           </Section>
@@ -519,7 +519,7 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
                 <NumInput value={p.fxPercent} onChange={(v) => set({ fxPercent: v })} />
               </Field>
               {teu && (
-                <Field label="ТЭУ, % от общей суммы">
+                <Field label="НДС, %" hint="от расходов и комиссии компании, кроме товара, пошлины и таможенного НДС">
                   <NumInput value={p.teuPercent} onChange={(v) => set({ teuPercent: v })} />
                 </Field>
               )}
@@ -578,7 +578,7 @@ function EstimateForm({ saved }: { saved: Saved | null }) {
                         ["СВХ", res.terminal],
                         ["До склада", res.lastMile],
                         ["Прочие", res.extras],
-                        [`ТЭУ ${(p.teuPercent ?? 0).toLocaleString("ru-RU")}%`, res.teuRub, `от ${rub(res.subtotal + res.commission)} (с комиссией компании)`],
+                        [`НДС ${(p.teuPercent ?? 0).toLocaleString("ru-RU")}%`, res.teuRub, `от ${rub(res.teuBase)} (без товара, пошлины и таможенного НДС; с комиссией компании)`],
                         ["Комиссия компании", res.commission],
                       ] as [string, number, string?][]
                     )

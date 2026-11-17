@@ -3,8 +3,8 @@
  * → КП. Считается и в браузере (сразу при правке), и на сервере при сохранении — одна функция.
  *
  * Договор комиссии: товар и перевозку оплачиваем мы → комиссия за валютный перевод (4 %) — на товар + перевозку.
- * Договор ТЭУ: товар клиент оплачивает сам, мы — только фрахт → 4 % на фрахт, затем +6 % от общей суммы.
- * Комиссия компании — как везде, задаётся суммой; по ТЭУ 6 % начисляются и на неё.
+ * Договор ТЭУ: товар клиент оплачивает сам, мы — только фрахт → 4 % на фрахт, затем НДС 6 %.
+ * НДС начисляется на все расходы и комиссию компании, кроме товара, пошлины и таможенного НДС.
  */
 
 import { calcCustoms, type CustomsResult, dutyUnit, isWeightUnit } from "./customs.ts";
@@ -63,7 +63,7 @@ export type EstimateParams = {
   transportLabel: string;
   /** Комиссия за валютный перевод, %: по комиссии — от товара + перевозки, по ТЭУ — от фрахта. */
   fxPercent: number | null;
-  /** ТЭУ: % от общей суммы. */
+  /** НДС по ТЭУ: % от расходов и комиссии компании, кроме товара, пошлины и таможенного НДС. */
   teuPercent: number | null;
   broker: number | null;
   terminal: number | null;
@@ -150,8 +150,10 @@ export type EstimateResult = {
   terminal: number;
   lastMile: number;
   extras: number;
-  /** Всё, кроме ТЭУ-процента и комиссии компании, ₽ (база ТЭУ — subtotal + commission). */
+  /** Всё, кроме НДС 6% и комиссии компании, ₽. */
   subtotal: number;
+  /** База НДС: все расходы и комиссия компании, кроме товара, пошлины и таможенного НДС. */
+  teuBase: number;
   teuRub: number;
   commission: number;
   totalRub: number;
@@ -235,8 +237,9 @@ export function computeEstimate(p: EstimateParams, ctx: { rates: Record<string, 
   const extras = r2(p.extras.reduce((s, e) => s + (e.amount ?? 0), 0));
   const subtotal = r2(goodsRub + transportRub + fxRub + customs.duty + customs.vat + broker + terminal + lastMile + extras);
   const commission = p.commission ?? 0;
-  // ТЭУ: 6 % от общей суммы — вместе с комиссией компании.
-  const teuRub = p.scheme === "teu" && p.teuPercent ? r2(((subtotal + commission) * p.teuPercent) / 100) : 0;
+  // НДС по ТЭУ: все расходы и комиссия компании, кроме товара, пошлины и таможенного НДС.
+  const teuBase = r2(subtotal - goodsRub - customs.duty - customs.vat + commission);
+  const teuRub = p.scheme === "teu" && p.teuPercent ? r2((teuBase * p.teuPercent) / 100) : 0;
   return {
     goods,
     goodsRub,
@@ -252,6 +255,7 @@ export function computeEstimate(p: EstimateParams, ctx: { rates: Record<string, 
     lastMile,
     extras,
     subtotal,
+    teuBase,
     teuRub,
     commission,
     totalRub: r2(subtotal + teuRub + commission),
@@ -275,7 +279,7 @@ export function estimateKpLines(p: EstimateParams, q: EstimateResult): { name: s
   if (q.broker) lines.push({ name: `${++n}. Таможенное оформление`, amount: q.broker });
   if (q.terminal) lines.push({ name: `${++n}. Хранение на СВХ, досмотры`, amount: q.terminal });
   for (const e of p.extras) if (e.amount) lines.push({ name: `${++n}. ${e.name || "Прочие расходы"}`, amount: e.amount });
-  if (q.teuRub) lines.push({ name: `${++n}. Транспортно-экспедиционное обслуживание ${pct(p.teuPercent)}%`, amount: q.teuRub });
+  if (q.teuRub) lines.push({ name: `${++n}. НДС ${pct(p.teuPercent)}%`, amount: q.teuRub });
   if (q.commission) lines.push({ name: `${++n}. Вознаграждение`, amount: q.commission });
   if (q.lastMile) lines.push({ name: "*Доставка до склада клиента", amount: q.lastMile, approx: true });
   return lines;

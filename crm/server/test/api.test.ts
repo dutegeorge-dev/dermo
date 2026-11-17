@@ -1312,7 +1312,7 @@ describe("Раздел «Расчёт»: заявка клиента на его
     assert.equal(duty(item("6.5%, но не менее 0.096 EUR за 1 кг", 3, "шт", 100), 500).duty, 4320, "иначе — общий вес");
   });
 
-  test("комиссия: 4 % на товар + перевозку; ТЭУ: 4 % на фрахт и +6 % от общей суммы; КП", async () => {
+  test("комиссия: 4 % на товар + перевозку; ТЭУ: НДС 6 % без товара, пошлины и таможенного НДС; КП", async () => {
     const s = await adminSession();
     // USD = 80 ₽ (CRM_RATES_FIXED). Товар 1000 $, перевозка 500 $, кода ТН ВЭД нет — пошлина 0, НДС 22 %.
     const params = {
@@ -1334,10 +1334,10 @@ describe("Раздел «Расчёт»: заявка клиента на его
     assert.equal(res.statusCode, 200, res.body);
     r = res.json().result;
     assert.equal(r.fxRub, 1600, "по ТЭУ — 4 % только от фрахта");
-    assert.deepEqual([r.subtotal, r.teuRub, r.totalRub], [163600, 10416, 184016], "6 % от общей суммы вместе с комиссией компании");
+    assert.deepEqual([r.subtotal, r.teuBase, r.teuRub, r.totalRub], [163600, 71600, 4296, 177896], "НДС 6 % — от расходов и комиссии компании без товара, пошлины и таможенного НДС");
 
     const list = (await call(s, "GET", "/estimates")).json().estimates;
-    assert.equal(list.find((e: { id: number }) => e.id === id).totalRub, 184016);
+    assert.equal(list.find((e: { id: number }) => e.id === id).totalRub, 177896);
     const kp = await app.inject({ method: "GET", url: `${API}/estimates/${id}/kp.docx`, headers: { cookie: s.cookie } });
     assert.equal(kp.statusCode, 200);
     const { docxText } = await import("../lib/file-text.ts");
@@ -1345,13 +1345,13 @@ describe("Раздел «Расчёт»: заявка клиента на его
     assert.match(text, /Демо-стенд/);
     assert.match(text, /Dongguan — Москва/);
     assert.match(text, /оплачивается клиентом поставщику/);
-    assert.match(text, /Транспортно-экспедиционное обслуживание 6%\t10\s416 руб\./);
-    assert.match(text, /184\s016 руб\./);
-    // Четыре главные цифры — в рублях и долларах (USD = 80): партия 184 016 ₽ = $2 300,20, товар 80 000 ₽ = $1 000.
-    assert.match(text, /СТОИМОСТЬ ПАРТИИ\t184\s016 руб\. \/ \$2\s300,20/);
+    assert.match(text, /НДС 6%\t4\s296 руб\./);
+    assert.match(text, /177\s896 руб\./);
+    // Четыре главные цифры — в рублях и долларах (USD = 80): партия 177 896 ₽ = $2 223,70, товар 80 000 ₽ = $1 000.
+    assert.match(text, /СТОИМОСТЬ ПАРТИИ\t177\s896 руб\. \/ \$2\s223,70/);
     assert.match(text, /ТОВАР\t80\s000 руб\. \/ \$1\s000,00/);
-    assert.match(text, /ДОСТАВКА[^\t]*\t104\s016 руб\. \/ \$1\s300,20/);
-    assert.match(text, /СТОИМОСТЬ ЕДИНИЦЫ — 1 шт\t184\s016 руб\. \/ \$2\s300,20/);
+    assert.match(text, /ДОСТАВКА[^\t]*\t97\s896 руб\. \/ \$1\s223,70/);
+    assert.match(text, /СТОИМОСТЬ ЕДИНИЦЫ — 1 шт\t177\s896 руб\. \/ \$2\s223,70/);
     assert.doesNotMatch(text, /\{\{/);
     assert.equal((await call(s, "DELETE", `/estimates/${id}`)).statusCode, 200);
   });
