@@ -25,7 +25,7 @@ import { cancelPlanned } from "./sender.ts";
 import { loadMailbox, type MailboxFull } from "./render.ts";
 import { evaluateWarmup, pauseForConfiguration } from "./warmup.ts";
 
-export const IMAP_CONFIG_RE = /AUTHENTICATIONFAILED|authentication failed|invalid credentials|EAUTH|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|connection timeout|Command failed/i;
+export const IMAP_CONFIG_RE = /AUTHENTICATIONFAILED|authentication failed|invalid credentials|EAUTH|ENOTFOUND/i;
 
 export type FetchedMessage = { uid: number; source: Buffer };
 export type FetchResult = { uidValidity: number; lastUid: number; messages: FetchedMessage[] };

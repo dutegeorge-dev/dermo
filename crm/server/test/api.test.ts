@@ -2806,6 +2806,18 @@ describe("Рассылка: ступени, предохранители и ло
       a.release();
       b.release();
     }
+    const { applyCheckResult } = await import("../lib/mail/agent.ts");
+    const { IMAP_CONFIG_RE } = await import("../lib/mail/inbound.ts");
+    assert.equal(IMAP_CONFIG_RE.test("read ECONNRESET"), false);
+    assert.equal(IMAP_CONFIG_RE.test("Unexpected close"), false);
+    assert.equal(IMAP_CONFIG_RE.test("Command failed"), false);
+    assert.equal(IMAP_CONFIG_RE.test("AUTHENTICATIONFAILED invalid credentials or IMAP is disabled"), true);
+    await applyCheckResult({ type: "check", mailboxId, smtp: { ok: true }, imap: { ok: false, error: "read ECONNRESET" } }, new Date());
+    assert.notEqual((await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, mailboxId)))[0].status, "paused", "временный сбой не ставит бессрочную паузу");
+    await applyCheckResult({ type: "check", mailboxId, smtp: { ok: true }, imap: { ok: false, error: "AUTHENTICATIONFAILED invalid credentials or IMAP is disabled" } }, new Date());
+    assert.equal((await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, mailboxId)))[0].status, "paused", "auth — это конфигурация, а не временный сбой");
+    await applyCheckResult({ type: "check", mailboxId, smtp: { ok: true }, imap: { ok: true } }, new Date());
+    assert.equal((await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.id, mailboxId)))[0].status, "warming", "успешная проверка восстанавливает ящик");
     process.env.MAIL_FOLLOWUPS_ENABLED = "false";
   });
 

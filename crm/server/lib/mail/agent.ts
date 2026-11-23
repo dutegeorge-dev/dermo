@@ -8,7 +8,7 @@ import { mailboxes, mailMessages, settings as settingsTable } from "../../db/sch
 import { HttpError } from "../http.ts";
 import { checkImap, type FetchedMessage, IMAP_CONFIG_RE, processMessage } from "./inbound.ts";
 import { decryptSecret } from "./crypto.ts";
-import { inWindow, buildMail, claimOutgoing, completeOutgoing, type ClaimedOutgoing, type OutgoingMail } from "./sender.ts";
+import { CONFIG_SMTP_RE, inWindow, buildMail, claimOutgoing, completeOutgoing, type ClaimedOutgoing, type OutgoingMail } from "./sender.ts";
 import { mailboxLimit, mailboxUsable } from "./planner.ts";
 import { getMailSettings, loadMailbox, newMessageId, type MailboxFull } from "./render.ts";
 import { getDailyRun } from "./runs.ts";
@@ -179,7 +179,6 @@ export async function applyCheckResult(result: AgentCheckResult, now: Date): Pro
   const m = await loadMailbox(db, result.mailboxId);
   const smtpError = result.smtp.ok ? result.test && !result.test.ok ? result.test.error ?? "тестовое письмо не отправлено" : null : result.smtp.error ?? "SMTP: ошибка";
   const imapError = result.imap.ok ? null : result.imap.error ?? "IMAP: ошибка";
-  const configError = (!result.smtp.ok && (result.smtp.error ?? "SMTP")) || (!result.imap.ok && (result.imap.error ?? "IMAP"));
   await db
     .update(mailboxes)
     .set({
@@ -194,10 +193,8 @@ export async function applyCheckResult(result: AgentCheckResult, now: Date): Pro
       updatedAt: now,
     })
     .where(eq(mailboxes.id, m.id));
-  if (configError) {
-    if (!result.smtp.ok) await pauseForConfiguration(db, m.id, result.smtp.error ?? "SMTP: ошибка", now, "SMTP");
-    if (!result.imap.ok) await pauseForConfiguration(db, m.id, result.imap.error ?? "IMAP: ошибка", now, "IMAP");
-  }
+  if (!result.smtp.ok && CONFIG_SMTP_RE.test(result.smtp.error ?? "")) await pauseForConfiguration(db, m.id, result.smtp.error ?? "SMTP: ошибка", now, "SMTP");
+  if (!result.imap.ok && IMAP_CONFIG_RE.test(result.imap.error ?? "")) await pauseForConfiguration(db, m.id, result.imap.error ?? "IMAP: ошибка", now, "IMAP");
   await evaluateWarmup(db, m.id, now);
 }
 
